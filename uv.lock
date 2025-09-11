@@ -45,6 +45,7 @@ dependencies = [
     { name = "google-auth-oauthlib" },
     { name = "google-generativeai" },
     { name = "grpcio" },
+    { name = "joblib" },
     { name = "mgba" },
     { name = "more-itertools" },
     { name = "numpy" },
@@ -85,6 +86,7 @@ requires-dist = [
     { name = "google-auth-oauthlib", specifier = ">=1.2.2" },
     { name = "google-generativeai", specifier = ">=0.3.0" },
     { name = "grpcio", specifier = ">=1.48.2" },
+    { name = "joblib", specifier = ">=1.5.2" },
     { name = "mgba", specifier = "==0.10.2" },
     { name = "more-itertools", specifier = ">=10.7.0" },
     { name = "numpy", specifier = "==1.26.4" },
@@ -790,6 +792,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ea/10/768e8818538e5817c637b0df52e54366ec4cebc3346108a4457ea7a98f32/jiter-0.10.0-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:7d1bbf3c465de4a24ab12fb7766a0003f6f9bce48b8b6a886158c4d569452dc5", size = 514527 },
     { url = "https://files.pythonhosted.org/packages/73/6d/29b7c2dc76ce93cbedabfd842fc9096d01a0550c52692dfc33d3cc889815/jiter-0.10.0-cp311-cp311-win32.whl", hash = "sha256:db16e4848b7e826edca4ccdd5b145939758dadf0dc06e7007ad0e9cfb5928ae7", size = 210765 },
     { url = "https://files.pythonhosted.org/packages/c2/c9/d394706deb4c660137caf13e33d05a031d734eb99c051142e039d8ceb794/jiter-0.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:9c9c1d5f10e18909e993f9641f12fe1c77b3e9b533ee94ffa970acc14ded3812", size = 209234 },
+]
+
+[[package]]
+name = "joblib"
+version = "1.5.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/5d/447af5ea094b9e4c4054f82e223ada074c552335b9b4b2d14bd9b35a67c4/joblib-1.5.2.tar.gz", hash = "sha256:3faa5c39054b2f03ca547da9b2f52fde67c06240c31853f306aea97f13647b55", size = 331077 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1e/e8/685f47e0d754320684db4425a0967f7d3fa70126bffd76110b7009a0090f/joblib-1.5.2-py3-none-any.whl", hash = "sha256:4e1f0bdbb987e6d843c70cf43714cb276623def372df3c22fe5266b2670bc241", size = 308396 },
 ]
 
 [[package]]
