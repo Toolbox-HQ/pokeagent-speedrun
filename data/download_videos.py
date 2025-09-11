@@ -21,7 +21,9 @@ def download_video(youtube_id: str, output_dir: str):
     ys.download(output_path=output_dir, filename=f"{youtube_id}.mp4")
 
 
-def download_videos_in_parallel(youtube_ids: List[str], output_dir: str, threads: int = 1):
+def download_videos_in_parallel(
+    youtube_ids: List[str], output_dir: str, threads: int = 1
+):
     cached_videos = [file.split(".")[0] for file in list_files(output_dir)]
     ids_to_download = [id for id in youtube_ids if id not in cached_videos]
 
@@ -29,10 +31,9 @@ def download_videos_in_parallel(youtube_ids: List[str], output_dir: str, threads
         print("All videos are already cached.")
         return
 
-    with tqdm(total=len(ids_to_download)):
-        joblib.Parallel(n_jobs=threads)(
-            joblib.delayed(download_video)(id, output_dir) for id in ids_to_download
-        )
+    joblib.Parallel(n_jobs=threads)(
+        joblib.delayed(download_video)(id, output_dir) for id in tqdm(ids_to_download)
+    )
 
 
 if __name__ == "__main__":
