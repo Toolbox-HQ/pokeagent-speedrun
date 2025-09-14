@@ -10,8 +10,8 @@ import pygame
 import cv2
 from PIL import Image
 import numpy as np
-import json  # NEW
-import os    # NEW
+import json
+import os
 
 # Global state
 latest_png_b64 = None
@@ -27,10 +27,10 @@ stream = None
 vw = None
 
 # Key logging state
-keys_json_path = None     # NEW
-keys_log_fp = None        # NEW
-_keys_log_first = True    # NEW
-frame_index = 0           # NEW
+keys_json_path = None
+keys_log_fp = None
+_keys_log_first = True
+frame_index = 0
 
 # Button mapping for manual control
 button_map = {
@@ -76,25 +76,19 @@ def get_keys_for_frame():
 
     # Make sure input state is fresh for this frame
     pygame.event.pump()
-
-    # 1) Continuous held inputs
     keys = pygame.key.get_pressed()
     for key, action in button_map.items():
         if keys[key]:
             actions_pressed.append(action)
-
-    # 2) One-shot events
-    for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_1 and emulator:
-                save_file = "agent_direct_save.state"
-                emulator.save_state(save_file)
-                print(f"State saved to: {save_file}")
-            elif event.key == pygame.K_2 and emulator:
-                load_file = "agent_direct_save.state"
-                if os.path.exists(load_file):
-                    emulator.load_state(load_file)
-                    print(f"State loaded from: {load_file}")
+    if keys[pygame.K_1]:
+        save_file = "agent_direct_save.state"
+        emulator.save_state(save_file)
+        print(f"State saved to: {save_file}")
+    elif keys[pygame.K_2]:
+        load_file = "agent_direct_save.state"
+        if os.path.exists(load_file):
+            emulator.load_state(load_file)
+            print(f"State loaded from: {load_file}")
 
     return actions_pressed
 
