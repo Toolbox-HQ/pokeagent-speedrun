@@ -61,6 +61,7 @@ dependencies = [
     { name = "pytz" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "s3cmd" },
     { name = "sentencepiece" },
     { name = "six" },
     { name = "torch" },
@@ -102,6 +103,7 @@ requires-dist = [
     { name = "pytz", specifier = ">=2020.1" },
     { name = "pyyaml", specifier = ">=5.1" },
     { name = "requests", specifier = ">=2.25.0" },
+    { name = "s3cmd", specifier = ">=2.4.0" },
     { name = "sentencepiece", specifier = ">=0.1.99" },
     { name = "six", specifier = ">=1.14.0" },
     { name = "torch", specifier = ">=2.0.0" },
@@ -1259,6 +1261,18 @@ wheels = [
 ]
 
 [[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892 },
+]
+
+[[package]]
 name = "python-dotenv"
 version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1277,6 +1291,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/be/1b/13caab8337dc0cec96c65226a0fbaa2d1c6ec4ad0fb4faf02b1f2fdc150a/python-engineio-4.9.0.tar.gz", hash = "sha256:e87459c15638e567711fd156e6f9c4a402668871bed79523f0ecfec744729ec7", size = 89122 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/e5/03fa8e76c718e1dd7fb5b74e9ce816ae0e08734080b1e98dbafbcf2fc8ba/python_engineio-4.9.0-py3-none-any.whl", hash = "sha256:979859bff770725b75e60353d7ae53b397e8b517d05ba76733b404a3dcca3e4c", size = 57526 },
+]
+
+[[package]]
+name = "python-magic"
+version = "0.4.27"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/db/0b3e28ac047452d079d375ec6798bf76a036a08182dbb39ed38116a49130/python-magic-0.4.27.tar.gz", hash = "sha256:c1ba14b08e4a5f5c31a302b7721239695b2f0f058d125bd5ce1ee36b9d9d3c3b", size = 14677 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/73/9f872cb81fc5c3bb48f7227872c28975f998f3e7c2b1c16e95e6432bbb90/python_magic-0.4.27-py2.py3-none-any.whl", hash = "sha256:c212960ad306f700aa0d01e5d7a325d20548ff97eb9920dcd29513174f0294d3", size = 13840 },
 ]
 
 [[package]]
@@ -1390,6 +1413,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/da/8a/22b7beea3ee0d44b1916c0c1cb0ee3af23b700b6da9f04991899d0c555d4/rsa-4.9.1.tar.gz", hash = "sha256:e7bdbfdb5497da4c07dfd35530e1a902659db6ff241e39d9953cad06ebd0ae75", size = 29034 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/8d/0133e4eb4beed9e425d9a98ed6e081a55d195481b7632472be1af08d2f6b/rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762", size = 34696 },
+]
+
+[[package]]
+name = "s3cmd"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "python-magic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/9c/ad4cd51328bd7a058bfda6739bc061c63ee3531ad2fbc6e672518a1eed01/s3cmd-2.4.0.tar.gz", hash = "sha256:6b567521be1c151323f2059c8feec85ded96b6f184ff80535837fea33798b40b", size = 144976 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/e7/2dd0a37637ad8c128c8449205b5d0282a0ce52273c9cd6d40916a85b97c9/s3cmd-2.4.0-py2.py3-none-any.whl", hash = "sha256:13ad8a44d44cc0535ba8c878c91fd68cd830dc48f6388722fa44a7aaf3f18017", size = 164998 },
 ]
 
 [[package]]

@@ -7,7 +7,7 @@
 *.gba
 llm_log_*
 CLAUDE.md
-
+.vscode
 # Ignore everything inside Data/
 Data/*
 
