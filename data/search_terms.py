@@ -13,7 +13,6 @@ pokemon_search_keywords = [
     "let’s play pokemon emerald episode 1",
     "pokemon emerald learning to play",
     "how to play pokemon emerald",
-    "how to play pokemon emerald",
     "pokemon emerald basic",
     "how to play pokemon emerald for beginners",
     "pokemon emerald tutorial series",

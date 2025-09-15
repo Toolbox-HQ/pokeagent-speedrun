@@ -6,6 +6,7 @@ import json
 from tqdm import tqdm
 import os
 import joblib
+import functools
 
 
 def list_files(directory):
@@ -15,10 +16,15 @@ def list_files(directory):
 
 
 def download_video(youtube_id: str, output_dir: str):
-    url = f"https://www.youtube.com/watch?v={youtube_id}"
-    yt = YouTube(url, on_progress_callback=on_progress)
-    ys = yt.streams.get_highest_resolution()
-    ys.download(output_path=output_dir, filename=f"{youtube_id}.mp4")
+    try:
+        url = f"https://www.youtube.com/watch?v={youtube_id}"
+        yt = YouTube(url, on_progress_callback=on_progress)
+        ys = yt.streams.get_highest_resolution()
+        ys.download(output_path=output_dir, filename=f"{youtube_id}.mp4")
+        return 1
+    except Exception as e:
+        print(f"[ERROR] {youtube_id} | {e}")
+        return 0
 
 
 def download_videos_in_parallel(
@@ -31,9 +37,11 @@ def download_videos_in_parallel(
         print("All videos are already cached.")
         return
 
-    joblib.Parallel(n_jobs=threads)(
+    results = joblib.Parallel(n_jobs=threads)(
         joblib.delayed(download_video)(id, output_dir) for id in tqdm(ids_to_download)
     )
+    fetched_videos = functools.reduce(lambda x, y: x + y, results)
+    print(f"{fetched_videos} were retrieved")
 
 
 if __name__ == "__main__":
