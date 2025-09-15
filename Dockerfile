@@ -36,5 +36,6 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync
 COPY . .
 
-# Specify the default command to run when the container starts
-CMD ["/app/.venv/bin/python", "/app/main.py", "--fps", "60"]
+
+# /app/.venv/bin/python /app/main.py --fps 60 --max-steps 120
+CMD ["/app/.venv/bin/python", "/app/main.py", "--fps", "60", "--max-steps", "120"]

@@ -126,11 +126,12 @@ def _close_keys_logger():
         keys_log_fp.close()
         keys_log_fp = None
 
-def game_loop():
+def game_loop(max_steps: int=0) -> None:
     global latest_png_b64, frame_index
     
     while True:
         try:
+            
             start = time.perf_counter()
 
             # 1) gather input keys for this frame
@@ -147,15 +148,21 @@ def game_loop():
             if frame is None:
                 time.sleep(0.01)
                 continue
+            
             buf = io.BytesIO()
             frame.save(buf, format="PNG")
             latest_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
             write_frame(frame)
             dt = time.perf_counter() - start
+            
             if emulator_fps:
                 frame_time = 1.0 / emulator_fps
                 if dt < frame_time:
                     time.sleep(frame_time - dt)
+
+            if max_steps and frame_index >= max_steps:
+                break
+
         except Exception as e:
             # log and keep going
             print(f"emulator_loop error: {e}")
@@ -222,11 +229,13 @@ def quit(signum, _frame):
 def main():
     parser = argparse.ArgumentParser(description="Direct Agent Pokemon Emerald")
     parser.add_argument("--rom", type=str, default="Emerald-GBAdvance/rom.gba", help="Path to ROM file")
-    parser.add_argument("--mp4-path", type=str, default="Data/output.mp4", help="Path to mp4 output")
+    parser.add_argument("--mp4-path", type=str, default="./Data/output.mp4", help="Path to mp4 output")
     parser.add_argument("--port", type=int, default=8000, help="Port for web interface")
     parser.add_argument("--manual-mode", action="store_true", help="Start in manual mode instead of agent mode")
     parser.add_argument("--fps", type=int, help="Emulator fps (uncapped if not set)")
     parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")  # NEW
+    parser.add_argument("--max-steps", type=int, default=0, help="Number of emulator steps before the emulator quits.")
+
     args = parser.parse_args()
 
     if args.manual_mode:
@@ -247,7 +256,10 @@ def main():
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # or 'avc1' if your build supports H.264
     global vw
+    os.makedirs(os.path.dirname(args.mp4_path), exist_ok=True)
     vw = cv2.VideoWriter(args.mp4_path, fourcc, 60, (emulator.width, emulator.height))
+    
+    assert vw.isOpened(), "VideoWriter did not initialize correctly."
 
     # NEW: open the keys JSON logger
     global keys_json_path, keys_log_fp, _keys_log_first, frame_index
@@ -264,7 +276,7 @@ def main():
     if args.fps:
         emulator_fps = args.fps
     try:
-        game_loop() # Run main game loop
+        game_loop(max_steps=args.max_steps) # Run main game loop
     except KeyboardInterrupt:
         print("Interrupted by user")
     except Exception as e:
