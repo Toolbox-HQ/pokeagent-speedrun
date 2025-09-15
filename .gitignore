@@ -1,5 +1,16 @@
+/cache
+*.log
+*.gba
+*.pyc
+*.cpython
+*.pem
+*.gba
+llm_log_*
+CLAUDE.md
+
 # Ignore everything inside Data/
 Data/*
+
 
 # Ignore everything inside Emerald-GBAdvance/
 Emerald-GBAdvance/*
