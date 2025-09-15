@@ -27,7 +27,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 # Set a working directory inside the container
 WORKDIR /app
 
-RUN wget https://github.com/mgba-emu/mgba/releases/download/0.10.5/mGBA-0.10.5-ubuntu64-noble.tar.xz && \
+RUN curl -L -o mGBA-0.10.5-ubuntu64-noble.tar.xz https://github.com/mgba-emu/mgba/releases/download/0.10.5/mGBA-0.10.5-ubuntu64-noble.tar.xz && \
     tar -xf mGBA-0.10.5-ubuntu64-noble.tar.xz && \
     rm mGBA-0.10.5-ubuntu64-noble.tar.xz
 RUN dpkg -i mGBA-0.10.5-ubuntu64-noble/libmgba.deb
