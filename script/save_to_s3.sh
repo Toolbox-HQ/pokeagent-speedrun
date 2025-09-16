@@ -1,7 +1,7 @@
-# !bin/bash
+#!bin/bash
 
 # WLOG we choose the first bucket
-bucket=$(s3cmd ls | head -n 1 | awk '{print $NF}' | sed 's/s3:\/\///; s/\///')
+bucket=$(.venv/bin/s3cmd ls | head -n 1 | awk '{print $NF}' | sed 's/s3:\/\///; s/\///')
 
 # Define the directory you want to loop through
 DATA_DIR="./Data"
@@ -12,7 +12,7 @@ if [ -d "$DATA_DIR" ]; then
     for file in "$DATA_DIR"/*; do
         if [ -f "$file" ]; then
             echo "Uploading file: $file"
-            s3cmd put $file s3://$bucket/pokeagent/emulator-data/
+            .venv/bin/s3cmd put $file s3://$bucket/pokeagent/emulator-data/
         fi
     done
 else

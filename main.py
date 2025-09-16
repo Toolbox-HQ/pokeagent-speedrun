@@ -213,7 +213,7 @@ def run_fastapi_server(port):
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
 
 def save_to_s3():
-    import s3cmd
+    os.system("bash ./script/save_to_s3.sh")
 
 def quit(signum, _frame, save_s3: bool):
     # Close video writer if initialized
@@ -227,6 +227,9 @@ def quit(signum, _frame, save_s3: bool):
         _close_keys_logger()
     except Exception:
         pass
+
+    if save_s3:
+        save_to_s3()
 
     sys.exit(0)
 

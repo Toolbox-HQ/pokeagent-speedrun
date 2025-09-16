@@ -37,5 +37,5 @@ RUN uv sync
 COPY . .
 RUN if [ -f ".s3cfg" ]; then mv .s3cfg ~/.s3cfg; fi
 
-# /app/.venv/bin/python /app/main.py --fps 60 --max-steps 120
-CMD ["/app/.venv/bin/python", "/app/main.py", "--fps", "60", "--max-steps", "120"]
+# /app/.venv/bin/python /app/main.py --fps 60 --max-steps 120 --save-s3
+CMD ["/app/.venv/bin/python", "/app/main.py", "--fps", "60", "--max-steps", "120", "--save-s3"]

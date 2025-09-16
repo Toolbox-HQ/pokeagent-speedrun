@@ -4,7 +4,7 @@ Performs a search on YoutTube and retrieves
 
 from googleapiclient.discovery import build
 from googleapiclient.discovery import Resource
-from data.search_terms import pokemon_search_keywords as search_keywords
+from scrape.search_terms import pokemon_search_keywords as search_keywords
 import os
 import argparse
 import json
