@@ -212,7 +212,10 @@ def api_frame():
 def run_fastapi_server(port):
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
 
-def quit(signum, _frame):
+def save_to_s3():
+    import s3cmd
+
+def quit(signum, _frame, save_s3: bool):
     # Close video writer if initialized
     try:
         if vw is not None:
@@ -224,6 +227,7 @@ def quit(signum, _frame):
         _close_keys_logger()
     except Exception:
         pass
+
     sys.exit(0)
 
 def main():
@@ -235,7 +239,7 @@ def main():
     parser.add_argument("--fps", type=int, help="Emulator fps (uncapped if not set)")
     parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")  # NEW
     parser.add_argument("--max-steps", type=int, default=0, help="Number of emulator steps before the emulator quits.")
-
+    parser.add_argument("--save-s3", action="store_true", help="Save to s3 bucket, uses s3cmd credentials.")
     args = parser.parse_args()
 
     if args.manual_mode:
@@ -282,7 +286,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
     finally:
-        quit(None, None)
+        quit(None, None, args.save_s3)
 
 if __name__ == "__main__":
    sys.exit(main())

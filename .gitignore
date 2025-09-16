@@ -8,9 +8,9 @@
 llm_log_*
 CLAUDE.md
 .vscode
+**.s3cfg**
 # Ignore everything inside Data/
 Data/*
-
 
 # Ignore everything inside Emerald-GBAdvance/
 Emerald-GBAdvance/*

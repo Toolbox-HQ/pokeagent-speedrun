@@ -35,7 +35,7 @@ RUN dpkg -i mGBA-0.10.5-ubuntu64-noble/libmgba.deb
 COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync
 COPY . .
-
+RUN if [ -f ".s3cfg" ]; then mv .s3cfg ~/.s3cfg; fi
 
 # /app/.venv/bin/python /app/main.py --fps 60 --max-steps 120
 CMD ["/app/.venv/bin/python", "/app/main.py", "--fps", "60", "--max-steps", "120"]
