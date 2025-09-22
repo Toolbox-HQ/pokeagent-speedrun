@@ -2,7 +2,7 @@ import base64, io, threading, time
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, Response
 import uvicorn
-from emerald_emulator_mgba import EmeraldEmulator  # keep OR replace with your local class
+from mgba_emulator import MGBAEmulator  # keep OR replace with your local class
 import argparse
 import sys
 import signal
@@ -12,6 +12,7 @@ from PIL import Image
 import numpy as np
 import json
 import os
+from policy import policy_map
 
 # Global state
 latest_png_b64 = None
@@ -64,7 +65,7 @@ def init_pygame():
 def setup_emulator(rom_path="Emerald-GBAdvance/rom.gba", save_state:str =None):
     try:
         global emulator
-        emulator = EmeraldEmulator(rom_path)
+        emulator = MGBAEmulator(rom_path)
         emulator.initialize()
 
         if save_state:
@@ -237,6 +238,9 @@ def quit(signum, _frame, save_s3: bool = False):
 
     sys.exit(0)
 
+def init_policy(policy_name):
+    print(policy_name)
+
 def main():
     parser = argparse.ArgumentParser(description="Direct Agent Pokemon Emerald")
     parser.add_argument("--rom", type=str, default="Emerald-GBAdvance/rom.gba", help="Path to ROM file")
@@ -256,15 +260,14 @@ def main():
         global agent_mode
         agent_mode = False
         print("🎮 Starting in MANUAL mode (--manual-mode flag)")
+        init_pygame()
     else:
         print("🤖 Starting in AGENT mode (default)")
+        global policy; policy = init_policy(args.policy)
     
     # Set up signal handlers
     signal.signal(signal.SIGINT, quit)
     signal.signal(signal.SIGTERM, quit)
-
-    if args.manual_mode:
-        init_pygame()
 
     setup_emulator(args.rom, args.save_state)
 

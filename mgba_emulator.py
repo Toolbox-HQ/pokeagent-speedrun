@@ -10,7 +10,7 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-class EmeraldEmulator:
+class MGBAEmulator:
     """emulator wrapper for Pokémon Emerald with headless frame capture and scripted inputs."""
 
     def __init__(self, rom_path: str):

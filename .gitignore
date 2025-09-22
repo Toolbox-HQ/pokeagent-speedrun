@@ -20,3 +20,4 @@ agent_direct_save.state
 # Keep the folders themselves (optional)
 !Data/.gitkeep
 !Emerald-GBAdvance/.gitkeep
+/state
