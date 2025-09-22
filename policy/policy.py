@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 class Policy(ABC):
 
     @abstractmethod
-    def get_action(self):
+    def get_action(self) -> list:
         pass
 
     @abstractmethod

@@ -8,6 +8,7 @@ from mgba._pylib import ffi, lib
 import queue
 from typing import List
 
+
 logger = logging.getLogger(__name__)
 
 class MGBAEmulator:

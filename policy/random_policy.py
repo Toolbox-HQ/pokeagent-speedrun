@@ -12,7 +12,7 @@ class RandomPolicy(Policy):
 
     def enqueue_action(self) -> None:
         rnd = np.random.normal(loc=self.mean_action_time,
-                               scale=self.std_action_time_dev,
+                               scale=self.std_action_time,
                                size=1).item()
         
         num_presses = round(rnd * self.game_fps)
@@ -25,3 +25,6 @@ class RandomPolicy(Policy):
             self.enqueue_action()
 
         return [self.action_queue.pop(0)]
+    
+    def send_state():
+        pass

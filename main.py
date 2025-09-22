@@ -12,14 +12,16 @@ from PIL import Image
 import numpy as np
 import json
 import os
-from policy import policy_map
+from policy import Policy, policy_map
+from typing import Union
+from tqdm import tqdm 
 
 # Global state
 latest_png_b64 = None
 app = FastAPI()
 emulator_fps = None
 emulator = None
-policy = None
+policy: Union[Policy, None] = None
 agent_mode = True
 container = None
 stream = None
@@ -75,10 +77,11 @@ def setup_emulator(rom_path="Emerald-GBAdvance/rom.gba", save_state:str =None):
             raise RuntimeError(f"Failed to initialize mgba: {e}")
 
 def get_keys_for_frame():
-    actions_pressed = []
-    if agent_mode:
-        return actions_pressed
 
+    if agent_mode:
+        return policy.get_action()
+
+    actions_pressed = []
     # Make sure input state is fresh for this frame
     pygame.event.pump()
     keys = pygame.key.get_pressed()
@@ -134,6 +137,8 @@ def _close_keys_logger():
 def game_loop(max_steps: int=0) -> None:
     global latest_png_b64, frame_index
     
+    pbar: tqdm = tqdm(total=max_steps) if max_steps else None
+
     while True:
         try:
             
@@ -167,9 +172,13 @@ def game_loop(max_steps: int=0) -> None:
 
             if max_steps and frame_index >= max_steps:
                 break
+            elif pbar:
+                pbar.update(1)
 
         except Exception as e:
             # log and keep going
+            import traceback
+            traceback.print_exc()
             print(f"emulator_loop error: {e}")
             time.sleep(0.5)
 
@@ -238,8 +247,8 @@ def quit(signum, _frame, save_s3: bool = False):
 
     sys.exit(0)
 
-def init_policy(policy_name):
-    print(policy_name)
+def init_policy(policy_name: str) -> Policy:
+    return policy_map(policy_name)
 
 def main():
     parser = argparse.ArgumentParser(description="Direct Agent Pokemon Emerald")
