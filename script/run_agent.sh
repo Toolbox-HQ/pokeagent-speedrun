@@ -1,0 +1,1 @@
+python main.py --max-steps 100 --save-s3 --policy "random_policy"
