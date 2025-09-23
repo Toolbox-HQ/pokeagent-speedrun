@@ -15,6 +15,7 @@ import os
 from policy import Policy, policy_map
 from typing import Union
 from tqdm import tqdm 
+from util.data import init_boto3_client, upload_to_s3
 
 # Global state
 latest_png_b64 = None
@@ -227,7 +228,16 @@ def run_fastapi_server(port):
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
 
 def save_to_s3():
-    os.system("bash ./script/save_to_s3.sh")
+    s3 = init_boto3_client()
+    bucket = s3.list_buckets()["Buckets"][0]["Name"]
+    from pathlib import Path
+
+    data_dir = Path("./Data")
+
+    for file in data_dir.iterdir():
+        path = file.resolve()     
+        file_name = file.name         
+        upload_to_s3(path, f"ai4pokemon/{file_name}", bucket, s3)
 
 def quit(signum, _frame, save_s3: bool = False):
     # Close video writer if initialized
