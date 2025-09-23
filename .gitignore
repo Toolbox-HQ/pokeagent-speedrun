@@ -21,3 +21,4 @@ agent_direct_save.state
 !Data/.gitkeep
 !Emerald-GBAdvance/.gitkeep
 /state
+/docker_build
