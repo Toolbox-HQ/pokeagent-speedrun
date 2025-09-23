@@ -38,4 +38,4 @@ RUN uv sync
 COPY . .
 
 # /app/.venv/bin/python /app/main.py --fps 60 --max-steps 120 --save-s3
-CMD ["source","./script/run_agent.sh"]
+CMD ["bash","./script/run_agent.sh"]
