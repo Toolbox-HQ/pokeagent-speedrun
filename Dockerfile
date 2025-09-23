@@ -17,6 +17,7 @@ RUN apt-get update && \
     libzip4 \
     libsqlite3-0 \
     libelf1 \
+    uuid-runtime \
     liblua5.4-0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
