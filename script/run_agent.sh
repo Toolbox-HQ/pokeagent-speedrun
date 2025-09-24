@@ -8,7 +8,7 @@ python main.py \
     --save-s3 \
     --policy "random_policy" \
     --save-state "./Data/${STATE_NUM}.state" \
-    --keys-json-path "/Data/keys_${RND}.json" \
-    --mp4-path "/Data/output_${RND}.mp4"
+    --keys-json-path "./Data/keys_${RND}.json" \
+    --mp4-path "./Data/output_${RND}.mp4"
 
 rm -r ./Data

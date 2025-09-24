@@ -4,7 +4,7 @@ def init_boto3_client():
     import configparser
 
     config = configparser.ConfigParser()
-    config.read(Path.joinpath("./.s3cfg"))
+    config.read("./.s3cfg")
     return boto3.client(
         "s3",
         aws_access_key_id=config["default"]["access_key"],
