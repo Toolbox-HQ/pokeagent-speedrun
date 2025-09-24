@@ -7,7 +7,7 @@ python main.py \
     --max-steps 100000 \
     --save-s3 \
     --policy "random_policy" \
-    --save-state "./Data/${STATE_NUM}.state" \
+    --save-state "./state/${STATE_NUM}.state" \
     --keys-json-path "./Data/keys_${RND}.json" \
     --mp4-path "./Data/output_${RND}.mp4"
 
