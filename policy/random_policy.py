@@ -11,13 +11,11 @@ class RandomPolicy(Policy):
         self.std_action_time = 0.25
 
     def enqueue_action(self) -> None:
-        rnd = np.random.normal(loc=self.mean_action_time,
-                               scale=self.std_action_time,
-                               size=1).item()
-        
-        num_presses = round(rnd * self.game_fps)
+
+        # 30-150 frame actions presses ~ 0.5-2.5 seconds
+        num_presses = random.randint(30, 150)
         button = random.choice(KEY_LIST)
-        self.action_queue.extend([button] * num_presses)
+        self.action_queue.extend(button * num_presses)
 
     def get_action(self)-> list:
 

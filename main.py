@@ -237,7 +237,7 @@ def save_to_s3():
     for file in data_dir.iterdir():
         path = file.resolve()     
         file_name = file.name         
-        upload_to_s3(path, f"pokeagent/emulator/{file_name}", bucket, s3)
+        upload_to_s3(path, f"pokeagent/emulator_v1/{file_name}", bucket, s3)
 
 def quit(signum, _frame, save_s3: bool = False):
     # Close video writer if initialized

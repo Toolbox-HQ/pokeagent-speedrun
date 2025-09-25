@@ -14,14 +14,15 @@ class Policy(ABC):
         return self.get_action()
     
 KEY_LIST = [
-    "a",
-    "b",
-    "start",
-    "select",
-    "up",
-    "down",
-    "left",
-    "right",
-    "l",
-    "r",
+    ["a"],
+    ["b"],
+    ["start"],
+    ["select"],
+    ["up"],
+    ["down"],
+    ["left"],
+    ["right"],
+    ["l"],
+    ["r"],
+    [],
 ]
