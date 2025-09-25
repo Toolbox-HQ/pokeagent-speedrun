@@ -15,4 +15,4 @@ docker build -t "$IMAGE_NAME:$TAG" .
 # Save Docker image to build directory
 #docker save "$IMAGE_NAME:$TAG" -o "$BUILD_DIR/${IMAGE_NAME}_${TAG}.tar"
 
-echo "Docker image saved to $BUILD_DIR/${IMAGE_NAME}_${TAG}.tar"
+echo "Docker image built!"
