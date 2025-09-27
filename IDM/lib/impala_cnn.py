@@ -5,9 +5,9 @@ from typing import Dict, List, Optional
 from torch import nn
 from torch.nn import functional as F
 
-from lib import misc
-from lib import torch_util as tu
-from lib.util import FanInInitReLULayer
+from IDM.lib import misc
+from IDM.lib import torch_util as tu
+from IDM.lib.util import FanInInitReLULayer
 
 
 class CnnBasicBlock(nn.Module):

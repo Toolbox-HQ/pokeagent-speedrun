@@ -3,10 +3,10 @@ from typing import Dict, Optional
 import torch as th
 from torch import nn
 from torch.nn import functional as F
-import lib.torch_util as tu
-from lib.masked_attention import MaskedAttention
-from lib.store_args import store_args
-from lib.tree_util import tree_map
+import IDM.lib.torch_util as tu
+from IDM.lib.masked_attention import MaskedAttention
+from IDM.lib.store_args import store_args
+from IDM.lib.tree_util import tree_map
 
 
 def get_module_log_keys_recursive(m: nn.Module):

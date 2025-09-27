@@ -8,9 +8,9 @@ import torch as th
 from torch import nn
 from torch.nn import functional as F
 
-from lib import misc, mlp
-from lib import torch_util as tu
-from lib import util
+from IDM.lib import misc, mlp
+from IDM.lib import torch_util as tu
+from IDM.lib import util
 
 SENTINEL = 0.1337
 
@@ -337,7 +337,7 @@ class SelfAttentionLayer(AttentionLayerBase):
         K_bte = self.k_layer(X_bte)
         V_bte = self.v_layer(X_bte)
         if state:
-            state, K_bte, V_bte = self.update_state(state, K_bte, V_bte)
+           state, K_bte, V_bte = self.update_state(state, K_bte, V_bte)
         postproc_closure, Q_bte, K_bte, V_bte = self.attn.preproc_qkv(Q_bte, K_bte, V_bte)
         extra_btT = self.relattn_logits(X_bte, K_bte.shape[1]) if self.relattn else None
         A_bte = attention(
