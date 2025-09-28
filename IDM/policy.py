@@ -8,6 +8,7 @@ from IDM.lib.categorical_classifier import CategoricalClassifier
 from IDM.lib.misc import transpose
 from IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
 from IDM.lib.impala_cnn import ImpalaCNN
+from cut_cross_entropy import linear_cross_entropy
 
 net_kwargs = {   
         'attention_heads': 32,
@@ -301,18 +302,23 @@ class InverseActionPolicy(nn.Module):
     def __init__(
         self,
         idm_net_kwargs=net_kwargs,
+        output_classes: int = 9,
+        fps: int = 4
     ):
         super().__init__()
+        self.fps = fps
+        self.num_classes = output_classes
         self.net = InverseActionNet(**idm_net_kwargs)
         pi_out_size = self.net.output_latent_size()
-        self.pi_head = CategoricalClassifier(pi_out_size, 9)
+        self.out_head = nn.Linear(pi_out_size, out_features=self.num_classes, bias=False)
 
     def reset_parameters(self):
         super().reset_parameters()
         self.net.reset_parameters()
-        self.pi_head.reset_parameters()
+        self.out_head.reset_parameters()
 
-    def forward(self, obs, first: th.Tensor, state_in, **kwargs):
+    # TODO fix terrible signiture of the forward pass
+    def forward(self, obs, first: th.Tensor, state_in, labels = None, **kwargs):
         if isinstance(obs, dict):
             # We don't want to mutate the obs input.
             obs = obs.copy()
@@ -325,26 +331,21 @@ class InverseActionPolicy(nn.Module):
             mask = None
 
         (pi_h, _), state_out = self.net(obs, state_in=state_in, context={"first": first}, **kwargs)
-        pi_logits = self.pi_head(pi_h)
-        return (pi_logits, None, None), state_out
+        logits = self.out_head(pi_h)
 
-    @th.no_grad()
-    def predict(
-        self,
-        obs,
-        deterministic: bool = True,
-        **kwargs,
-    ):
-        (pd, _, _), state_out = self(obs=obs, **kwargs)
+        loss = None
 
-        ac = self.pi_head.sample(pd, deterministic=deterministic)
-        log_prob = self.pi_head.logprob(ac, pd)
+        if labels:
+            classifier = self.out_head.weight
+            loss = linear_cross_entropy(logits, classifier, labels, impl="cce_kahan_full")
 
-        assert not th.isnan(log_prob).any()
-
-        result = {"log_prob": log_prob, "pd": pd}
-
-        return ac, state_out, result
+        return IDMOutput(logits=logits, loss=loss)
 
     def initial_state(self, batch_size: int):
         return self.net.initial_state(batch_size)
+    
+class IDMOutput():
+    def __init__(self, logits = None, loss = None):
+        self.logits = logits
+        self.loss = loss
+        

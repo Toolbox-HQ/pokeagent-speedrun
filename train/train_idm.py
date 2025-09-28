@@ -1,7 +1,7 @@
 import os
 import argparse
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Tuple
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -10,19 +10,23 @@ import wandb
 from tqdm.auto import tqdm
 import time
 from IDM.policy import InverseActionPolicy as IDModel
+from dataset import IDMDataset
 from transformers import HfArgumentParser
+from util.repro import repro_init
 
 @dataclass
 class Config:
     # Model
     torch_compile: bool = field(default=False)
-    output_classes: int = field(default=None, help="Number of output classes, used to initialize classification head dim.")
+    output_classes: int = field(default=None)
+    fps: int = field(default=4)
 
     # Data
     batch_size: int = field(default=256)
-    image_size: int = field(default=None)
-    dataset_dir: str = field(default=None, help="Path to dataset, assumed to be in .cache subdirectory.")
-    s3_bucket: str = field(default=None, help="S3 bucket name if data not in cache.")
+    image_size: Tuple[int, int] = field(default_factory=lambda: (128, 128))
+    dataset_dir: str = field(default=None)
+    s3_bucket: str = field(default=None)
+
 
     # Training
     epochs: int = field(default=10)
@@ -43,13 +47,14 @@ def setup_distributed():
 
 def main():
 
-    # Parse config
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--config", type=str, required=True)
     args = arg_parser.parse_args()
+    repro_init(args.config)
 
     parser = HfArgumentParser(Config)
     (cfg,) = parser.parse_yaml_file(args.config)
+    
 
     rank, world_size = setup_distributed()
     device = torch.device(f"cuda:{rank}")
@@ -57,17 +62,11 @@ def main():
     if rank == 0:
         wandb.init(project=cfg.wandb_project, config=vars(cfg))
 
-    # Dataset
-    transform = T.v2.Compose(
-        [
-            T.v2.Resize((cfg.image_size, cfg.image_size), antialias=True),
-            T.v2.ToImage(),  # Ensures we're dealing with an image type
-            T.v2.ToDtype(torch.float32, scale=True),  # Like ToTensor(): 0–1 scaling
-        ]
-    )
-    dataset = FastImageFolderNoLabels(
-        cfg.dataset_root, cfg.image_size, transform=transform
-    )
+
+    model = IDModel(output_classes=cfg.output_classes, fps=cfg.fps).to(device=device)
+
+    h,w = cfg.image_size
+    dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps)
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,
@@ -75,33 +74,15 @@ def main():
         sampler=sampler,
         num_workers=4,
         pin_memory=True,
+        collate_fn=IDMDataset.collate
     )
 
-    # SigLIP
-    processor = AutoProcessor.from_pretrained(cfg.model_name_or_path, use_fast=True)
-    siglip = SiglipModel.from_pretrained(
-        cfg.model_name_or_path, attn_implementation="sdpa"
-    ).to(device)
-    if cfg.freeze_encoder:
-        siglip.eval()
-    else:
-        siglip.train()
 
-    # VQ + Decoder
-    model = QuantizeDecode(dim=cfg.embed_dim, levels=cfg.levels).to(device)
-
-    # Torch Compile (optional)
     if cfg.torch_compile:
-        siglip = torch.compile(siglip, fullgraph=True)
         model = torch.compile(model, fullgraph=True)
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
-
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
-    if cfg.loss_fn == "mse":
-        loss_fn = nn.MSELoss()
-    elif cfg.loss_fn == "cosine":
-        loss_fn = cosine_loss
 
     # Training
     for epoch in range(cfg.epochs):
@@ -113,16 +94,20 @@ def main():
             disable=(rank != 0),
         )
         start_time = time.time()
-        for images in epoch_bar:
-            images = images.to(device)
+        for inp, labels in epoch_bar:
+            
+            # TODO refactor out useless but required inputs
+            dummy = {
+            "first": torch.zeros((inp.shape[0], 1)).to(device),
+            "state_in": model.module.initial_state(1)
+            }
 
-            with torch.no_grad():
-                inputs = processor(images=images, return_tensors="pt").to(device)
-                outputs: BaseModelOutputWithPooling = siglip.vision_model(**inputs)
-                features: torch.Tensor = outputs.last_hidden_state  # [B, S, 768]
-
-            reconstruction = model(features)
-            loss = loss_fn(reconstruction, features)
+            # TODO refactor so that this isn't wrapped in a dict
+            inp = {"img": inp.to(device)}
+            labels = labels.to(device)
+            
+            out = model(inp,labels=labels, **dummy)
+            loss = out.loss
 
             optimizer.zero_grad()
             loss.backward()
@@ -130,31 +115,19 @@ def main():
 
             elapsed = time.time() - start_time
             start_time = time.time()
-            throughput = (cfg.batch_size * world_size) / elapsed
+            throughput = world_size / elapsed
 
             if rank == 0:
-                l1loss = (
-                    torch.nn.functional.l1_loss(reconstruction, features)
-                    .detach()
-                    .item()
-                )
-                infloss = infinity_loss(reconstruction, features).detach().item()
-                norm_l1 = normalized_l1(reconstruction, features).detach().item()
-                norm_mse = normalized_mse(reconstruction, features).detach().item()
 
                 wandb.log(
                     {
                         "epoch": epoch + 1,
                         "loss": loss.item(),
                         "throughput": throughput,
-                        "error_norm_1": l1loss,
-                        "error_norm_inf": infloss,
-                        "normalized_l1": norm_l1,
-                        "normalized_mse": norm_mse,
                     }
                 )
                 epoch_bar.set_postfix_str(
-                    f"loss={loss.item():.4f} | img/s={throughput:.1f} | iter={epoch_bar.n}/{epoch_bar.total}"
+                    f"loss={loss.item():.4f} | batch/s={throughput:.1f} | iter={epoch_bar.n}/{epoch_bar.total}"
                 )
 
     # Save model

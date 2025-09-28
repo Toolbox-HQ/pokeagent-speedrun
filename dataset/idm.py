@@ -6,6 +6,7 @@ import torch
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from typing import Tuple
+import einops
 
 class IDMDataset(Dataset):
 
@@ -24,12 +25,14 @@ class IDMDataset(Dataset):
                           for path in list_files_with_extentions(self.local_path, ".json")]
     
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
-        print('done')
 
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
         (frames, actions, video) = self.samples[ind]
         frames = VideoDecoder(video).get_frames_at(frames.tolist()).data
-        return resize(frames, (self.h, self.w)), actions
+        frames = resize(frames, (self.h, self.w))
+
+        # IDM expects channel dim is last
+        return einops.rearrange(frames, "B C H W -> B H W C"), actions
     
     def __len__(self):
         return len(self.samples)
@@ -68,5 +71,5 @@ if __name__ == "__main__":
     ds = IDMDataset("pokeagent/emulator_v1", s3_bucket="b4schnei")
     item = ds[0]
     item2 = ds[1]
-    x, y = IDM_collator([item, item2])
+    x, y = ds.collate([item, item2])
     print("done")
