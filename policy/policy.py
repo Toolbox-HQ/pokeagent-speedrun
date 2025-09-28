@@ -26,3 +26,7 @@ KEY_LIST = [
     ["r"],
     [],
 ]
+
+# hack because list not-hashable
+CLASS_TO_KEY = {ind:str(key) for (ind, key) in enumerate(KEY_LIST)}
+KEY_TO_CLASS = {v:k for k,v in CLASS_TO_KEY.items()}

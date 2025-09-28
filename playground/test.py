@@ -1,7 +1,9 @@
 import os
 import torch
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "5"
 from IDM.policy import InverseActionPolicy
+
 
 
 device = "cuda"
