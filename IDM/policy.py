@@ -9,6 +9,7 @@ from IDM.lib.misc import transpose
 from IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
 from IDM.lib.impala_cnn import ImpalaCNN
 from cut_cross_entropy import linear_cross_entropy
+import einops
 
 net_kwargs = {   
         'attention_heads': 32,
@@ -283,7 +284,8 @@ class InverseActionNet(PokePolicy):
 
         x = F.relu(x, inplace=False)
 
-        pi_latent = self.lastlayer(x)
+        # NOTE the original implementation is bugged here
+        x = self.lastlayer(x)
         pi_latent = self.final_ln(x)
         return (pi_latent, None), state_out
 
@@ -310,11 +312,9 @@ class InverseActionPolicy(nn.Module):
         self.num_classes = output_classes
         self.net = InverseActionNet(**idm_net_kwargs)
         pi_out_size = self.net.output_latent_size()
-        self.out_head = nn.Linear(pi_out_size, out_features=self.num_classes, bias=False)
+        self.out_head = nn.Linear(in_features=pi_out_size, out_features=self.num_classes, bias=False)
 
     def reset_parameters(self):
-        super().reset_parameters()
-        self.net.reset_parameters()
         self.out_head.reset_parameters()
 
     # TODO fix terrible signiture of the forward pass
@@ -330,14 +330,16 @@ class InverseActionPolicy(nn.Module):
         else:
             mask = None
 
-        (pi_h, _), state_out = self.net(obs, state_in=state_in, context={"first": first}, **kwargs)
-        logits = self.out_head(pi_h)
+        (last_layer_hidden, _), state_out = self.net(obs, state_in=state_in, context={"first": first}, **kwargs)
+        
 
+        logits = self.out_head(last_layer_hidden)
+        logits = einops.rearrange(logits, "b t c -> (b t) c")
         loss = None
 
-        if labels:
-            classifier = self.out_head.weight
-            loss = linear_cross_entropy(logits, classifier, labels, impl="cce_kahan_full")
+        if labels is not None:
+            labels = einops.rearrange(labels, "b t -> (b t)").long()
+            loss = F.cross_entropy(logits, labels)
 
         return IDMOutput(logits=logits, loss=loss)
 

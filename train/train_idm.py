@@ -31,6 +31,9 @@ class Config:
     # Training
     epochs: int = field(default=10)
     lr: float = field(default=2e-4)
+    weight_decay: float = field(default=0.01)
+    max_grad_norm: float = field(default=1.0)
+
     wandb_project: str = field(default="pokeagent")
 
     # Output
@@ -44,6 +47,12 @@ def setup_distributed():
     world_size = dist.get_world_size()
     return local_rank, world_size
 
+def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
+    with torch.no_grad():
+        predictions = torch.argmax(logits, dim=-1)
+        correct = (predictions == labels).float()
+        accuracy = correct.mean().item()
+    return accuracy
 
 def main():
 
@@ -63,7 +72,10 @@ def main():
         wandb.init(project=cfg.wandb_project, config=vars(cfg))
 
 
-    model = IDModel(output_classes=cfg.output_classes, fps=cfg.fps).to(device=device)
+    model = IDModel(output_classes=cfg.output_classes, fps=cfg.fps)
+    #model.reset_parameters()
+    model.to(device=device)
+
 
     h,w = cfg.image_size
     dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps)
@@ -82,7 +94,7 @@ def main():
         model = torch.compile(model, fullgraph=True)
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
     # Training
     for epoch in range(cfg.epochs):
@@ -99,7 +111,7 @@ def main():
             # TODO refactor out useless but required inputs
             dummy = {
             "first": torch.zeros((inp.shape[0], 1)).to(device),
-            "state_in": model.module.initial_state(1)
+            "state_in": model.module.initial_state(inp.shape[0])
             }
 
             # TODO refactor so that this isn't wrapped in a dict
@@ -108,11 +120,18 @@ def main():
             
             out = model(inp,labels=labels, **dummy)
             loss = out.loss
+            logits = out.logits
 
             optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
 
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(), 
+                max_norm=cfg.max_grad_norm
+            )
+
+            optimizer.step()
+            accuracy = compute_accuracy(logits, labels)
             elapsed = time.time() - start_time
             start_time = time.time()
             throughput = world_size / elapsed
@@ -123,11 +142,15 @@ def main():
                     {
                         "epoch": epoch + 1,
                         "loss": loss.item(),
+                        "accuracy": accuracy,
                         "throughput": throughput,
                     }
                 )
                 epoch_bar.set_postfix_str(
-                    f"loss={loss.item():.4f} | batch/s={throughput:.1f} | iter={epoch_bar.n}/{epoch_bar.total}"
+                    f"loss={loss:.4f} | "
+                    f"acc={accuracy:.2f} | "
+                    f"batch/s={throughput:.1f} | "
+                    f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
 
     # Save model
