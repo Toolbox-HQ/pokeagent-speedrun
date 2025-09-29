@@ -1,6 +1,7 @@
 import os
 import orjson
 import re 
+import os.path as path
 
 def list_files_with_extentions(dir: str, ext: str):
     files = list(filter(lambda x: x.endswith(ext), os.listdir(dir)))
@@ -9,13 +10,25 @@ def list_files_with_extentions(dir: str, ext: str):
 def map_json_to_mp4(filename):
     dirname, basename = os.path.split(filename)
     new_basename = re.sub(r'^keys_([a-f0-9]+)\.json$', r'output_\1.mp4', basename)
-    return os.path.join(dirname, new_basename)
+    return path.join(dirname, new_basename)
+
+def has_s3():
+    assert find_s3_cfg()
+
+def find_s3_cfg():
+    if path.exists(".s3cfg"):
+        return ".s3cfg"
+    elif path.exists(path.expanduser("~/.s3cfg")):
+        return path.expanduser("~/.s3cfg")
+    else:
+        return None        
+
 
 def init_boto3_client(config_path = None):
     import boto3
     import configparser
 
-    path = config_path if config_path else os.path.expanduser("~/.s3cfg")
+    path = config_path if config_path else find_s3_cfg()
     config = configparser.ConfigParser()
     config.read(path)
     return boto3.client(

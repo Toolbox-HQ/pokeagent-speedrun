@@ -290,6 +290,10 @@ def main():
         print("🤖 Starting in AGENT mode (default)")
         global policy; policy = init_policy(args.policy)
     
+    if args.save_s3:
+        from util.data import has_s3
+        has_s3()
+
     # Set up signal handlers
     signal.signal(signal.SIGINT, quit)
     signal.signal(signal.SIGTERM, quit)
