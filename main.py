@@ -2,13 +2,12 @@ import base64, io, threading, time
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, Response
 import uvicorn
-from mgba_emulator import MGBAEmulator  # keep OR replace with your local class
+from mgba_emulator import MGBAEmulator
 import argparse
 import sys
 import signal
 import pygame
 import cv2
-from PIL import Image
 import numpy as np
 import json
 import os
