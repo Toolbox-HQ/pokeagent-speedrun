@@ -22,8 +22,6 @@ KEY_LIST = [
     ["down"],
     ["left"],
     ["right"],
-    ["l"],
-    ["r"],
     [],
 ]
 

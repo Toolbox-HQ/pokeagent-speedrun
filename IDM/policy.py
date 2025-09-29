@@ -10,7 +10,6 @@ from IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
 from IDM.lib.impala_cnn import ImpalaCNN
 from cut_cross_entropy import linear_cross_entropy
 import einops
-from torch.utils.checkpoint import checkpoint
 
 net_kwargs = {   
         'attention_heads': 32,
@@ -316,7 +315,7 @@ class InverseActionPolicy(nn.Module):
         pi_out_size = self.net.output_latent_size()
         self.out_head = nn.Linear(in_features=pi_out_size, out_features=self.num_classes, bias=False)
         if activation_checkpoint:
-            self.net.forward = checkpoint(self.net.forward, use_reentrant=False)
+            raise Exception("Activation checkpointing not implemented")
 
     def reset_parameters(self):
         self.out_head.reset_parameters()
@@ -343,7 +342,8 @@ class InverseActionPolicy(nn.Module):
         if labels is not None:
             loss = F.cross_entropy(
                 einops.rearrange(logits, "b t c -> (b t) c"),
-                einops.rearrange(labels, "b t -> (b t)"))
+                einops.rearrange(labels, "b t -> (b t)")
+                )
 
         return IDMOutput(logits=logits, loss=loss)
 
