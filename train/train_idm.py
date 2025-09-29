@@ -95,6 +95,9 @@ def main():
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
+    avg_loss = -1
+    avg_acc = -1
+
     # Training
     for epoch in range(cfg.epochs):
         sampler.set_epoch(epoch)
@@ -105,19 +108,24 @@ def main():
             disable=(rank != 0),
         )
         start_time = time.time()
+
+        # Track metrics for epoch averages
+        total_loss = 0.0
+        total_acc = 0.0
+        num_batches = 0
+
         for inp, labels in epoch_bar:
-            
             # TODO refactor out useless but required inputs
             dummy = {
-            "first": torch.zeros((inp.shape[0], 1)).to(device),
-            "state_in": model.module.initial_state(inp.shape[0])
+                "first": torch.zeros((inp.shape[0], 1)).to(device),
+                "state_in": model.module.initial_state(inp.shape[0])
             }
 
             # TODO refactor so that this isn't wrapped in a dict
             inp = {"img": inp.to(device)}
             labels = labels.to(dtype=torch.long, device=device)
             
-            out = model(inp,labels=labels, **dummy)
+            out = model(inp, labels=labels, **dummy)
             loss = out.loss
             logits = out.logits
 
@@ -135,13 +143,16 @@ def main():
             start_time = time.time()
             throughput = world_size / elapsed
 
-            if rank == 0:
+            total_loss += loss.item()
+            total_acc += accuracy
+            num_batches += 1
 
+            if rank == 0:
                 wandb.log(
                     {
                         "epoch": epoch + 1,
-                        "loss": loss.item(),
-                        "accuracy": accuracy,
+                        "loss_step": loss.item(),
+                        "accuracy_step": accuracy,
                         "throughput": throughput,
                     }
                 )
@@ -149,8 +160,26 @@ def main():
                     f"loss={loss:.4f} | "
                     f"acc={accuracy:.2f} | "
                     f"batch/s={throughput:.1f} | "
+                    f"avg loss={avg_loss:.4f}" 
+                    f"avg acc={avg_acc:.2f}"
                     f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
+
+        avg_loss = total_loss / num_batches
+        avg_acc = total_acc / num_batches
+
+        if rank == 0:
+            wandb.log(
+                {
+                    "epoch": epoch + 1,
+                    "loss_epoch": avg_loss,
+                    "accuracy_epoch": avg_acc,
+                }
+            )
+            # Update tqdm bar one last time with epoch averages
+            epoch_bar.set_postfix_str(
+                f"[Epoch Avg] loss={avg_loss:.4f} | acc={avg_acc:.2f}"
+            )
 
     # Save model
     if rank == 0:
