@@ -114,12 +114,18 @@ def _open_keys_logger(path):
     fp.flush()
     return fp
 
+def map_key_to_str(action: list)-> str:
+    if not action:
+        return "none"
+    else:
+        return action[0]
+
 def log_keys(frame_num, keys_list):
     """Append one frame's keys as a JSON object into the array."""
     global keys_log_fp, _keys_log_first
     if keys_log_fp is None:
         return
-    entry = {"frame": frame_num, "keys": keys_list}
+    entry = {"frame": frame_num, "keys": map_key_to_str(keys_list)}
     if not _keys_log_first:
         keys_log_fp.write(",\n")
     keys_log_fp.write(json.dumps(entry, ensure_ascii=False))
