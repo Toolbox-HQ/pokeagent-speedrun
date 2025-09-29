@@ -33,7 +33,7 @@ class Config:
     lr: float = field(default=2e-4)
     weight_decay: float = field(default=0.01)
     max_grad_norm: float = field(default=1.0)
-
+    activation_checkpoint: bool = field(default=False)
     wandb_project: str = field(default="pokeagent")
 
     # Output
@@ -116,7 +116,7 @@ def main():
 
             # TODO refactor so that this isn't wrapped in a dict
             inp = {"img": inp.to(device)}
-            labels = labels.to(device)
+            labels = labels.to(dtype=torch.long, device=device)
             
             out = model(inp,labels=labels, **dummy)
             loss = out.loss

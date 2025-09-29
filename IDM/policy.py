@@ -10,6 +10,7 @@ from IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
 from IDM.lib.impala_cnn import ImpalaCNN
 from cut_cross_entropy import linear_cross_entropy
 import einops
+from torch.utils.checkpoint import checkpoint
 
 net_kwargs = {   
         'attention_heads': 32,
@@ -305,7 +306,8 @@ class InverseActionPolicy(nn.Module):
         self,
         idm_net_kwargs=net_kwargs,
         output_classes: int = 9,
-        fps: int = 4
+        fps: int = 4,
+        activation_checkpoint = False,
     ):
         super().__init__()
         self.fps = fps
@@ -313,6 +315,8 @@ class InverseActionPolicy(nn.Module):
         self.net = InverseActionNet(**idm_net_kwargs)
         pi_out_size = self.net.output_latent_size()
         self.out_head = nn.Linear(in_features=pi_out_size, out_features=self.num_classes, bias=False)
+        if activation_checkpoint:
+            self.net.forward = checkpoint(self.net.forward, use_reentrant=False)
 
     def reset_parameters(self):
         self.out_head.reset_parameters()
@@ -334,12 +338,12 @@ class InverseActionPolicy(nn.Module):
         
 
         logits = self.out_head(last_layer_hidden)
-        logits = einops.rearrange(logits, "b t c -> (b t) c")
         loss = None
 
         if labels is not None:
-            labels = einops.rearrange(labels, "b t -> (b t)").long()
-            loss = F.cross_entropy(logits, labels)
+            loss = F.cross_entropy(
+                einops.rearrange(logits, "b t c -> (b t) c"),
+                einops.rearrange(labels, "b t -> (b t)"))
 
         return IDMOutput(logits=logits, loss=loss)
 

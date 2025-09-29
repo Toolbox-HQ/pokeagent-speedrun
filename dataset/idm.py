@@ -27,7 +27,6 @@ class IDMDataset(Dataset):
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
-
         (frames, actions, video) = self.samples[ind]
         frames = VideoDecoder(video).get_frames_at(frames.tolist()).data
         frames = resize(frames, (self.h, self.w))
