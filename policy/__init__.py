@@ -1,5 +1,5 @@
 from .random_policy import RandomPolicy
-from .policy import Policy, KEY_LIST, CLASS_TO_KEY, KEY_TO_CLASS
+from .policy import Policy, MGBA_KEY_LIST, CLASS_TO_KEY, KEY_TO_CLASS
 
 def policy_map(x: str):
     if x == "random_policy":
