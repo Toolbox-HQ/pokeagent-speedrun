@@ -126,6 +126,7 @@ def log_keys(frame_num, keys_list):
     if keys_log_fp is None:
         return
     entry = {"frame": frame_num, "keys": map_key_to_str(keys_list)}
+    print(entry)
     if not _keys_log_first:
         keys_log_fp.write(",\n")
     keys_log_fp.write(json.dumps(entry, ensure_ascii=False))

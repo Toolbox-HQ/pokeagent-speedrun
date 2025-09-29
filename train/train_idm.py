@@ -62,8 +62,7 @@ def main():
     repro_init(args.config)
 
     parser = HfArgumentParser(Config)
-    (cfg,) = parser.parse_yaml_file(args.config)
-    
+    cfg: Config = parser.parse_yaml_file(args.config)[0]
 
     rank, world_size = setup_distributed()
     device = torch.device(f"cuda:{rank}")
@@ -78,7 +77,7 @@ def main():
 
 
     h,w = cfg.image_size
-    dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps)
+    dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,

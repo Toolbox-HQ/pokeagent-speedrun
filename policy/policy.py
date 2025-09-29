@@ -14,17 +14,16 @@ class Policy(ABC):
         return self.get_action()
     
 KEY_LIST = [
-    ["a"],
-    ["b"],
-    ["start"],
-    ["select"],
-    ["up"],
-    ["down"],
-    ["left"],
-    ["right"],
-    [],
+    "a",
+    "b",
+    "start",
+    "select",
+    "up",
+    "down",
+    "left",
+    "right",
+    "none",
 ]
 
-# hack because list not-hashable
-CLASS_TO_KEY = {ind:str(key) for (ind, key) in enumerate(KEY_LIST)}
+CLASS_TO_KEY = {ind:key for (ind, key) in enumerate(KEY_LIST)}
 KEY_TO_CLASS = {v:k for k,v in CLASS_TO_KEY.items()}
