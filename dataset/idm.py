@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 import os
 from util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4
-from policy import KEY_TO_CLASS, KEY_LIST, CLASS_TO_KEY
+from policy import KEY_TO_CLASS
 import torch 
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder

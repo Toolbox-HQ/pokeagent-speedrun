@@ -1,4 +1,4 @@
-from policy.policy import Policy, KEY_LIST
+from policy.policy import Policy, MGBA_KEY_LIST
 import numpy as np
 import random
 
@@ -14,7 +14,7 @@ class RandomPolicy(Policy):
 
         # 30-150 frame actions presses ~ 0.5-2.5 seconds
         num_presses = random.randint(30, 150)
-        button = random.choice(KEY_LIST)
+        button = random.choice(MGBA_KEY_LIST)
         self.action_queue.extend(button * num_presses)
 
     def get_action(self)-> list:
