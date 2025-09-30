@@ -122,7 +122,7 @@ def main():
             }
 
             # TODO refactor so that this isn't wrapped in a dict
-            inp = {"img": inp.to(device)}
+            inp = {"img": inp.to(device=device)}
             labels = labels.to(dtype=torch.long, device=device)
             
             out = model(inp, labels=labels, **dummy)

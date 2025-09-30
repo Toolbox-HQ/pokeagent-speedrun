@@ -14,6 +14,31 @@ from dataset import IDMDataset
 from transformers import HfArgumentParser
 from util.repro import repro_init
 
+import logging
+import socket
+from datetime import datetime, timedelta
+
+logging.basicConfig(
+   format="%(levelname)s:%(asctime)s %(message)s",
+   level=logging.INFO,
+   datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger: logging.Logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.INFO)
+
+TIME_FORMAT_STR: str = "%b_%d_%H_%M_%S"
+
+
+def trace_handler(prof: torch.profiler.profile):
+   # Prefix for file names.
+   host_name = socket.gethostname()
+   timestamp = datetime.now().strftime(TIME_FORMAT_STR)
+   file_prefix = f"./{host_name}_{timestamp}"
+   out = f"{file_prefix}.html"
+   # Construct the memory timeline file.
+   prof.export_memory_timeline(out, device="cuda:0")
+   print(f"exported {out}")
+
 @dataclass
 class Config:
     # Model
@@ -94,61 +119,77 @@ def main():
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-
+    from torch.autograd.profiler import record_function
     count = 0
-
+    cfg.epochs = 1
     # Training
-    for epoch in range(cfg.epochs):
-        sampler.set_epoch(epoch)
-        epoch_bar = tqdm(
-            loader,
-            desc=f"[Rank {rank}] Epoch {epoch + 1}",
-            total=len(loader),
-            disable=(rank != 0),
-        )
-        start_time = time.time()
-        for inp, labels in epoch_bar:
-            
-            dummy = {
-                "first": torch.zeros((inp.shape[0], 1)).to(device),
-                "state_in": model.module.initial_state(inp.shape[0])
-            }
-
-            inp = {"img": inp.to(device)}
-            labels = labels.to(dtype=torch.long, device=device)
-
-            out = model(inp, labels=labels, **dummy)
-            loss = out.loss
-            logits = out.logits
-
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.max_grad_norm)
-            optimizer.step()
-
-            accuracy = compute_accuracy(logits, labels)
-            elapsed = time.time() - start_time
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=6, repeat=1),
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True,
+        on_trace_ready=trace_handler,
+    ) as prof:
+        for epoch in range(cfg.epochs):
+            sampler.set_epoch(epoch)
+            epoch_bar = tqdm(
+                loader,
+                desc=f"[Rank {rank}] Epoch {epoch + 1}",
+                total=len(loader),
+                disable=(rank != 0),
+            )
             start_time = time.time()
-            throughput = world_size / elapsed
+            for inp, labels in epoch_bar:
+                prof.step()
 
-            if rank == 0:
-                wandb.log(
-                    {
-                        "epoch": epoch + 1,
-                        "loss": loss.item(),
-                        "accuracy": accuracy,
-                        "throughput": throughput,
-                    }
-                )
-                epoch_bar.set_postfix_str(
-                    f"loss={loss:.4f} | "
-                    f"acc={accuracy:.2f} | "
-                    f"batch/s={throughput:.1f} | "
-                    f"iter={epoch_bar.n}/{epoch_bar.total}"
-                )
-        count += 1
-        if count == 3:
-            break
+                dummy = {
+                    "first": torch.zeros((inp.shape[0], 1)).to(device),
+                    "state_in": model.module.initial_state(inp.shape[0])
+                }
+
+                inp = {"img": inp.to(device)}
+                labels = labels.to(dtype=torch.long, device=device)
+                with record_function("## forward ##"):
+                    out = model(inp, labels=labels, **dummy)
+                loss = out.loss
+                logits = out.logits
+                
+                with record_function("## backward ##"):
+                    loss.backward()
+                
+                
+                with record_function("## optimizer ##"):
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.max_grad_norm)
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                accuracy = compute_accuracy(logits, labels)
+                elapsed = time.time() - start_time
+                start_time = time.time()
+                throughput = world_size / elapsed
+
+                if rank == 0:
+                    wandb.log(
+                        {
+                            "epoch": epoch + 1,
+                            "loss": loss.item(),
+                            "accuracy": accuracy,
+                            "throughput": throughput,
+                        }
+                    )
+                    epoch_bar.set_postfix_str(
+                        f"loss={loss:.4f} | "
+                        f"acc={accuracy:.2f} | "
+                        f"batch/s={throughput:.1f} | "
+                        f"iter={epoch_bar.n}/{epoch_bar.total}"
+                    )
+                count += 1
+                if count == 3:
+                    break
 
     # Save model
     if rank == 0:
