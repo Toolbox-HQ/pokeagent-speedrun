@@ -39,5 +39,5 @@ class RandomMovementPolicy(RandomPolicy):
             ["left"],
             ["right"],
         ]
-        button = random.choices(MGBA_MOVEMENT_KEY_LIST, weights=[1,1,1,1])
+        button = random.choices(MGBA_MOVEMENT_KEY_LIST, weights=[1,1,1,1])[0]
         self.action_queue.extend(button * num_presses)
