@@ -178,8 +178,8 @@ def main():
     # Save model
     if rank == 0:
         os.makedirs(os.path.dirname(cfg.output_path), exist_ok=True)
-        model.module.save(cfg.output_path)
-
+        torch.save(model.module.state_dict(), cfg.output_path)
+        print(f"Model saved to {cfg.output_path}")
     dist.destroy_process_group()
 
 
