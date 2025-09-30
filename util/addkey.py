@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 from typing import List, Tuple, Optional
-
+from tqdm import tqdm
 import cv2
 import numpy as np
 
@@ -37,10 +37,11 @@ def load_keys_json(path: str) -> List[Tuple[int, str]]:
         keys = e.get("keys", [])
         label = ""
         if keys:
-            k = str(keys[0]).lower()
+            k = str(keys).lower()
             label = k if k in VALID_KEYS else ""
         events.append((fidx, label))
     events.sort(key=lambda x: x[0])
+
     return events
 
 def last_non_empty_key_in_frame_range(
@@ -93,7 +94,7 @@ def main():
     ap = argparse.ArgumentParser(description="Create labeled video + JSON at target FPS from mp4 + keys.json")
     ap.add_argument("video", type=str, help="Path to input .mp4 video")
     ap.add_argument("keys", type=str, help="Path to keys.json")
-    ap.add_argument("--fps", type=float, default=4.0, help="Target output FPS (default: 4.0)")
+    ap.add_argument("--fps", type=float, default=60.0, help="Target output FPS")
     ap.add_argument("--out-video", type=str, default=None, help="Output mp4 path (default: <video>_<fps>fps.mp4)")
     ap.add_argument("--out-json", type=str, default=None, help="Output JSON path (default: <video>_<fps>fps_keys.json)")
     ap.add_argument("--overlay", action="store_true", help="Burn label text onto frames")
@@ -122,73 +123,32 @@ def main():
     if not cap.isOpened():
         raise RuntimeError(f"Could not open video: {in_video}")
 
-    in_fps = cap.get(cv2.CAP_PROP_FPS)
-    if in_fps <= 0:
-        in_fps = 30.0  # fallback
+
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    target_fps = float(args.fps)
-    interval = 1.0 / target_fps
-    duration = frame_count / in_fps if in_fps > 0 else 0.0
-    # floor with a tiny epsilon to avoid off-by-one when duration*fps is near an integer
-    out_frames = int(np.floor(duration * target_fps + 1e-9))
-
     # Prepare writer
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(out_video, fourcc, target_fps, (width, height))
+    writer = cv2.VideoWriter(out_video, fourcc, 60, (width, height))
     if not writer.isOpened():
         cap.release()
         raise RuntimeError(f"Could not open VideoWriter for {out_video}")
 
-    json_labels = []  # [{"frame": i, "keys": [] or ["a"]}, ...]
+    for (ind, keystr) in tqdm(events):
 
-    for i in range(out_frames):
-        t_start = i * interval
-        t_end = (i + 1) * interval
+        if keystr == '':
+            keystr = 'none'
 
-        # Frames with timestamp fidx/in_fps in [t_start, t_end)
-        start_f = int(np.ceil(t_start * in_fps))
-        end_f = int(np.ceil(t_end * in_fps) - 1)
-        end_f = min(end_f, frame_count - 1)
-        start_f = max(0, min(start_f, frame_count - 1))
-        if end_f < start_f:
-            end_f = start_f
-
-        # Label: last non-empty key in [start_f, end_f]
-        label = last_non_empty_key_in_frame_range(events, start_f, end_f)
-
-        # Representative frame: center of interval
-        t_mid = 0.5 * (t_start + t_end)
-        rep_f = int(round(t_mid * in_fps))
-        rep_f = max(0, min(rep_f, frame_count - 1))
-
-        frame = grab_frame(cap, rep_f)
-        if frame is None:
-            frame = grab_frame(cap, start_f)
-        if frame is None:
-            frame = np.zeros((height, width, 3), dtype=np.uint8)
-
-        if args.overlay and label:
-            frame = put_label_on_frame(frame, label)
+        frame = grab_frame(cap, ind)
+        frame = put_label_on_frame(frame, keystr)
 
         writer.write(frame)
-
-        json_labels.append({
-            "frame": i,
-            "keys": [] if not label else [label]  # at most one entry
-        })
 
     writer.release()
     cap.release()
 
-    with open(out_json, "w") as f:
-        json.dump(json_labels, f, indent=2)
-
     print(f"[OK] Wrote video:  {out_video}")
-    print(f"[OK] Wrote labels: {out_json}")
-    print(f"Input FPS={in_fps:.3f}, frames={frame_count} -> Output FPS={target_fps:g}, frames={out_frames}")
 
 if __name__ == "__main__":
     main()
