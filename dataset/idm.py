@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 import os
 from util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4
-from policy import KEY_TO_CLASS, KEY_LIST, CLASS_TO_KEY
+from policy import KEY_TO_CLASS
 import torch 
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
@@ -27,38 +27,37 @@ class IDMDataset(Dataset):
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        (frames, actions, video) = self.samples[ind]
-        frames = VideoDecoder(video).get_frames_at(frames.tolist()).data
+        (frames, actions, video) = zip(*self.samples[ind])
+        frames = VideoDecoder(video[0]).get_frames_at(frames).data
         frames = resize(frames, (self.h, self.w))
 
         # IDM expects channel dim is last
-        return einops.rearrange(frames, "B C H W -> B H W C"), actions
+        return einops.rearrange(frames, "B C H W -> B H W C"), torch.tensor(actions, dtype=torch.long)
     
     def __len__(self):
         return len(self.samples)
 
     @staticmethod
-    def action_map(item):
-        return torch.tensor([KEY_TO_CLASS[str(i["keys"])] for i in item], dtype=torch.int32)
-
-    @staticmethod
     def process_raw_into_samples(raw_data, sample_fps, video_fps, sample_length):
+        
         samples = []
+        single_sample = []
 
-        frame_step = video_fps // sample_fps
+        frame_step = round(video_fps / sample_fps)
 
         for item in raw_data:
             video_path = item[1]
+            frame_data = item[0]
 
-            actions = IDMDataset.action_map(item[0])
-            indices = torch.arange(start=0, end=len(actions), step=frame_step)[: sample_length * (len(actions) % sample_length)]
-            
-            # add the batch dimension
-            actions = actions[indices].reshape(-1, sample_length)
-            indices = indices.reshape(-1, sample_length)
+            frame_data = [(frame_data[i]["frame"], KEY_TO_CLASS[frame_data[i]["keys"]], video_path) \
+                        for i in range(0, len(frame_data), frame_step)]
+
+            while frame_data:
+                single_sample.append(frame_data.pop(0))
+                if len(single_sample) == sample_length:
+                    samples.append(single_sample)
+                    single_sample = []
                                      
-            samples.extend([(indices[i], actions[i], video_path) for i in range(indices.size()[0])])
-
         return samples
     
     @staticmethod

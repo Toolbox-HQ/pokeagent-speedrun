@@ -2,13 +2,12 @@ import base64, io, threading, time
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, Response
 import uvicorn
-from mgba_emulator import MGBAEmulator  # keep OR replace with your local class
+from mgba_emulator import MGBAEmulator
 import argparse
 import sys
 import signal
 import pygame
 import cv2
-from PIL import Image
 import numpy as np
 import json
 import os
@@ -114,12 +113,18 @@ def _open_keys_logger(path):
     fp.flush()
     return fp
 
+def map_key_to_str(action: list)-> str:
+    if not action:
+        return "none"
+    else:
+        return action[0]
+
 def log_keys(frame_num, keys_list):
     """Append one frame's keys as a JSON object into the array."""
     global keys_log_fp, _keys_log_first
     if keys_log_fp is None:
         return
-    entry = {"frame": frame_num, "keys": keys_list}
+    entry = {"frame": frame_num, "keys": map_key_to_str(keys_list)}
     if not _keys_log_first:
         keys_log_fp.write(",\n")
     keys_log_fp.write(json.dumps(entry, ensure_ascii=False))
@@ -227,7 +232,7 @@ def api_frame():
 def run_fastapi_server(port):
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
 
-def save_to_s3():
+def save_to_s3(path):
     s3 = init_boto3_client()
     bucket = s3.list_buckets()["Buckets"][0]["Name"]
     from pathlib import Path
@@ -237,9 +242,9 @@ def save_to_s3():
     for file in data_dir.iterdir():
         path = file.resolve()     
         file_name = file.name         
-        upload_to_s3(path, f"pokeagent/emulator_v1/{file_name}", bucket, s3)
+        upload_to_s3(path, f"pokeagent/{path}/{file_name}", bucket, s3)
 
-def quit(signum, _frame, save_s3: bool = False):
+def quit(signum, _frame, save_s3: str = None):
     # Close video writer if initialized
     try:
         if vw is not None:
@@ -253,7 +258,7 @@ def quit(signum, _frame, save_s3: bool = False):
         pass
 
     if save_s3:
-        save_to_s3()
+        save_to_s3(save_s3)
 
     sys.exit(0)
 
@@ -269,7 +274,7 @@ def main():
     parser.add_argument("--fps", type=int, help="Emulator fps (uncapped if not set)")
     parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")  # NEW
     parser.add_argument("--max-steps", type=int, default=0, help="Number of emulator steps before the emulator quits.")
-    parser.add_argument("--save-s3", action="store_true", help="Save to s3 bucket, uses s3cmd credentials.")
+    parser.add_argument("--save-s3", type=str,default=None, help="Save to s3 bucket, uses s3cmd credentials.")
     parser.add_argument("--save-state",type=str, default=None, help="Save state to start from.")
     parser.add_argument("--policy",type=str, default=None, help="Agent policy.")
 

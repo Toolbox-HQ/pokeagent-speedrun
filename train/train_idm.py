@@ -13,6 +13,8 @@ from IDM.policy import InverseActionPolicy as IDModel
 from dataset import IDMDataset
 from transformers import HfArgumentParser
 from util.repro import repro_init
+import signal
+from util.dist import clean_dist_and_exit
 
 @dataclass
 class Config:
@@ -56,14 +58,16 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
 
 def main():
 
+    signal.signal(signal.SIGINT, clean_dist_and_exit)
+    signal.signal(signal.SIGTERM, clean_dist_and_exit)
+
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--config", type=str, required=True)
     args = arg_parser.parse_args()
     repro_init(args.config)
 
     parser = HfArgumentParser(Config)
-    (cfg,) = parser.parse_yaml_file(args.config)
-    
+    cfg: Config = parser.parse_yaml_file(args.config)[0]
 
     rank, world_size = setup_distributed()
     device = torch.device(f"cuda:{rank}")
@@ -78,7 +82,7 @@ def main():
 
 
     h,w = cfg.image_size
-    dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps)
+    dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,
@@ -96,6 +100,9 @@ def main():
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
+    avg_loss = 0
+    avg_acc = 0
+
     # Training
     for epoch in range(cfg.epochs):
         sampler.set_epoch(epoch)
@@ -106,19 +113,24 @@ def main():
             disable=(rank != 0),
         )
         start_time = time.time()
+
+        # Track metrics for epoch averages
+        total_loss = 0.0
+        total_acc = 0.0
+        num_batches = 0
+
         for inp, labels in epoch_bar:
-            
             # TODO refactor out useless but required inputs
             dummy = {
-            "first": torch.zeros((inp.shape[0], 1)).to(device),
-            "state_in": model.module.initial_state(inp.shape[0])
+                "first": torch.zeros((inp.shape[0], 1)).to(device),
+                "state_in": model.module.initial_state(inp.shape[0])
             }
 
             # TODO refactor so that this isn't wrapped in a dict
-            inp = {"img": inp.to(device)}
+            inp = {"img": inp.to(device=device)}
             labels = labels.to(dtype=torch.long, device=device)
             
-            out = model(inp,labels=labels, **dummy)
+            out = model(inp, labels=labels, **dummy)
             loss = out.loss
             logits = out.logits
 
@@ -136,22 +148,32 @@ def main():
             start_time = time.time()
             throughput = world_size / elapsed
 
-            if rank == 0:
+            total_loss += loss.item()
+            total_acc += accuracy
+            num_batches += 1
 
+            if rank == 0:
                 wandb.log(
                     {
-                        "epoch": epoch + 1,
-                        "loss": loss.item(),
-                        "accuracy": accuracy,
+                        "epoch": epoch,
+                        "loss_step": loss.item(),
+                        "accuracy_step": accuracy,
                         "throughput": throughput,
+                        "epoch_loss": avg_loss,
+                        "epoch_accuracy": avg_acc,
                     }
                 )
                 epoch_bar.set_postfix_str(
                     f"loss={loss:.4f} | "
                     f"acc={accuracy:.2f} | "
                     f"batch/s={throughput:.1f} | "
+                    f"avg loss={avg_loss:.4f}" 
+                    f"avg acc={avg_acc:.2f}"
                     f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
+
+        avg_loss = total_loss / num_batches
+        avg_acc = total_acc / num_batches
 
     # Save model
     if rank == 0:
