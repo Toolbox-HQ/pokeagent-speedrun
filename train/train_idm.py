@@ -57,7 +57,7 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
     return accuracy
 
 def main():
-    
+
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--config", type=str, required=True)
     args = arg_parser.parse_args()
@@ -164,8 +164,8 @@ def main():
                     f"loss={loss:.4f} | "
                     f"acc={accuracy:.2f} | "
                     f"batch/s={throughput:.1f} | "
-                    f"avg loss={avg_loss:.4f}" 
-                    f"avg acc={avg_acc:.2f}"
+                    f"avg loss={avg_loss:.4f} | " 
+                    f"avg acc={avg_acc:.2f} | "
                     f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
 
