@@ -13,6 +13,8 @@ from IDM.policy import InverseActionPolicy as IDModel
 from dataset import IDMDataset
 from transformers import HfArgumentParser
 from util.repro import repro_init
+import signal
+from util.dist import clean_dist_and_exit
 
 @dataclass
 class Config:
@@ -56,6 +58,9 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
 
 def main():
 
+    signal.signal(signal.SIGINT, clean_dist_and_exit)
+    signal.signal(signal.SIGTERM, clean_dist_and_exit)
+
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--config", type=str, required=True)
     args = arg_parser.parse_args()
@@ -95,8 +100,8 @@ def main():
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
-    avg_loss = -1
-    avg_acc = -1
+    avg_loss = 0
+    avg_acc = 0
 
     # Training
     for epoch in range(cfg.epochs):
@@ -150,10 +155,12 @@ def main():
             if rank == 0:
                 wandb.log(
                     {
-                        "epoch": epoch + 1,
+                        "epoch": epoch,
                         "loss_step": loss.item(),
                         "accuracy_step": accuracy,
                         "throughput": throughput,
+                        "epoch_loss": avg_loss,
+                        "epoch_accuracy": avg_acc,
                     }
                 )
                 epoch_bar.set_postfix_str(
@@ -167,19 +174,6 @@ def main():
 
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
-
-        if rank == 0:
-            wandb.log(
-                {
-                    "epoch": epoch + 1,
-                    "loss_epoch": avg_loss,
-                    "accuracy_epoch": avg_acc,
-                }
-            )
-            # Update tqdm bar one last time with epoch averages
-            epoch_bar.set_postfix_str(
-                f"[Epoch Avg] loss={avg_loss:.4f} | acc={avg_acc:.2f}"
-            )
 
     # Save model
     if rank == 0:
