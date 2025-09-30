@@ -1,5 +1,4 @@
 from policy.policy import Policy, MGBA_KEY_LIST
-import numpy as np
 import random
 
 class RandomPolicy(Policy):
@@ -26,3 +25,19 @@ class RandomPolicy(Policy):
     
     def send_state():
         pass
+
+class RandomMovementPolicy(RandomPolicy):
+
+    def enqueue_action(self) -> None:
+
+        # 150 frame actions presses ~ 3-5 seconds
+        num_presses = random.randint(150, 300)
+
+        MGBA_MOVEMENT_KEY_LIST = [
+            ["up"],
+            ["down"],
+            ["left"],
+            ["right"],
+        ]
+        button = random.choices(MGBA_MOVEMENT_KEY_LIST, weights=[1,1,1,1])
+        self.action_queue.extend(button * num_presses)
