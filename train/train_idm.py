@@ -57,10 +57,7 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
     return accuracy
 
 def main():
-
-    signal.signal(signal.SIGINT, clean_dist_and_exit)
-    signal.signal(signal.SIGTERM, clean_dist_and_exit)
-
+    
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--config", type=str, required=True)
     args = arg_parser.parse_args()
