@@ -2,7 +2,8 @@ output_classes: 9
 fps: 4
 batch_size: 2
 image_size: [128, 128]
-dataset_dir: pokeagent/random_movement_policy  
+dataset_dir: pokeagent/random_movement_policy
+validation_dir: pokeagent/val
 s3_bucket: b4schnei    
 epochs: 10
 lr: 5.0e-5
