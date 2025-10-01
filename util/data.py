@@ -3,6 +3,29 @@ import orjson
 import re 
 import os.path as path
 
+class ValueInterval():
+
+    def __init__(self, list):
+        self.curr_idx = 0
+        self.list = list
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+
+        if not self.curr_idx < len(self.list):
+            raise StopIteration
+
+        start_idx = self.curr_idx
+        item = self.list[start_idx]
+        self.curr_idx += 1
+
+        while self.curr_idx < len(self.list) and self.list[self.curr_idx] == item:
+            self.curr_idx += 1
+
+        return start_idx, self.curr_idx-1
+
 def list_files_with_extentions(dir: str, ext: str):
     files = list(filter(lambda x: x.endswith(ext), os.listdir(dir)))
     return [os.path.join(dir, file) for file in files]
