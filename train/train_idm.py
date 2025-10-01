@@ -27,6 +27,7 @@ class Config:
     batch_size: int = field(default=256)
     image_size: Tuple[int, int] = field(default_factory=lambda: (128, 128))
     dataset_dir: str = field(default=None)
+    validation_dir: str = field(default=None)
     s3_bucket: str = field(default=None)
 
 
@@ -56,6 +57,73 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
         accuracy = correct.mean().item()
     return accuracy
 
+@torch.no_grad()
+def run_validation(model, val_loader, device, world_size, rank, epoch):
+
+    model.eval()
+    val_bar = tqdm(
+        val_loader,
+        desc=f"[Rank {rank}] Val {epoch + 1}",
+        total=len(val_loader),
+        disable=(rank != 0),
+    )
+
+    v_start_time = time.time()
+    v_total_loss = 0.0
+    v_total_acc = 0.0
+    v_num_batches = 0
+
+    for inp, labels in val_bar:
+        dummy = {
+            "first": torch.zeros((inp.shape[0], 1)).to(device),
+            "state_in": model.module.initial_state(inp.shape[0])
+        }
+
+        inp = {"img": inp.to(device=device)}
+        labels = labels.to(dtype=torch.long, device=device)
+
+        out = model(inp, labels=labels, **dummy)
+        loss = out.loss
+        logits = out.logits
+
+        accuracy = compute_accuracy(logits, labels)
+        v_elapsed = time.time() - v_start_time
+        v_start_time = time.time()
+        v_throughput = world_size / v_elapsed
+
+        v_total_loss += loss.item()
+        v_total_acc += accuracy
+        v_num_batches += 1
+
+        if rank == 0:
+            wandb.log({
+                "epoch": epoch,
+                "val_loss_step": loss.item(),
+                "val_accuracy_step": accuracy,
+                "val_throughput": v_throughput,
+            })
+            val_bar.set_postfix_str(
+                f"loss={loss:.4f} | "
+                f"acc={accuracy:.2f} | "
+                f"batch/s={v_throughput:.1f} | "
+                f"avg loss={v_total_loss / v_num_batches:.4f} | "
+                f"avg acc={v_total_acc / v_num_batches:.2f} | "
+                f"iter={val_bar.n}/{val_bar.total}"
+            )
+
+    v_avg_loss = v_total_loss / max(v_num_batches, 1)
+    v_avg_acc  = v_total_acc  / max(v_num_batches, 1)
+
+    if rank == 0:
+        wandb.log({
+            "epoch": epoch,
+            "val_loss": v_avg_loss,
+            "val_accuracy": v_avg_acc,
+        })
+
+    model.train()
+
+
 def main():
 
     arg_parser = argparse.ArgumentParser()
@@ -77,7 +145,7 @@ def main():
     #model.reset_parameters()
     model.to(device=device)
 
-
+    # Training Dataset
     h,w = cfg.image_size
     dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
     sampler = DistributedSampler(dataset)
@@ -90,6 +158,17 @@ def main():
         collate_fn=IDMDataset.collate
     )
 
+    val_loader = None
+    val_dataset = IDMDataset(cfg.validation_dir, h=h, w=w, fps=model.fps, s3_bucket=cfg.s3_bucket)
+    val_sampler = DistributedSampler(val_dataset, shuffle=False)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=cfg.batch_size,
+        sampler=val_sampler,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=IDMDataset.collate
+    )
 
     if cfg.torch_compile:
         model = torch.compile(model, fullgraph=True)
@@ -171,6 +250,8 @@ def main():
 
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
+
+        run_validation(model, val_loader, device, world_size, rank, epoch)
 
     # Save model
     if rank == 0:
