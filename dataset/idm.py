@@ -9,7 +9,6 @@ from torchcodec.decoders import VideoDecoder
 from typing import Tuple,List
 import einops
 from util.data import ValueInterval
-import numpy as np 
 
 class IDMDataset(Dataset):
 
@@ -39,7 +38,7 @@ class IDMDataset(Dataset):
         return einops.rearrange(frames, "B C H W -> B H W C"), torch.tensor(actions, dtype=torch.long)
 
     def unchanged_interval(vr, start, end):
-        buffer = 32
+        buffer = 60
         diff = vr[end-buffer:end] - vr[start].unsqueeze(0)
         return torch.any((diff == 0).all(dim=tuple(range(1, diff.ndim))))
 
