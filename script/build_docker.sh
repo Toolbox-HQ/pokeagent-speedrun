@@ -6,9 +6,6 @@ IMAGE_NAME="pokeagent"
 BUILD_DIR="./docker_build"
 TAG="latest"
 
-# Create build directory if it doesn't exist
-mkdir -p "$BUILD_DIR"
-
 # Build Docker image
 docker build -t "$IMAGE_NAME:$TAG" .
 

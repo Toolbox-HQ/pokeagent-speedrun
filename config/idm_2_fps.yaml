@@ -1,14 +1,13 @@
 output_classes: 9
-fps: 4
+fps: 2
 batch_size: 2
 image_size: [128, 128]
-dataset_dir: pokeagent/random_movement_policy
-validation_dir: pokeagent/val
+dataset_dir: pokeagent/random_movement_policy  
 s3_bucket: b4schnei    
 epochs: 10
 lr: 5.0e-5
 weight_decay: 0.001
 wandb_project: "pokeagent"
-output_path: "./checkpoints/idm_model.pt"
+output_path: "./checkpoints/idm_model_2_fps.pt"
 activation_checkpoint: false
 torch_compile: false

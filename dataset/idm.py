@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import Dataset
 import os
 from util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4
@@ -5,12 +6,13 @@ from policy import KEY_TO_CLASS
 import torch 
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
-from typing import Tuple
+from typing import Tuple,List
 import einops
+from util.data import ValueInterval
 
 class IDMDataset(Dataset):
 
-    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None):
+    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, apply_filter = True):
         
         self.local_path = os.path.join(".cache", data_path)
         self.fps = fps
@@ -23,7 +25,8 @@ class IDMDataset(Dataset):
         # this is slow as data gets large
         self.raw_data = [(load_json(path), map_json_to_mp4(path))\
                           for path in list_files_with_extentions(self.local_path, ".json")]
-    
+
+        IDMDataset.action_filter(self.action_filter(self.raw_data))
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -33,7 +36,30 @@ class IDMDataset(Dataset):
 
         # IDM expects channel dim is last
         return einops.rearrange(frames, "B C H W -> B H W C"), torch.tensor(actions, dtype=torch.long)
-    
+
+    def unchanged_interval(vr, start, end):
+        buffer = 60
+        diff = vr[end-buffer:end] - vr[start].unsqueeze(0)
+        return torch.any((diff == 0).all(dim=tuple(range(1, diff.ndim))))
+
+    @staticmethod
+    def action_filter(raw_data: List[Tuple])-> None:
+       """
+       Filters actions where the game remained static
+       over the entire course of the action.
+       """
+       for ind, (actions, video) in enumerate(raw_data):
+            mask = torch.full((len(actions),), False)
+
+            for start, end in ValueInterval([i["keys"] for i in actions]):
+                print(f"{start} : {end} : {video}")
+                vr = VideoDecoder(video)
+                if IDMDataset.unchanged_interval(vr, start, end):
+                    mask[start : end] = True
+                    print("filtered")
+                    
+            raw_data[ind] = ([x for x, m in zip(raw_data[ind][0], mask) if not m], raw_data[ind][1])
+
     def __len__(self):
         return len(self.samples)
 
@@ -67,8 +93,6 @@ class IDMDataset(Dataset):
 
 
 if __name__ == "__main__":
-    ds = IDMDataset("pokeagent/emulator_v1", s3_bucket="b4schnei")
-    item = ds[0]
-    item2 = ds[1]
-    x, y = ds.collate([item, item2])
+    ds = IDMDataset("pokeagent/emulator_v1", s3_bucket=None)
+
     print("done")

@@ -40,7 +40,7 @@ class RandomMovementPolicy(RandomPolicy):
 
     def enqueue_action(self) -> None:
 
-        # 150 frame actions presses ~ 3-5 seconds
+        # 150-300 frame actions presses ~ 3-5 seconds
         num_presses = random.randint(150, 300)
 
         MGBA_MOVEMENT_KEY_LIST = [
@@ -49,5 +49,5 @@ class RandomMovementPolicy(RandomPolicy):
             ["left"],
             ["right"],
         ]
-        button = random.choices(MGBA_MOVEMENT_KEY_LIST, weights=[1,1,1,1])
+        button = random.choices(MGBA_MOVEMENT_KEY_LIST, weights=[1,1,1,1])[0]
         self.action_queue.extend(button * num_presses)

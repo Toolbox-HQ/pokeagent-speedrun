@@ -4,11 +4,9 @@ from torch import nn
 from typing import Dict, Optional
 import numpy as np
 import torch.nn.functional as F
-from IDM.lib.categorical_classifier import CategoricalClassifier
 from IDM.lib.misc import transpose
 from IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
 from IDM.lib.impala_cnn import ImpalaCNN
-from cut_cross_entropy import linear_cross_entropy
 import einops
 
 net_kwargs = {   
