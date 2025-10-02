@@ -1,6 +1,18 @@
 from policy.policy import Policy, MGBA_KEY_LIST
 import random
 
+RND_KEY_LIST = [
+    ["a"],
+    ["b"],
+    ["start"],
+  #  ["select"], # we exclude select
+    ["up"],
+    ["down"],
+    ["left"],
+    ["right"],
+    [],
+]
+
 class RandomPolicy(Policy):
 
     def __init__(self) -> None:
