@@ -24,7 +24,7 @@ class ValueInterval():
         while self.curr_idx < len(self.list) and self.list[self.curr_idx] == item:
             self.curr_idx += 1
 
-        return start_idx, self.curr_idx-1
+        return (start_idx, self.curr_idx-1), item
 
 def list_files_with_extentions(dir: str, ext: str):
     files = list(filter(lambda x: x.endswith(ext), os.listdir(dir)))
@@ -97,3 +97,7 @@ def load_json(path):
     with open(path, "rb") as f:
         data = orjson.loads(f.read())
     return data
+
+def save_json(path: str, data) -> None:
+    with open(path, "wb") as f:
+        f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))

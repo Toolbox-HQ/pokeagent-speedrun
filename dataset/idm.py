@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 import os
-from util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4
+from util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4, save_json
 from policy import KEY_TO_CLASS
 import torch 
 from torchvision.transforms.functional import resize
@@ -9,6 +9,11 @@ from torchcodec.decoders import VideoDecoder
 from typing import Tuple,List
 import einops
 from util.data import ValueInterval
+from joblib import Parallel, delayed
+
+
+def filter_map(l: list):
+    return list(filter(lambda x: not "filter" in x.keys() or not x["filter"], l))
 
 class IDMDataset(Dataset):
 
@@ -22,11 +27,11 @@ class IDMDataset(Dataset):
         if not os.path.isdir(self.local_path):
             download_s3_folder(s3_bucket, data_path, self.local_path)
 
-        # this is slow as data gets large
-        self.raw_data = [(load_json(path), map_json_to_mp4(path))\
-                          for path in list_files_with_extentions(self.local_path, ".json")]
+        self.data_files = list_files_with_extentions(self.local_path, ".json")
 
-        IDMDataset.action_filter(self.action_filter(self.raw_data))
+        # this is slow as data gets large
+        self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
+
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -42,24 +47,35 @@ class IDMDataset(Dataset):
         diff = vr[end-buffer:end] - vr[start].unsqueeze(0)
         return torch.any((diff == 0).all(dim=tuple(range(1, diff.ndim))))
 
-    @staticmethod
-    def action_filter(raw_data: List[Tuple])-> None:
-       """
-       Filters actions where the game remained static
-       over the entire course of the action.
-       """
-       for ind, (actions, video) in enumerate(raw_data):
-            mask = torch.full((len(actions),), False)
+    def action_filter(self, raw_data: List[Tuple]) -> None:
 
-            for start, end in ValueInterval([i["keys"] for i in actions]):
-                print(f"{start} : {end} : {video}")
+        def process_item(ind, actions, video, json_path):
+            mask = torch.full((len(actions),), False)
+            filtered, total = 0, 0
+
+            for (start, end), action in ValueInterval([i["keys"] for i in actions]):
+                total += 1
+                if action == "none":
+                    continue
+
                 vr = VideoDecoder(video)
                 if IDMDataset.unchanged_interval(vr, start, end):
-                    mask[start : end] = True
-                    print("filtered")
-                    
-            raw_data[ind] = ([x for x, m in zip(raw_data[ind][0], mask) if not m], raw_data[ind][1])
+                    mask[start:end+1] = True
+                    filtered += 1
 
+            print(f"filtered {100*(filtered / total):.2f}% in {video} : {filtered} / {total} segments")
+            assert map_json_to_mp4(json_path) == video, "json path should match mp4 path."
+
+            filtered_data = [
+                item | {"filter": mask[idx].item()} for idx, item in enumerate(actions)
+            ]
+            save_json(json_path, filtered_data)
+
+        # Parallelize over outer loop
+        Parallel(n_jobs=8)(
+            delayed(process_item)(ind, actions, video, self.data_files[ind])
+            for ind, (actions, video) in enumerate(raw_data)
+        )
     def __len__(self):
         return len(self.samples)
 
@@ -91,8 +107,7 @@ class IDMDataset(Dataset):
         frames, actions =  zip(*batch)
         return torch.stack(frames), torch.stack(actions)
 
-
 if __name__ == "__main__":
-    ds = IDMDataset("pokeagent/emulator_v1", s3_bucket=None)
-
+    ds = IDMDataset("pokeagent/test_filter", s3_bucket="b4schnei")
+    ds.action_filter(ds.raw_data)
     print("done")
