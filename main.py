@@ -142,7 +142,8 @@ def _close_keys_logger():
 
 def game_loop(max_steps: int=0) -> None:
     global latest_png_b64, frame_index
-    
+    print(f"[EMULATOR] begin emulation loop")
+    print(f"[EMULATOR] max_steps={max_steps}")
     pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:  
