@@ -265,13 +265,13 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="Port for web interface")
     parser.add_argument("--manual-mode", action="store_true", help="Start in manual mode instead of agent mode")
     parser.add_argument("--fps", type=int, help="Emulator fps (uncapped if not set)")
-    parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")  # NEW
-    parser.add_argument("--max-steps", type=int, default=0, help="Number of emulator steps before the emulator quits.")
+    parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")
     parser.add_argument("--save-s3", type=str, default=None, help="Save to s3 bucket, uses s3cmd credentials.")
     parser.add_argument("--save-state",type=str, default=None, help="Save state to start from.")
     parser.add_argument("--policy",type=str, default=None, help="Agent policy.")
 
     args = parser.parse_args()
+    max_steps = 0
 
     if args.manual_mode:
         global agent_mode
@@ -281,7 +281,8 @@ def main():
     else:
         print("🤖 Starting in AGENT mode (default)")
         global policy; policy = init_policy(args.policy)
-    
+        max_steps = policy.config.max_steps
+
     if args.save_s3:
         from util.data import has_s3
         has_s3()
@@ -317,7 +318,7 @@ def main():
     if args.fps:
         emulator_fps = args.fps
     try:
-        game_loop(max_steps=args.max_steps) # Run main game loop
+        game_loop(max_steps=max_steps) # Run main game loop
     except KeyboardInterrupt:
         print("Interrupted by user")
     except Exception as e:
