@@ -1,9 +1,8 @@
 import os
 import argparse
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import Tuple
 import torch
-import torch.nn as nn
 import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
 import wandb
@@ -13,8 +12,9 @@ from IDM.policy import InverseActionPolicy as IDModel
 from dataset import IDMDataset
 from transformers import HfArgumentParser
 from util.repro import repro_init
-import signal
-from util.dist import clean_dist_and_exit
+from policy import CLASS_TO_KEY
+from util.data import reduce_dict
+from pprint import pprint
 
 @dataclass
 class Config:
@@ -50,30 +50,38 @@ def setup_distributed():
     world_size = dist.get_world_size()
     return local_rank, world_size
 
-def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
-    with torch.no_grad():
-        predictions = torch.argmax(logits, dim=-1)
-        correct = (predictions == labels).float()
-        accuracy = correct.mean().item()
+def gather_and_stack(t: torch.Tensor):
+    world_size = dist.get_world_size()
+    gather_list = [torch.zeros_like(t) for _ in range(world_size)]
+    dist.all_gather(gather_list, t)
+    return torch.stack(gather_list)
+
+
+@torch.no_grad()
+def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -> float:
+    s = "val_" if is_val else ""
+
+    predictions = torch.argmax(logits, dim=-1)
+    correct = (predictions == labels).float()
+    
+    acc = dist.all_reduce(correct.mean(), op=dist.ReduceOp.SUM)
+    accuracy = { f"{s}accuracy": acc.mean().item()}
+
+    for label in list(CLASS_TO_KEY.keys()):
+        l = gather_and_stack(labels)
+        c = gather_and_stack(correct)
+        c = c[l == label]
+        accuracy[f"{s}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item() if c.numel() else -1
+
     return accuracy
 
 @torch.no_grad()
-def run_validation(model, val_loader, device, world_size, rank, epoch):
+def validate(model, val_loader, device, rank):
 
     model.eval()
-    val_bar = tqdm(
-        val_loader,
-        desc=f"[Rank {rank}] Val {epoch + 1}",
-        total=len(val_loader),
-        disable=(rank != 0),
-    )
+    stats = []
 
-    v_start_time = time.time()
-    v_total_loss = 0.0
-    v_total_acc = 0.0
-    v_num_batches = 0
-
-    for inp, labels in val_bar:
+    for inp, labels in val_loader:
         dummy = {
             "first": torch.zeros((inp.shape[0], 1)).to(device),
             "state_in": model.module.initial_state(inp.shape[0])
@@ -86,40 +94,13 @@ def run_validation(model, val_loader, device, world_size, rank, epoch):
         loss = out.loss
         logits = out.logits
 
-        accuracy = compute_accuracy(logits, labels)
-        v_elapsed = time.time() - v_start_time
-        v_start_time = time.time()
-        v_throughput = world_size / v_elapsed
+        stats.append(compute_accuracy(logits, labels, is_val=True) | {"val_loss": loss.cpu().item()})
 
-        v_total_loss += loss.item()
-        v_total_acc += accuracy
-        v_num_batches += 1
-
-        if rank == 0:
-            wandb.log({
-                "epoch": epoch,
-                "val_loss_step": loss.item(),
-                "val_accuracy_step": accuracy,
-                "val_throughput": v_throughput,
-            })
-            val_bar.set_postfix_str(
-                f"loss={loss:.4f} | "
-                f"acc={accuracy:.2f} | "
-                f"batch/s={v_throughput:.1f} | "
-                f"avg loss={v_total_loss / v_num_batches:.4f} | "
-                f"avg acc={v_total_acc / v_num_batches:.2f} | "
-                f"iter={val_bar.n}/{val_bar.total}"
-            )
-
-    v_avg_loss = v_total_loss / max(v_num_batches, 1)
-    v_avg_acc  = v_total_acc  / max(v_num_batches, 1)
-
+    
     if rank == 0:
-        wandb.log({
-            "epoch": epoch,
-            "val_loss": v_avg_loss,
-            "val_accuracy": v_avg_acc,
-        })
+        log = reduce_dict(stats)
+        wandb.log(log)
+        pprint(log)
 
     model.train()
 
@@ -219,13 +200,13 @@ def main():
             )
 
             optimizer.step()
-            accuracy = compute_accuracy(logits, labels)
+            metrics = compute_accuracy(logits, labels)
             elapsed = time.time() - start_time
             start_time = time.time()
             throughput = world_size / elapsed
 
             total_loss += loss.item()
-            total_acc += accuracy
+            total_acc += metrics
             num_batches += 1
 
             if rank == 0:
@@ -233,15 +214,14 @@ def main():
                     {
                         "epoch": epoch,
                         "loss_step": loss.item(),
-                        "accuracy_step": accuracy,
                         "throughput": throughput,
                         "epoch_loss": avg_loss,
                         "epoch_accuracy": avg_acc,
-                    }
+                    } | metrics
                 )
                 epoch_bar.set_postfix_str(
                     f"loss={loss:.4f} | "
-                    f"acc={accuracy:.2f} | "
+                    f"acc={metrics["accuracy"]:.2f} | "
                     f"batch/s={throughput:.1f} | "
                     f"avg loss={avg_loss:.4f} | " 
                     f"avg acc={avg_acc:.2f} | "
@@ -251,7 +231,7 @@ def main():
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
 
-        run_validation(model, val_loader, device, world_size, rank, epoch)
+        validate(model, val_loader, device, rank)
 
     # Save model
     if rank == 0:

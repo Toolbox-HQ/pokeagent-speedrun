@@ -2,6 +2,18 @@ import os
 import orjson
 import re 
 import os.path as path
+from typing import Dict, List
+
+def reduce_dict(l: List) -> Dict:
+    rd = {}
+    for d in l:
+        for k in d.keys():
+            if not k in rd:
+                rd[k] = (d[k],1)
+            else:
+                (x, y) = rd[k]
+                rd[k] = (x+d[k] ,y+1)
+    return {k : x/y for k, (x,y) in rd.items()}
 
 class ValueInterval():
 

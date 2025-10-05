@@ -9,7 +9,7 @@ from torchcodec.decoders import VideoDecoder
 from typing import Tuple,List
 import einops
 from util.data import ValueInterval
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, cpu_count
 
 
 def filter_map(l: list):
@@ -17,7 +17,7 @@ def filter_map(l: list):
 
 class IDMDataset(Dataset):
 
-    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, apply_filter = True):
+    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None):
         
         self.local_path = os.path.join(".cache", data_path)
         self.fps = fps
@@ -49,7 +49,7 @@ class IDMDataset(Dataset):
 
     def action_filter(self, raw_data: List[Tuple]) -> None:
 
-        def process_item(ind, actions, video, json_path):
+        def process_item(actions, video, json_path):
             mask = torch.full((len(actions),), False)
             filtered, total = 0, 0
 
@@ -71,9 +71,8 @@ class IDMDataset(Dataset):
             ]
             save_json(json_path, filtered_data)
 
-        # Parallelize over outer loop
-        Parallel(n_jobs=8)(
-            delayed(process_item)(ind, actions, video, self.data_files[ind])
+        Parallel(n_jobs=cpu_count())(
+            delayed(process_item)(actions, video, self.data_files[ind])
             for ind, (actions, video) in enumerate(raw_data)
         )
     def __len__(self):
@@ -108,6 +107,6 @@ class IDMDataset(Dataset):
         return torch.stack(frames), torch.stack(actions)
 
 if __name__ == "__main__":
-    ds = IDMDataset("pokeagent/test_filter", s3_bucket="b4schnei")
+    import sys
+    ds = IDMDataset(sys.argv[1], s3_bucket="b4schnei")
     ds.action_filter(ds.raw_data)
-    print("done")
