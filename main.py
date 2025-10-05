@@ -147,7 +147,6 @@ def game_loop(max_steps: int=0) -> None:
     pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:  
-            print("loop")
             start = time.perf_counter()
 
             # 1) gather input keys for this frame
