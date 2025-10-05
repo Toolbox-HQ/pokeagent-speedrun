@@ -5,4 +5,4 @@ NUM_LOOPS=$2
 
 for ((i=0; i < $NUM_LOOPS; i++)) do
     docker run -d "$IMAGE"
-fi
+done
