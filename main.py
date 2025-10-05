@@ -145,9 +145,8 @@ def game_loop(max_steps: int=0) -> None:
     
     pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
-    while True:
-        try:
-            
+    while True:  
+            print("loop")
             start = time.perf_counter()
 
             # 1) gather input keys for this frame
@@ -180,13 +179,6 @@ def game_loop(max_steps: int=0) -> None:
                 break
             elif pbar:
                 pbar.update(1)
-
-        except Exception as e:
-            # log and keep going
-            import traceback
-            traceback.print_exc()
-            print(f"emulator_loop error: {e}")
-            time.sleep(0.5)
 
 @app.get("/")
 def index():
