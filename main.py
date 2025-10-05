@@ -161,6 +161,7 @@ def game_loop(max_steps: int=0) -> None:
             frame_index += 1  # increment AFTER using this frame number
 
             if frame is None:
+                print("frame is none")
                 time.sleep(0.01)
                 continue
             
