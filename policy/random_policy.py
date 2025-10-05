@@ -15,7 +15,7 @@ class RandomPolicy(Policy):
 
     def enqueue_action(self) -> None:
         num_presses = random.randint(150, 300)
-        button = random.choice(self.key_map.values())
+        button = random.choice(list(self.key_map.values()))
         self.action_queue.extend(button * num_presses)
 
     def get_action(self)-> list:
