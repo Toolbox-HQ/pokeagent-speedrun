@@ -18,7 +18,7 @@ Data/*
 Emerald-GBAdvance/*
 
 agent_direct_save.state
-
+/wandb
 # Keep the folders themselves (optional)
 !Data/.gitkeep
 !Emerald-GBAdvance/.gitkeep
