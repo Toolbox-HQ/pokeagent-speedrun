@@ -5,7 +5,7 @@ from dataclass import PolicyConfig
 class RandomPolicy(Policy):
 
     def __init__(self, cfg: PolicyConfig) -> None:
-        super.__init__(cfg)
+        super().__init__(cfg)
         self.key_map = KEY_TO_MGBA.copy()
 
         for key in cfg.exclude:
