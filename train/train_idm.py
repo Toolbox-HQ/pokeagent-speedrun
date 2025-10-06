@@ -38,10 +38,11 @@ class Config:
     max_grad_norm: float = field(default=1.0)
     wandb_project: str = field(default="pokeagent")
     gradient_accumulation_steps: int = field(default=1)
-
+    eval_every: int = field(default=None)
+    
     # Output
-    output_path: str = field(default="./checkpoints")
-
+    output_path: str = field(default="model.pt")
+    save_every: int = field(default=None)
 
 def setup_distributed():
     dist.init_process_group(backend="nccl")
@@ -64,7 +65,7 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -
     predictions = torch.argmax(logits, dim=-1)
     correct = (predictions == labels).float()
     acc = correct.mean()
-    dist.all_reduce(acc, op=dist.ReduceOp.SUM)
+    dist.all_reduce(acc, op=dist.ReduceOp.AVG)
     accuracy = { f"{s}accuracy": acc.mean().item()}
 
     for label in list(CLASS_TO_KEY.keys()):
@@ -104,13 +105,19 @@ def validate(model, val_loader, device, rank):
 
     model.train()
 
+def save(model, save_path, cfg):
+    if dist.get_rank() == 0:
+        path = os.path.join(save_path, cfg.output_path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save(model.module.state_dict(), path)
+        print(f"Model saved to {path}")
 
 def main():
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("--config", type=str, required=True)
     args = arg_parser.parse_args()
-    repro_init(args.config)
+    save_path = repro_init(args.config)
 
     parser = HfArgumentParser(Config)
     cfg: Config = parser.parse_yaml_file(args.config)[0]
@@ -194,7 +201,7 @@ def main():
 
             loss.backward()
 
-            if global_step % cfg.gradient_accumulation_steps:
+            if global_step % cfg.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), 
                     max_norm=cfg.max_grad_norm
@@ -229,17 +236,17 @@ def main():
                     f"avg acc={avg_acc:.2f} | "
                     f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
+                
+            if cfg.save_every and global_step % cfg.save_every == 0:
+                save(model, os.path.join(save_path,str(global_step)), cfg)
+
+            if cfg.eval_every and global_step % cfg.eval_every == 0:
+                validate(model, val_loader, device, rank)
 
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
-
-        validate(model, val_loader, device, rank)
-
-    # Save model
-    if rank == 0:
-        os.makedirs(os.path.dirname(cfg.output_path), exist_ok=True)
-        torch.save(model.module.state_dict(), cfg.output_path)
-        print(f"Model saved to {cfg.output_path}")
+    
+    save(model, save_path, cfg)
     dist.destroy_process_group()
 
 

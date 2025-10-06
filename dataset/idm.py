@@ -72,7 +72,9 @@ class IDMDataset(Dataset):
             ]
             save_json(json_path, filtered_data)
 
-        Parallel(n_jobs=cpu_count())(
+        cpu_jobs = cpu_count()
+        print(f"[DATASET] spawning {cpu_jobs} to filter intervals")
+        Parallel(n_jobs=cpu_jobs)(
             delayed(process_item)(actions, video, self.data_files[ind])
             for ind, (actions, video) in enumerate(raw_data)
         )
@@ -109,5 +111,8 @@ class IDMDataset(Dataset):
 
 if __name__ == "__main__":
     import sys
+    assert len(sys.argv) == 3, "Please give the dataset and whether to filter (yes/no)"
     ds = IDMDataset(sys.argv[1], s3_bucket="b4schnei")
-    ds.action_filter(ds.raw_data)
+
+    if sys.argv[2] == "yes":
+        ds.action_filter(ds.raw_data)

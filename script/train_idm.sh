@@ -1,8 +1,10 @@
 #!/bin/bash
 
 source .venv/bin/activate
+export PYTHONPATH=$(pwd)
 export EXPERIMENT_RUN="1"
 export TMPDIR="/scratch/b3schnei/tmp"
+export WANDB_MODE="offline"
 NUM_GPUS=${CUDA_VISIBLE_DEVICES:+$(echo $CUDA_VISIBLE_DEVICES | awk -F',' '{print NF}')}
 NUM_GPUS=${NUM_GPUS:-8}
 
