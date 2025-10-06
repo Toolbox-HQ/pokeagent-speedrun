@@ -134,7 +134,7 @@ def main():
         dataset,
         batch_size=cfg.batch_size,
         sampler=sampler,
-        num_workers=4,
+        num_workers=16,
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
