@@ -119,9 +119,7 @@ class CnnDownStack(nn.Module):
             if self.post_pool_groups is not None:
                 x = self.n(x)
         
-        for (i, layer) in enumerate(self.blocks):
-            x = checkpoint.checkpoint(layer, x)
-
+        x = tu.sequential(self.blocks, x, diag_name=self.name)
         return x
 
     def output_shape(self, inshape):

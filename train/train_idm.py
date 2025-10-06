@@ -36,8 +36,8 @@ class Config:
     lr: float = field(default=2e-4)
     weight_decay: float = field(default=0.01)
     max_grad_norm: float = field(default=1.0)
-    activation_checkpoint: bool = field(default=False)
     wandb_project: str = field(default="pokeagent")
+    gradient_accumulation_steps: int = field(default=1)
 
     # Output
     output_path: str = field(default="./checkpoints")
@@ -159,6 +159,7 @@ def main():
 
     avg_loss = 0
     avg_acc = 0
+    global_step = 1
 
     # Training
     for epoch in range(cfg.epochs):
@@ -191,15 +192,17 @@ def main():
             loss = out.loss
             logits = out.logits
 
-            optimizer.zero_grad()
+            
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(
-                model.parameters(), 
-                max_norm=cfg.max_grad_norm
-            )
+            if global_step % cfg.gradient_accumulation_steps:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), 
+                    max_norm=cfg.max_grad_norm
+                )
+                optimizer.step()
+                optimizer.zero_grad()
 
-            optimizer.step()
             metrics = compute_accuracy(logits, labels)
             elapsed = time.time() - start_time
             start_time = time.time()
