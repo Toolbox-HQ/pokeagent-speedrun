@@ -16,14 +16,14 @@ class RandomPolicy(Policy):
     def enqueue_action(self) -> None:
         num_presses = random.randint(150, 300)
         button = random.choice(list(self.key_map.values()))
-        self.action_queue.extend(button * num_presses)
+        self.action_queue.extend([button for _ in range(num_presses)])
 
     def get_action(self)-> list:
 
         while not self.action_queue:
             self.enqueue_action()
 
-        return [self.action_queue.pop(0)]
+        return self.action_queue.pop(0)
     
     def send_state():
         pass
