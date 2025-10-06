@@ -38,7 +38,7 @@ class Config:
     max_grad_norm: float = field(default=1.0)
     wandb_project: str = field(default="pokeagent")
     gradient_accumulation_steps: int = field(default=1)
-
+    eval_every: int = field(default=None)
     # Output
     output_path: str = field(default="./checkpoints")
 
@@ -64,7 +64,7 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -
     predictions = torch.argmax(logits, dim=-1)
     correct = (predictions == labels).float()
     acc = correct.mean()
-    dist.all_reduce(acc, op=dist.ReduceOp.SUM)
+    dist.all_reduce(acc, op=dist.ReduceOp.AVG)
     accuracy = { f"{s}accuracy": acc.mean().item()}
 
     for label in list(CLASS_TO_KEY.keys()):
@@ -229,11 +229,14 @@ def main():
                     f"avg acc={avg_acc:.2f} | "
                     f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
+                
+            if cfg.eval_every and global_step % cfg.eval_every == 0:
+                validate(model, val_loader, device, rank)
 
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
 
-        validate(model, val_loader, device, rank)
+
 
     # Save model
     if rank == 0:
