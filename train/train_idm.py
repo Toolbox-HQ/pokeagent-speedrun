@@ -192,7 +192,6 @@ def main():
             loss = out.loss
             logits = out.logits
 
-            
             loss.backward()
 
             if global_step % cfg.gradient_accumulation_steps:
@@ -211,6 +210,7 @@ def main():
             total_loss += loss.item()
             total_acc += metrics["accuracy"]
             num_batches += 1
+            global_step += 1
 
             if rank == 0:
                 wandb.log(

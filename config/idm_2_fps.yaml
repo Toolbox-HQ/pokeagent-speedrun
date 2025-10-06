@@ -9,5 +9,4 @@ lr: 5.0e-5
 weight_decay: 0.001
 wandb_project: "pokeagent"
 output_path: "./checkpoints/idm_model_2_fps.pt"
-activation_checkpoint: false
 torch_compile: false
