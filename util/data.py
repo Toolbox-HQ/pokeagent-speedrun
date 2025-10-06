@@ -107,7 +107,7 @@ def download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None
             s3.download_file(bucket_name, key, local_path)
             files_downloaded += 1
 
-    assert not files_downloaded, "No files were found in s3"
+    assert files_downloaded > 0, "No files were found in s3"
 
 def load_json(path):
     with open(path, "rb") as f:
