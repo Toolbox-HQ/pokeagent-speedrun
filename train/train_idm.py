@@ -194,7 +194,7 @@ def main():
 
             loss.backward()
 
-            if global_step % cfg.gradient_accumulation_steps:
+            if global_step % cfg.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), 
                     max_norm=cfg.max_grad_norm
