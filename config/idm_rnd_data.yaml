@@ -11,3 +11,4 @@ weight_decay: 0
 wandb_project: "pokeagent"
 output_path: "./checkpoints/idm_model.pt"
 torch_compile: false
+eval_every: 100
