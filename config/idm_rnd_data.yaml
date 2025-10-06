@@ -12,5 +12,5 @@ wandb_project: "pokeagent"
 output_path: "rnd_idm_model.pt"
 torch_compile: false
 eval_every: 100
-checkpoint_every: 100
+save_every: 100
 gradient_accumulation_steps: 1
