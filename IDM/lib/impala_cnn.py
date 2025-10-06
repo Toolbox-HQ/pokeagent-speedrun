@@ -51,6 +51,7 @@ class CnnBasicBlock(nn.Module):
         x = x + self.conv1(self.conv0(x))
         return x
 
+import torch.utils.checkpoint as checkpoint
 
 class CnnDownStack(nn.Module):
     """
@@ -117,7 +118,10 @@ class CnnDownStack(nn.Module):
             x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
             if self.post_pool_groups is not None:
                 x = self.n(x)
-        x = tu.sequential(self.blocks, x, diag_name=self.name)
+        
+        for (i, layer) in enumerate(self.blocks):
+            x = checkpoint.checkpoint(layer, x)
+
         return x
 
     def output_shape(self, inshape):
