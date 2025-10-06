@@ -74,7 +74,7 @@ def init_boto3_client(config_path = None):
     )
 
 def upload_to_s3(local_filepath, upload_path, bucket_name, s3client):
-    print(f"Uploading {local_filepath} => s3://{bucket_name}{upload_path}")
+    print(f"Uploading {local_filepath} => s3://{bucket_name}/{upload_path}")
     s3client.upload_file(local_filepath, bucket_name, upload_path)
 
 

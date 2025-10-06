@@ -63,8 +63,8 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -
 
     predictions = torch.argmax(logits, dim=-1)
     correct = (predictions == labels).float()
-    
-    acc = dist.all_reduce(correct.mean(), op=dist.ReduceOp.SUM)
+    acc = correct.mean()
+    dist.all_reduce(acc, op=dist.ReduceOp.SUM)
     accuracy = { f"{s}accuracy": acc.mean().item()}
 
     for label in list(CLASS_TO_KEY.keys()):
@@ -206,7 +206,7 @@ def main():
             throughput = world_size / elapsed
 
             total_loss += loss.item()
-            total_acc += metrics
+            total_acc += metrics["accuracy"]
             num_batches += 1
 
             if rank == 0:
@@ -221,7 +221,6 @@ def main():
                 )
                 epoch_bar.set_postfix_str(
                     f"loss={loss:.4f} | "
-                    f"acc={metrics["accuracy"]:.2f} | "
                     f"batch/s={throughput:.1f} | "
                     f"avg loss={avg_loss:.4f} | " 
                     f"avg acc={avg_acc:.2f} | "
