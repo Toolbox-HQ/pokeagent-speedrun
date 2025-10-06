@@ -6,7 +6,7 @@ dataset_dir: pokeagent/rnd_policy
 validation_dir: pokeagent/val
 s3_bucket: b4schnei    
 epochs: 1
-lr: 3.0e-4
+lr: 1.0e-5
 weight_decay: 0
 wandb_project: "pokeagent"
 output_path: "rnd_idm_model.pt"
