@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source .venv/bin/activate
+export PYTHONPATH=$(pwd)
 export EXPERIMENT_RUN="1"
 export TMPDIR="/scratch/b3schnei/tmp"
 export WANDB_MODE="offline"
