@@ -87,6 +87,7 @@ def download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None
     :param local_dir: Local directory to download to.
     """
     s3 = init_boto3_client(config_path=s3)
+    files_downloaded = 0
 
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket_name, Prefix=s3_folder):
@@ -104,6 +105,9 @@ def download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None
 
             print(f"Downloading s3://{bucket_name}/{key} => {local_path}")
             s3.download_file(bucket_name, key, local_path)
+            files_downloaded += 1
+
+    assert not files_downloaded, "No files were found in s3"
 
 def load_json(path):
     with open(path, "rb") as f:

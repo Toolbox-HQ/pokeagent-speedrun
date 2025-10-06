@@ -25,6 +25,7 @@ class IDMDataset(Dataset):
         self.w = w
 
         if not os.path.isdir(self.local_path):
+            print(f"proxying to s3://{s3_bucket} for {data_path}")
             download_s3_folder(s3_bucket, data_path, self.local_path)
 
         self.data_files = list_files_with_extentions(self.local_path, ".json")
