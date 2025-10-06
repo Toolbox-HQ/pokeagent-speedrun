@@ -1,0 +1,17 @@
+output_classes: 9
+fps: 4
+batch_size: 2
+image_size: [128, 128]
+dataset_dir: pokeagent/rnd_policy
+validation_dir: pokeagent/val
+s3_bucket: b4schnei    
+epochs: 1
+lr: 3.0e-4
+weight_decay: 0
+wandb_project: "pokeagent"
+output_path: "rnd_idm_model.pt"
+torch_compile: false
+eval_every: 100
+save_every: 100
+gradient_accumulation_steps: 1
+scheduler: "cosine"

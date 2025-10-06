@@ -39,7 +39,7 @@ class Config:
     wandb_project: str = field(default="pokeagent")
     gradient_accumulation_steps: int = field(default=1)
     eval_every: int = field(default=None)
-    
+    scheduler: str = field(default=None)
     # Output
     output_path: str = field(default="model.pt")
     save_every: int = field(default=None)
@@ -167,6 +167,15 @@ def main():
     avg_loss = 0
     avg_acc = 0
     global_step = 1
+    total_steps = cfg.epochs * len(loader)
+    scheduler = None
+
+    if cfg.scheduler == "cosine":
+        from torch.optim.lr_scheduler import CosineAnnealingLR
+        scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
+    else:
+        from torch.optim.lr_scheduler import ConstantLR
+        scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
 
     # Training
     for epoch in range(cfg.epochs):
@@ -208,6 +217,7 @@ def main():
                 )
                 optimizer.step()
                 optimizer.zero_grad()
+                scheduler.step()
 
             metrics = compute_accuracy(logits, labels)
             elapsed = time.time() - start_time
@@ -223,6 +233,7 @@ def main():
                 wandb.log(
                     {
                         "epoch": epoch,
+                        "lr": scheduler.get_last_lr(),
                         "loss_step": loss.item(),
                         "throughput": throughput,
                         "epoch_loss": avg_loss,
