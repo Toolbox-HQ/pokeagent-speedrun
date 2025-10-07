@@ -56,11 +56,8 @@ class IDMDataset(Dataset):
 
             for (start, end), action in ValueInterval([i["keys"] for i in actions]):
                 total += 1
-                if action == "none":
-                    continue
 
-                vr = VideoDecoder(video)
-                if IDMDataset.unchanged_interval(vr, start, end):
+                if not action == "none" and IDMDataset.unchanged_interval(VideoDecoder(video), start, end):
                     mask[start:end+1] = True
                     filtered += 1
 

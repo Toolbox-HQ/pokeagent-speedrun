@@ -147,39 +147,37 @@ def game_loop(max_steps: int=0) -> None:
     pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:  
-            start = time.perf_counter()
+        start = time.perf_counter()
 
-            # 1) gather input keys for this frame
-            keys = get_keys_for_frame()
+        keys = get_keys_for_frame()
 
-            # 2) log them with the current frame index
-            log_keys(frame_index, keys)
+        log_keys(frame_index, keys)
 
-            # 3) advance emulator with those keys
-            emulator.run_frame_with_keys(keys)
-            frame = emulator.get_frame()
-            frame_index += 1  # increment AFTER using this frame number
+        emulator.run_frame_with_keys(keys)
+        frame = emulator.get_frame()
+        frame_index += 1  # increment AFTER using this frame number
 
-            if frame is None:
-                print("frame is none")
-                time.sleep(0.01)
-                continue
-            
-            buf = io.BytesIO()
-            frame.save(buf, format="PNG")
-            latest_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-            write_frame(frame)
-            dt = time.perf_counter() - start
-            
-            if emulator_fps:
-                frame_time = 1.0 / emulator_fps
-                if dt < frame_time:
-                    time.sleep(frame_time - dt)
+        if frame is None:
+            print("frame is none")
+            time.sleep(0.01)
+            continue
+        
+        buf = io.BytesIO()
+        frame.save(buf, format="PNG")
+        latest_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        write_frame(frame)
+        dt = time.perf_counter() - start
+        
+        if emulator_fps:
+            frame_time = 1.0 / emulator_fps
+            if dt < frame_time:
+                time.sleep(frame_time - dt)
 
-            if max_steps and frame_index >= max_steps:
-                break
-            elif pbar:
-                pbar.update(1)
+        if max_steps and frame_index >= max_steps:
+            break
+        elif pbar:
+            pbar.update(1)
+            pbar.set_postfix({"MGBA ACTION" : keys})
 
 @app.get("/")
 def index():
@@ -322,6 +320,8 @@ def main():
     except KeyboardInterrupt:
         print("Interrupted by user")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error: {e}")
     finally:
         quit(None, None, args.save_s3)

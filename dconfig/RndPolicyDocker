@@ -37,4 +37,4 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync
 COPY . .
 
-CMD ["bash","./script/run_agent.sh", "./config/policy/random_policy.yaml", "rnd_policy"]
+CMD ["bash","./script/run_agent.sh", "./config/policy/random_policy.yaml", "rnd_policy_v2"]
