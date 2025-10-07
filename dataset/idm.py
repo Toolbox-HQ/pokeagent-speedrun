@@ -8,7 +8,7 @@ from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from typing import Tuple,List
 import einops
-from util.data import ValueInterval
+from util.data import ValueInterval, apply_video_transform
 from joblib import Parallel, delayed, cpu_count
 
 
@@ -38,6 +38,7 @@ class IDMDataset(Dataset):
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
         (frames, actions, video) = zip(*self.samples[ind])
         frames = VideoDecoder(video[0]).get_frames_at(frames).data
+        frames = apply_video_transform(frames)
         frames = resize(frames, (self.h, self.w))
 
         # IDM expects channel dim is last
@@ -60,7 +61,7 @@ class IDMDataset(Dataset):
                 if not action == "none" and IDMDataset.unchanged_interval(VideoDecoder(video), start, end):
                     mask[start:end+1] = True
                     filtered += 1
-
+        
             print(f"filtered {100*(filtered / total):.2f}% in {video} : {filtered} / {total} segments")
             assert map_json_to_mp4(json_path) == video, "json path should match mp4 path."
 

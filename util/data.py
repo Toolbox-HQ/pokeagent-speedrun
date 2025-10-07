@@ -3,6 +3,49 @@ import orjson
 import re 
 import os.path as path
 from typing import Dict, List
+import torchvision.transforms.functional as F
+import random
+
+def sample_transform_params():
+    hue = random.uniform(-0.2, 0.2)
+    saturation = random.uniform(0.8, 1.2)
+    brightness = random.uniform(0.8, 1.2)
+    contrast = random.uniform(0.8, 1.2)
+    angle = random.uniform(-2, 2)
+    scale = random.uniform(0.98, 1.02)
+    shear = random.uniform(-2, 2)
+    translate_x = random.uniform(-2, 2)
+    translate_y = random.uniform(-2, 2)
+    return {
+        "hue": hue,
+        "saturation": saturation,
+        "brightness": brightness,
+        "contrast": contrast,
+        "angle": angle,
+        "scale": scale,
+        "shear": shear,
+        "translate": (translate_x, translate_y),
+    }
+
+def apply_video_transform(img):
+
+    B, C, W, H = img.shape
+    assert C == 3, "Channel dim must be first"
+
+    params = sample_transform_params()
+    x = F.adjust_hue(img, params["hue"])
+    x = F.adjust_saturation(x, params["saturation"])
+    x = F.adjust_brightness(x, params["brightness"])
+    x = F.adjust_contrast(x, params["contrast"])
+    x = F.affine(
+        x,
+        angle=params["angle"],
+        translate=params["translate"],
+        scale=params["scale"],
+        shear=params["shear"],
+    )
+    return x
+
 
 def reduce_dict(l: List) -> Dict:
     rd = {}
