@@ -147,7 +147,7 @@ def main():
     )
 
     val_loader = None
-    val_dataset = IDMDataset(cfg.validation_dir, h=h, w=w, fps=model.fps, s3_bucket=cfg.s3_bucket)
+    val_dataset = IDMDataset(cfg.validation_dir, h=h, w=w, fps=model.fps, s3_bucket=cfg.s3_bucket, is_val=True)
     val_sampler = DistributedSampler(val_dataset, shuffle=False)
     val_loader = DataLoader(
         val_dataset,

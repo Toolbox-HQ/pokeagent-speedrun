@@ -17,7 +17,7 @@ def filter_map(l: list):
 
 class IDMDataset(Dataset):
 
-    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None):
+    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, is_val=False):
         
         self.local_path = os.path.join(".cache", data_path)
         self.fps = fps
@@ -29,7 +29,7 @@ class IDMDataset(Dataset):
             download_s3_folder(s3_bucket, data_path, self.local_path)
 
         self.data_files = list_files_with_extentions(self.local_path, ".json")
-
+        self.is_val = is_val
         # this is slow as data gets large
         self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
 
@@ -38,7 +38,8 @@ class IDMDataset(Dataset):
     def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
         (frames, actions, video) = zip(*self.samples[ind])
         frames = VideoDecoder(video[0]).get_frames_at(frames).data
-        frames = apply_video_transform(frames)
+        if not self.is_val:
+            frames = apply_video_transform(frames)
         frames = resize(frames, (self.h, self.w))
 
         # IDM expects channel dim is last
