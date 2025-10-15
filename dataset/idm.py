@@ -35,15 +35,24 @@ class IDMDataset(Dataset):
 
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
-    def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        (frames, actions, video) = zip(*self.samples[ind])
-        frames = VideoDecoder(video[0]).get_frames_at(frames).data
-        if not self.is_val:
+    @staticmethod
+    def get_frames(video_path, frame_idx, h, w,  is_val=False):
+
+        frames = VideoDecoder(video_path).get_frames_at(frame_idx).data
+        if not is_val:
             frames = apply_video_transform(frames)
-        frames = resize(frames, (self.h, self.w))
+        frames = resize(frames, (h, w))
 
         # IDM expects channel dim is last
-        return einops.rearrange(frames, "B C H W -> B H W C"), torch.tensor(actions, dtype=torch.long)
+        frames = einops.rearrange(frames, "B C H W -> B H W C")
+        return frames
+
+
+    def __getitem__(self, ind: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        (frames, actions, video) = zip(*self.samples[ind])
+        frames = IDMDataset.get_frames(video[0], frames, self.h, self.w, is_val=self.is_val)
+
+        return frames, torch.tensor(actions, dtype=torch.long)
 
     def unchanged_interval(vr, start, end):
         buffer = 60
@@ -102,6 +111,27 @@ class IDMDataset(Dataset):
                     single_sample = []
                                      
         return samples
+
+    @staticmethod
+    def process_video(video_path, sample_fps, sample_length):
+        
+        samples = []
+        single_sample = []
+
+        vr = VideoDecoder(video_path)
+        video_fps = round(vr.metadata.average_fps)
+        frame_step = round(video_fps / sample_fps)
+        frame_idx = list(range(0, len(vr), frame_step))
+
+        while frame_idx:
+            single_sample.append(frame_idx.pop(0))
+            if len(single_sample) == sample_length:
+                samples.append(single_sample)
+                single_sample = []
+                                     
+        return samples
+       
+
     
     @staticmethod
     def collate(batch):
