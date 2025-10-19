@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 import wandb
 from tqdm.auto import tqdm
 import time
-from IDM.policy import InverseActionPolicy as IDModel
+from model.IDM.policy import InverseActionPolicy as IDModel
 from dataset import IDMDataset
 from transformers import HfArgumentParser
 from util.repro import repro_init
