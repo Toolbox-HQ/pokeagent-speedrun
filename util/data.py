@@ -120,6 +120,50 @@ def upload_to_s3(local_filepath, upload_path, bucket_name, s3client):
     print(f"Uploading {local_filepath} => s3://{bucket_name}/{upload_path}")
     s3client.upload_file(local_filepath, bucket_name, upload_path)
 
+import os
+import boto3
+
+def resumable_download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None, check_size: bool = True):
+    """
+    Download the contents of an S3 folder to a local directory, skipping files that already exist.
+
+    :param bucket_name: Name of the S3 bucket.
+    :param s3_folder: Folder path in S3 (prefix).
+    :param local_dir: Local directory to download to.
+    :param s3: path to config for init_boto3_client.
+    :param check_size: If True, skip only if local file size matches remote file size.
+    """
+    s3 = init_boto3_client(config_path=s3)
+    files_downloaded = 0
+    files_skipped = 0
+
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=s3_folder):
+        if "Contents" not in page:
+            continue
+        for obj in page["Contents"]:
+            key = obj["Key"]
+            if key.endswith("/"):
+                continue  # Skip directories
+
+            rel_path = os.path.relpath(key, s3_folder)
+            local_path = os.path.join(local_dir, rel_path)
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            # Skip file if it already exists (and optionally matches size)
+            if os.path.exists(local_path):
+                if not check_size or os.path.getsize(local_path) == obj["Size"]:
+                    print(f"Skipping (already exists): {local_path}")
+                    files_skipped += 1
+                    continue
+
+            print(f"Downloading s3://{bucket_name}/{key} => {local_path}")
+            s3.download_file(bucket_name, key, local_path)
+            files_downloaded += 1
+
+    assert files_downloaded + files_skipped > 0, f"No files were found in s3://{bucket_name}/{s3_folder}"
+    print(f"Downloaded: {files_downloaded}, Skipped: {files_skipped}")
+
 
 def download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None):
     """
