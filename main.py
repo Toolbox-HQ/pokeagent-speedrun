@@ -48,8 +48,8 @@ button_map = {
 }
 
 # Pygame display
-screen_width = 480  # 240 * 2 (upscaled)
-screen_height = 320  # 160 * 2 (upscaled)
+screen_width = 1920
+screen_height = 1080
 screen = None
 font = None
 clock = None
@@ -146,17 +146,17 @@ def game_loop(max_steps: int=0) -> None:
     print(f"[EMULATOR] max_steps={max_steps}")
     pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
-    while True:  
+    while True:
         start = time.perf_counter()
 
         keys = get_keys_for_frame()
 
         log_keys(frame_index, keys)
-
+       
         emulator.run_frame_with_keys(keys)
         frame = emulator.get_frame()
         frame_index += 1  # increment AFTER using this frame number
-
+    
         if frame is None:
             print("frame is none")
             time.sleep(0.01)
@@ -166,6 +166,13 @@ def game_loop(max_steps: int=0) -> None:
         frame.save(buf, format="PNG")
         latest_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
         write_frame(frame)
+
+        if not agent_mode:
+            surf = pygame.image.frombuffer(frame.tobytes(), frame.size, "RGB").convert()
+            surf = pygame.transform.scale(surf, (screen_width, screen_height))
+            screen.blit(surf, (0, 0))
+            pygame.display.update()
+        
         dt = time.perf_counter() - start
         
         if emulator_fps:
@@ -173,11 +180,12 @@ def game_loop(max_steps: int=0) -> None:
             if dt < frame_time:
                 time.sleep(frame_time - dt)
 
-        if max_steps and frame_index >= max_steps:
-            break
-        elif pbar:
-            pbar.update(1)
-            pbar.set_postfix({"MGBA ACTION" : keys})
+        if agent_mode:
+            if max_steps and frame_index >= max_steps:
+                break
+            elif pbar:
+                pbar.update(1)
+                pbar.set_postfix({"MGBA ACTION" : keys})
 
 @app.get("/")
 def index():
@@ -293,14 +301,14 @@ def main():
     signal.signal(signal.SIGTERM, quit)
 
     setup_emulator(args.rom, args.save_state)
-
+    
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # or 'avc1' if your build supports H.264
     global vw
     os.makedirs(os.path.dirname(args.mp4_path), exist_ok=True)
     vw = cv2.VideoWriter(args.mp4_path, fourcc, 60, (emulator.width, emulator.height))
     
     assert vw.isOpened(), "VideoWriter did not initialize correctly."
-
+    
     # NEW: open the keys JSON logger
     global keys_json_path, keys_log_fp, _keys_log_first, frame_index
     keys_json_path = args.keys_json_path
@@ -311,7 +319,7 @@ def main():
     # Start web server in background thread
     server_thread = threading.Thread(target=run_fastapi_server, args=(args.port,), daemon=True)
     server_thread.start()
-
+    
     global emulator_fps
     if args.fps:
         emulator_fps = args.fps
