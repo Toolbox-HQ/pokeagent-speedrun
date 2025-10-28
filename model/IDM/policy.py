@@ -4,9 +4,9 @@ from torch import nn
 from typing import Dict, Optional
 import numpy as np
 import torch.nn.functional as F
-from IDM.lib.misc import transpose
-from IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
-from IDM.lib.impala_cnn import ImpalaCNN
+from model.IDM.lib.misc import transpose
+from model.IDM.lib.util import FanInInitReLULayer, ResidualRecurrentBlocks
+from model.IDM.lib.impala_cnn import ImpalaCNN
 import einops
 
 net_kwargs = {   

@@ -7,7 +7,7 @@ def repro_init(cfg: str, seed: int = 1234):
     config_file = get_config_file(cfg)
     git_hash = enforce_versioning()
     seed_rng(seed=seed)
-    return os.path.join(config_file, git_hash)
+    return os.path.join("checkpoints", config_file, git_hash)
 
 
 def get_config_file(path):

@@ -2,10 +2,10 @@ output_classes: 9
 fps: 4
 batch_size: 1
 image_size: [128, 128]
-dataset_dir: pokeagent/test_filter
+dataset_dir: pokeagent/rnd_ex_none_policy
 validation_dir: pokeagent/val
 s3_bucket: b4schnei    
-epochs: 10
+epochs: 1
 lr: 5.0e-5
 weight_decay: 0.001
 wandb_project: "pokeagent"

@@ -1,8 +1,8 @@
 import torch as th
 from torch import nn
 
-from IDM.lib import misc
-from IDM.lib import torch_util as tu
+from model.IDM.lib import misc
+from model.IDM.lib import torch_util as tu
 
 
 class MLP(nn.Module):

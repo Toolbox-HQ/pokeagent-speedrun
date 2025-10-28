@@ -1,25 +1,29 @@
-from policy.policy import Policy, MGBA_KEY_LIST
+from policy.policy import Policy, KEY_TO_MGBA
 import random
+from dataclass import PolicyConfig
 
 class RandomPolicy(Policy):
 
-    def __init__(self) -> None:
-        self.game_fps = 60
+    def __init__(self, cfg: PolicyConfig) -> None:
+        super().__init__(cfg)
+        self.key_map = KEY_TO_MGBA.copy()
+
+        for key in cfg.exclude:
+            del self.key_map[key]
+
         self.action_queue = []
-        self.mean_action_time = 1.0
-        self.std_action_time = 0.25
 
     def enqueue_action(self) -> None:
         num_presses = random.randint(150, 300)
-        button = random.choice(MGBA_KEY_LIST)
-        self.action_queue.extend(button * num_presses)
+        button = random.choice(list(self.key_map.values()))
+        self.action_queue.extend([button for _ in range(num_presses)])
 
     def get_action(self)-> list:
 
         while not self.action_queue:
             self.enqueue_action()
 
-        return [self.action_queue.pop(0)]
+        return self.action_queue.pop(0)
     
     def send_state():
         pass

@@ -20,7 +20,7 @@ from typing import List, Tuple, Optional
 import cv2
 import numpy as np
 
-VALID_KEYS = {"a", "b", "start", "select", "up", "down", "left", "right"}
+VALID_KEYS = {"a", "b", "start", "select", "up", "down", "left", "right", "none"}
 
 def load_keys_json(path: str) -> List[Tuple[int, str]]:
     """
@@ -37,8 +37,14 @@ def load_keys_json(path: str) -> List[Tuple[int, str]]:
         keys = e.get("keys", [])
         label = ""
         if keys:
-            k = str(keys[0]).lower()
-            label = k if k in VALID_KEYS else ""
+            
+            if isinstance(keys, list):
+                keys = keys[0]
+
+            k = str(keys).lower()
+            label = k
+            if not k in VALID_KEYS:
+                raise Exception(f"{k} not in valid keys")
         events.append((fidx, label))
     events.sort(key=lambda x: x[0])
     return events

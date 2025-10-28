@@ -5,9 +5,9 @@ from typing import Dict, List, Optional
 from torch import nn
 from torch.nn import functional as F
 
-from IDM.lib import misc
-from IDM.lib import torch_util as tu
-from IDM.lib.util import FanInInitReLULayer
+from model.IDM.lib import misc
+from model.IDM.lib import torch_util as tu
+from model.IDM.lib.util import FanInInitReLULayer
 
 
 class CnnBasicBlock(nn.Module):
@@ -51,6 +51,7 @@ class CnnBasicBlock(nn.Module):
         x = x + self.conv1(self.conv0(x))
         return x
 
+import torch.utils.checkpoint as checkpoint
 
 class CnnDownStack(nn.Module):
     """
@@ -117,6 +118,7 @@ class CnnDownStack(nn.Module):
             x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)
             if self.post_pool_groups is not None:
                 x = self.n(x)
+        
         x = tu.sequential(self.blocks, x, diag_name=self.name)
         return x
 

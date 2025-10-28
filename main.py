@@ -48,8 +48,8 @@ button_map = {
 }
 
 # Pygame display
-screen_width = 480  # 240 * 2 (upscaled)
-screen_height = 320  # 160 * 2 (upscaled)
+screen_width = 1920
+screen_height = 1080
 screen = None
 font = None
 clock = None
@@ -142,51 +142,50 @@ def _close_keys_logger():
 
 def game_loop(max_steps: int=0) -> None:
     global latest_png_b64, frame_index
-    
+    print(f"[EMULATOR] begin emulation loop")
+    print(f"[EMULATOR] max_steps={max_steps}")
     pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:
-        try:
-            
-            start = time.perf_counter()
+        start = time.perf_counter()
 
-            # 1) gather input keys for this frame
-            keys = get_keys_for_frame()
+        keys = get_keys_for_frame()
 
-            # 2) log them with the current frame index
-            log_keys(frame_index, keys)
+        log_keys(frame_index, keys)
+       
+        emulator.run_frame_with_keys(keys)
+        frame = emulator.get_frame()
+        frame_index += 1  # increment AFTER using this frame number
+    
+        if frame is None:
+            print("frame is none")
+            time.sleep(0.01)
+            continue
+        
+        buf = io.BytesIO()
+        frame.save(buf, format="PNG")
+        latest_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        write_frame(frame)
 
-            # 3) advance emulator with those keys
-            emulator.run_frame_with_keys(keys)
-            frame = emulator.get_frame()
-            frame_index += 1  # increment AFTER using this frame number
+        if not agent_mode:
+            surf = pygame.image.frombuffer(frame.tobytes(), frame.size, "RGB").convert()
+            surf = pygame.transform.scale(surf, (screen_width, screen_height))
+            screen.blit(surf, (0, 0))
+            pygame.display.update()
+        
+        dt = time.perf_counter() - start
+        
+        if emulator_fps:
+            frame_time = 1.0 / emulator_fps
+            if dt < frame_time:
+                time.sleep(frame_time - dt)
 
-            if frame is None:
-                time.sleep(0.01)
-                continue
-            
-            buf = io.BytesIO()
-            frame.save(buf, format="PNG")
-            latest_png_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-            write_frame(frame)
-            dt = time.perf_counter() - start
-            
-            if emulator_fps:
-                frame_time = 1.0 / emulator_fps
-                if dt < frame_time:
-                    time.sleep(frame_time - dt)
-
+        if agent_mode:
             if max_steps and frame_index >= max_steps:
                 break
             elif pbar:
                 pbar.update(1)
-
-        except Exception as e:
-            # log and keep going
-            import traceback
-            traceback.print_exc()
-            print(f"emulator_loop error: {e}")
-            time.sleep(0.5)
+                pbar.set_postfix({"MGBA ACTION" : keys})
 
 @app.get("/")
 def index():
@@ -272,13 +271,13 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="Port for web interface")
     parser.add_argument("--manual-mode", action="store_true", help="Start in manual mode instead of agent mode")
     parser.add_argument("--fps", type=int, help="Emulator fps (uncapped if not set)")
-    parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")  # NEW
-    parser.add_argument("--max-steps", type=int, default=0, help="Number of emulator steps before the emulator quits.")
+    parser.add_argument("--keys-json-path", type=str, default="Data/keys.json", help="Path to JSON file that logs per-frame keys")
     parser.add_argument("--save-s3", type=str, default=None, help="Save to s3 bucket, uses s3cmd credentials.")
     parser.add_argument("--save-state",type=str, default=None, help="Save state to start from.")
     parser.add_argument("--policy",type=str, default=None, help="Agent policy.")
 
     args = parser.parse_args()
+    max_steps = 0
 
     if args.manual_mode:
         global agent_mode
@@ -288,7 +287,8 @@ def main():
     else:
         print("🤖 Starting in AGENT mode (default)")
         global policy; policy = init_policy(args.policy)
-    
+        max_steps = policy.config.max_steps
+
     if args.save_s3:
         from util.data import has_s3
         has_s3()
@@ -301,14 +301,14 @@ def main():
     signal.signal(signal.SIGTERM, quit)
 
     setup_emulator(args.rom, args.save_state)
-
+    
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # or 'avc1' if your build supports H.264
     global vw
     os.makedirs(os.path.dirname(args.mp4_path), exist_ok=True)
     vw = cv2.VideoWriter(args.mp4_path, fourcc, 60, (emulator.width, emulator.height))
     
     assert vw.isOpened(), "VideoWriter did not initialize correctly."
-
+    
     # NEW: open the keys JSON logger
     global keys_json_path, keys_log_fp, _keys_log_first, frame_index
     keys_json_path = args.keys_json_path
@@ -319,15 +319,17 @@ def main():
     # Start web server in background thread
     server_thread = threading.Thread(target=run_fastapi_server, args=(args.port,), daemon=True)
     server_thread.start()
-
+    
     global emulator_fps
     if args.fps:
         emulator_fps = args.fps
     try:
-        game_loop(max_steps=args.max_steps) # Run main game loop
+        game_loop(max_steps=max_steps) # Run main game loop
     except KeyboardInterrupt:
         print("Interrupted by user")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error: {e}")
     finally:
         quit(None, None, args.save_s3)

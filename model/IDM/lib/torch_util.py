@@ -17,7 +17,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import IDM.lib.tree_util as tree_util
-from IDM.lib import misc
+from model.IDM.lib import misc
 
 
 def contextmanager_to_decorator(cm):
