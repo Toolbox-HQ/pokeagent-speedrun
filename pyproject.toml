@@ -10,6 +10,7 @@ dependencies = [
     "boto3>=1.40.36",
     "cffi>=1.6",
     "colorama>=0.4.6",
+    "cut-cross-entropy>=25.1.1",
     "datasets>=4.1.1",
     "einops>=0.8.1",
     "eventlet==0.35.2",
