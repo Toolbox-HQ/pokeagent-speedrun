@@ -76,15 +76,23 @@ def main():
 
     for path, batches, vr in tqdm(ds):
         try:
+
+            filename = os.path.splitext(os.path.basename(path))[0]
+            meta_filename = os.path.join(OUTPUT_DIR, f"{filename}.json")
+            pt_filename = os.path.join(OUTPUT_DIR, f"{filename}.pt")
+            os.makedirs(os.path.dirname(pt_filename), exist_ok=True)
+
+            # guard if script was resumed
+            if all(Path(p).exists() for p in [meta_filename, pt_filename]):
+                print(f"{filename} skipped")
+                continue
+
             results = Parallel(n_jobs=64, backend="threading")(
                 delayed(prcoess_batch)(model, processor, path, batch) for batch in batches
             )
             results = torch.cat(results)
-            filename = os.path.splitext(os.path.basename(path))[0]
 
             # save embeddings
-            pt_filename = os.path.join(OUTPUT_DIR, f"{filename}.pt")
-            os.makedirs(os.path.dirname(pt_filename), exist_ok=True)
             torch.save(results, pt_filename)
 
             # save metadata
@@ -94,7 +102,7 @@ def main():
                 "video_total_frames": len(vr),
                 "sampled_frame_index": idx,
             } for batch in batches for idx in batch]
-            meta_filename = os.path.join(OUTPUT_DIR, f"{filename}.json")
+            
             save_json(meta_filename, metadata)
         
         except Exception as e:
