@@ -7,15 +7,17 @@ import transformers
 from util.trainer import Trainer
 from torch.utils.data import Dataset
 from model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
+from util.repro import repro_init
 
 @dataclass
 class ModelArguments:
-    model_name_or_path: Optional[str] = field(default=None)
+
     lm_name_or_path: Optional[str] = field(default=None)
     vision_name_or_path: Optional[str] = field(default=None)
 
 @dataclass
 class DataArguments:
+
     data_path: str | None = field(
         default=None, metadata={"help": "Path to the training data."}
     )
@@ -28,19 +30,12 @@ class DataArguments:
     eval_data_path: str | None = field(
         default=None, metadata={"help": "Path to the evaluation data."}
     )
-    lazy_preprocess: bool = False
-
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
+
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
-    model_max_length: int = field(
-        default=8192,
-        metadata={
-            "help": "Maximum sequence length. Sequences will be right padded (and possibly truncated)."
-        },
-    )
 
 
 local_rank = None
@@ -66,9 +61,22 @@ class DummyData(Dataset):
         labels = torch.ones((64), dtype=torch.int32)                
 
         if self.processor:
-            t = self.processor(t) 
+            t = self.processor.image_processor(t, return_tensors="pt")
 
         return  t, labels
+    
+    @staticmethod
+    def collate_fn(batch):
+        pixels, inps = [], []
+
+        for pixel, ids in batch:
+            pixels.append(pixel["pixel_values"])
+            inps.append(ids)
+
+        return {
+            "pixel_values": torch.stack(pixels, dim=0),
+            "input_ids": torch.stack(inps, dim=0),
+        }
     
 
 def train() -> None:
@@ -78,6 +86,7 @@ def train() -> None:
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
     args = parser.parse_args()
+    save_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments)
@@ -89,18 +98,24 @@ def train() -> None:
     ) = parser.parse_yaml_file(yaml_file=args.config)
 
     local_rank = training_args.local_rank
+    training_args.output_dir = save_path
 
     # model stuff
     model = init_lm_agent(lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
     
+    if training_args.gradient_checkpointing:
+        model.text_model.gradient_checkpointing_enable()
+        model.vision_tower.gradient_checkpointing_enable()
+        training_args.gradient_checkpointing = False
+
     # data stuff
     training_dataset = DummyData()
     training_dataset.processor = processor
 
-    # Start trainner
+    # Start trainer
     trainer = Trainer(
-        model=model, args=training_args, train_dataset=training_dataset
+        model=model, args=training_args, data_collator=DummyData.collate_fn, train_dataset=training_dataset
     )
 
     trainer.train()

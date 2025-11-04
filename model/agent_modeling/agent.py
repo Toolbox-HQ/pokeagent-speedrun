@@ -30,7 +30,8 @@ from transformers.models.siglip import SiglipVisionModel
 from cut_cross_entropy import linear_cross_entropy
 from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
-
+from torch.nn import Module
+from policy import NUM_ACTION_CLASSES
 
 class MLP(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -50,7 +51,7 @@ class MLP(nn.Module):
             out = self.decoder(x)
         return out
 
-class LMAgent(GenerationMixin):
+class LMAgent(Module, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
     _tp_plan = {"lm_head": "colwise_rep"}
     _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
@@ -58,24 +59,34 @@ class LMAgent(GenerationMixin):
     def __init__(self, config):
         super().__init__()
 
-        self.config = config    
-        # Never initialize backbones here
-        with ContextManagers(PreTrainedModel.get_init_context(False, False)):
-            self.text_model = Qwen3Model(config["text_config"])
-            self.vision_tower = SiglipVisionModel(config["vision_config"])
+        self.config = config
+        self.tconfig = config["text_config"]
+        self.vconfig = config["vision_config"].vision_config
+        self.num_actions = config["num_actions"]
 
-        self.hidden_dim: int = self.config.text_config.hidden_size
-        self.vocab_size: int = self.config.text_config.vocab_size
+        with ContextManagers(PreTrainedModel.get_init_context(False, False)):
+            self.text_model = Qwen3Model(self.tconfig)
+            self.vision_tower = SiglipVisionModel(self.vconfig)
+
+        self.hidden_dim: int = self.tconfig.hidden_size
+        self.vocab_size: int = self.tconfig.vocab_size
         self.vision_hidden_dim: int = self.vision_tower.config.hidden_size
         self.mlp = MLP(self.vision_hidden_dim, self.hidden_dim)
-
+        self.action_embedding = nn.Embedding(self.num_actions, self.hidden_dim)
+        self.output_actions = nn.Linear(self.hidden_dim, self.num_actions, bias=False)
+        self.finish_init()
 
     def get_processor(self):
         return None
 
-    def cast_precision(self):
+    def finish_init(self):
+        delattr(self.text_model, "embed_tokens")
+        self.cast_mixed_precision()
+
+    def cast_mixed_precision(self):
         self.text_model.to(dtype=torch.bfloat16)
-        self.text_model.lm_head.to(dtype=torch.bfloat16)
+        self.action_embedding.to(dtype=torch.bfloat16)
+        self.output_actions.to(dtype=torch.bfloat16)
         self.mlp.to(dtype=torch.bfloat16)
         self.vision_tower.to(dtype=torch.float32)
 
@@ -142,45 +153,36 @@ class LMAgent(GenerationMixin):
         pixel_mask: Optional[torch.LongTensor] = None,
         **kwargs,
     ) -> CausalLMOutputWithPast:
-        r"""
-        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
-            config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-            (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
-        ```
-        """
 
         B, T, C, H, W = pixel_values.shape
-
+        device = pixel_values.device
         pixel_values = einops.rearrange(pixel_values, "b s c h w -> (b s) c h w")
 
         vision_tokens = self.vision_tower(pixel_values=pixel_values).last_hidden_state
-        vision_tokens = einops.rearrange(
-            vision_tokens, "(b s) c h -> b s c h", b=B, s=T
-        )
+        vision_tokens = einops.rearrange(vision_tokens, "(b s) c h -> b s c h", b=B, s=T)
         vision_tokens = self.mlp(vision_tokens)
+        B, T, S, H = vision_tokens.shape
+        
+        action_tokens = self.action_embedding(input_ids)
 
-        vision_tokens = einops.rearrange(vision_tokens, "b s t h -> b (s t) h")
+        hiddens = torch.zeros((B, S+1, H), dtype=torch.int32, device=device)
+        
+        hiddens[:, -1, :] = 1
+        hiddens[:,-2, :] = -1
+        hiddens = hiddens.repeat(1,T,1)
+        
+        state_mask = hiddens < 1 # all visual tokens
+        action_mask = hiddens == 1 # all action tokens
+        last_token_mask = hiddens == -1 # last visual token, used for prediction
 
-        # (B,S,D) TODO add method to make this less ugly
-        inputs_embeds = self.text_model.model.embed_tokens(input_ids)
+        hiddens = hiddens.to(torch.bfloat16)
+        hiddens = hiddens.masked_scatter(state_mask, vision_tokens.to(torch.bfloat16))
+        hiddens = hiddens.masked_scatter(action_mask, action_tokens)
 
-        # replace the placeholder tokens with vision tokens
-        V = vision_tokens.shape[1]
-        inputs_embeds[:, :V, :] = torch.where(
-            pixel_mask.unsqueeze(dim=-1) == 1, vision_tokens, inputs_embeds[:, :V, :]
-        )
 
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
-        output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
-        )
+        if not attention_mask:
+            B, S, H = hiddens.shape
+            attention_mask = torch.ones((B, S), dtype=torch.int32, device=device)
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs: BaseModelOutputWithPast = self.text_model(
@@ -188,46 +190,41 @@ class LMAgent(GenerationMixin):
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_values=past_key_values,
-            inputs_embeds=inputs_embeds,
+            inputs_embeds=hiddens,
             use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
+            output_attentions=False,
+            output_hidden_states=True,
             cache_position=cache_position,
             **kwargs,
         )
 
         hidden_states = outputs.last_hidden_state
-        loss = None
-        logits = None
-
-        if labels is not None:
-            classifier = self.text_model.lm_head.weight
-            loss = linear_cross_entropy(
-                hidden_states, classifier, labels, shift=1, impl="cce_kahan_full"
-            )
-        else:  # assume infernece
-            logits = self.text_model.lm_head(hidden_states)
+        action_hiddens = hidden_states[last_token_mask].view(B,T,H)
+        
+        classifier = self.output_actions.weight
+        labels = input_ids.detach()
+        loss = linear_cross_entropy(action_hiddens, classifier, labels)
 
         return CausalLMOutputWithPast(
             loss=loss,
-            logits=logits,
+            logits=None,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
 
 def init_vision_prcoessor(vision: str = None):
-    processor = AutoProcessor(vision)
-    return processor
+    from util.misc import local_model_map
+    return AutoProcessor.from_pretrained(local_model_map(vision))
 
 def init_lm_agent(lm: str = None, vision: str = None)  -> LMAgent:
     from util.misc import local_model_map
 
-    # TODO change this to not be hard coded
     lm_config_path = local_model_map(lm)
     vision_config_path = local_model_map(vision)
     
     config = {
+        "num_actions": NUM_ACTION_CLASSES,
         "text_config": AutoConfig.from_pretrained(lm_config_path),
         "vision_config": AutoConfig.from_pretrained(vision_config_path)
     }
@@ -236,4 +233,6 @@ def init_lm_agent(lm: str = None, vision: str = None)  -> LMAgent:
     # init pretraiend weights
     model.text_model = Qwen3Model.from_pretrained(lm_config_path)
     model.vision_tower = SiglipVisionModel.from_pretrained(vision_config_path)
+    model.finish_init()
+
     return model

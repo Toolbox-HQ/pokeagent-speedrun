@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Designed and tested for transformers==4.55.2
+
 """
 The Trainer class, to easily train a 🤗 Transformers from scratch or finetune it on a new task.
 """
@@ -35,7 +37,29 @@ from collections.abc import Iterator, Mapping
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union
-from utils.training import log_scalars
+
+def log_scalars(outputs):
+    log = {}
+
+    for key in outputs.keys():
+        item = outputs[key]
+
+        if isinstance(item, (int, float)):
+            log[key] = item
+        elif isinstance(item, torch.Tensor) and item.ndim == 0:
+            # reduce across ranks to decrease variance in logging
+            if dist.is_initialized() and not item.device.type == "cpu":
+                dist.all_reduce(item.detach(), dist.ReduceOp.AVG)
+
+            log[key] = item.cpu().item()
+        elif isinstance(item, np.ndarray) and item.ndim == 0:
+            log[key] = item.item()
+
+    # TODO remove this because it is not needed with allreduce
+    if "loss" in log:
+        log["local_loss"] = log.pop("loss")
+
+    return log
 
 # Integrations must be imported before ML frameworks:
 # ruff: isort: off
