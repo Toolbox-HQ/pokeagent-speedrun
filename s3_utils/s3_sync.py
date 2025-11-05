@@ -31,3 +31,26 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = "cache", s3=None
             if os.path.exists(local_path):
                 continue
             s3.download_file(bucket, key, local_path)
+
+def check_s3_existing_videos(bucket_name: str, s3_prefix: str = "youtube_videos", video_ids: list = None):
+    s3client = init_boto3_client()
+    try:
+        paginator = s3client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=s3_prefix)
+
+        existing_files = set()
+        for page in page_iterator:
+            if "Contents" not in page:
+                continue
+            for obj in page["Contents"]:
+                key = obj["Key"].split("/")[-1].replace(".mp4", "")
+                existing_files.add(key)
+
+        return existing_files.intersection(set(video_ids)) if video_ids else existing_files
+
+    except Exception as e:
+        print(f"[ERROR] Error listing S3 objects: {e}")
+        return set()
+
+def upload_to_s3(local_filepath, upload_path, bucket_name, s3client):
+    s3client.upload_file(local_filepath, bucket_name, upload_path)

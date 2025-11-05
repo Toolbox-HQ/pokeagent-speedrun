@@ -1,109 +1,265 @@
-from s3_utils.s3_sync import init_boto3_client, download_prefix
-import sys, os
-import cv2
+from s3_utils.s3_sync import init_boto3_client, download_prefix, upload_to_s3
+import sys
+import os
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
 import torch
 import numpy as np
 from PIL import Image
 from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 import json
 import glob
+from torchcodec.decoders import VideoDecoder
+import subprocess
+import time
+import cv2
+import math
+import torch.nn.functional as F
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 
-def clip_embed_pil(image_pil, model_name: str = "openai/clip-vit-base-patch32"):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = CLIPVisionModelWithProjection.from_pretrained(model_name).to(device)
-    processor = CLIPImageProcessor.from_pretrained(model_name)
-    inputs = processor(images=image_pil.convert("RGB"), return_tensors="pt").to(device)
+def clip_embeddings_every(video_path: str, interval_s: float = 2.0, model_id: str = "openai/clip-vit-base-patch32", device=None):
+    decoder = VideoDecoder(video_path)
+    duration = float(decoder.metadata.duration_seconds)
+
+    t, timestamps = 0.0, []
+    while t <= duration + 1e-6:
+        timestamps.append(round(t, 3))
+        t += interval_s
+
+    processor = CLIPImageProcessor.from_pretrained(model_id)
+    model = CLIPVisionModelWithProjection.from_pretrained(model_id).to(device).eval()
+
     with torch.no_grad():
-        feats = model(**inputs).image_embeds
-        feats = feats / feats.norm(dim=-1, keepdim=True)
-    return feats[0].cpu().numpy()
+        frames = decoder.get_frames_played_at(seconds=timestamps).data  # (N, C, H, W) uint8
+        imgs = frames.permute(0, 2, 3, 1).cpu().numpy()                 # (N, H, W, C) uint8
+        inputs = processor(images=list(imgs), return_tensors="pt")
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        embeds = model(**inputs).image_embeds.float()                    # (N, D) on device
+        embeds = F.normalize(embeds, p=2, dim=1, eps=1e-12).to(device)   # norm + device here
 
-def get_frame_at_index(video_path: str, frame_index: int):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        cap.release()
-        raise IOError(f"Cannot open video: {video_path}")
-    cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_index))
-    ok, frame = cap.read()
-    cap.release()
-    if not ok:
-        raise IndexError(f"Cannot read frame {frame_index} {video_path}")
-    return frame
+    return timestamps, embeds
 
-def cosine_search_gpu(embeddings, query):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    E = torch.as_tensor(embeddings, dtype=torch.float32, device=device)
-    q = torch.as_tensor(query, dtype=torch.float32, device=device)
-    E = E / E.norm(dim=1, keepdim=True)
-    q = q / q.norm()
-    sims = E @ q
-    return sims.cpu().numpy()
+def multi_cosine_search_gpu(db_embeddings, query_result):
+    _, query_embeddings = query_result
+    E = db_embeddings
+    Q = query_embeddings
+    sims = Q @ E.T
+    return sims.max(dim=0).values.float().cpu().numpy(), sims.argmax(dim=0).cpu().numpy()
 
-def load_embeddings_and_metadata(folder_path: str):
-    embed_files = sorted(glob.glob(os.path.join(folder_path, "*_embeddings.pt")))
+def load_embeddings_and_metadata(folder_path: str, device):
+    embed_files = sorted(glob.glob(os.path.join(folder_path, "*.pt")))
     all_meta, tensors = [], []
     for ef in embed_files:
-        base = os.path.basename(ef).rsplit("_embeddings.pt", 1)[0]
-        mf = os.path.join(folder_path, f"{base}_metadata.json")
+        base = os.path.basename(ef).rsplit(".pt", 1)[0]
+        mf = os.path.join(folder_path, f"{base}.json")
         if not os.path.exists(mf):
             continue
         emb = torch.load(ef, map_location="cpu")
         if not isinstance(emb, torch.Tensor):
             emb = torch.as_tensor(emb)
+        tensors.append(emb.float())
         with open(mf, "r") as f:
             meta = json.load(f)
-        tensors.append(emb)
         all_meta.extend(meta)
+
     out_tensor = torch.cat(tensors, dim=0) if tensors else torch.empty((0, 512), dtype=torch.float32)
+    if out_tensor.numel() > 0:
+        out_tensor = F.normalize(out_tensor, p=2, dim=1, eps=1e-12).to(device)  # norm + device here
     return all_meta, out_tensor
 
-def top_k_runs_threshold(a: np.ndarray, tau: float, k: int = 10):
-    m = a >= tau
-    if not m.any():
+def _segments_by_video(meta):
+    segs = []
+    if not meta:
+        return segs
+    start = 0
+    cur = meta[0]["video_path"]
+    for i in range(1, len(meta)):
+        if meta[i]["video_path"] != cur:
+            segs.append((start, i - 1))
+            start = i
+            cur = meta[i]["video_path"]
+    segs.append((start, len(meta) - 1))
+    return segs
+
+def top_runs_greedy(a, idxs, L=30, entropy_threshold=0.7):
+    n = len(a)
+    if n < L: return []
+    cs = np.concatenate(([0.0], np.cumsum(a, dtype=float)))
+    w = cs[L:] - cs[:-L]
+    valid = _rolling_entropy_valid(idxs, L, entropy_threshold)
+
+    cands = [(w[i], i) for i in range(len(w)) if valid[i]]
+    cands.sort(key=lambda t: t[0], reverse=True)
+
+    used = np.zeros(n, dtype=bool)
+    res = []
+    for score, start in cands:
+        s, e = start, start + L - 1
+        if not used[s:e+1].any():
+            used[s:e+1] = True
+            res.append((score, s, e))
+    res.sort(key=lambda x: x[1])
+    return res
+
+
+# top-level
+def _process_chunk_p(args):
+    sims, idxs, chunk, L = args
+    out = []
+    for s, e in chunk:
+        local = top_runs_greedy(sims[s:e+1], idxs[s:e+1], L=L, entropy_threshold=2.5)
+        out.extend((score / L, a + s, b + s) for score, a, b in local)
+    return out
+
+def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.8, max_workers=None):
+    segments = list(_segments_by_video(meta))
+    if not segments:
         return []
-    p = np.r_[False, m, False]
-    d = np.diff(p.astype(int))
-    starts = np.where(d == 1)[0]
-    ends   = np.where(d == -1)[0] - 1
-    lengths = ends - starts + 1
-    order = np.argsort(-lengths)
-    return [(int(starts[i]), int(ends[i])) for i in order[:k]]
+    n = min(max_workers or (os.cpu_count() or 1), len(segments))
+    chunk_size = math.ceil(len(segments) / n)
+    chunks = [segments[i:i + chunk_size] for i in range(0, len(segments), chunk_size)]
+
+    scored = []
+    with ProcessPoolExecutor(max_workers=n) as ex:
+        futs = [ex.submit(_process_chunk_p, (sims, idxs, c, L)) for c in chunks]
+        for f in as_completed(futs):
+            scored.extend(f.result())
+
+    scored.sort(key=lambda t: t[0], reverse=True)
+    return [(a, b, score) for score, a, b in scored if score >= threshold]
+
+def _rolling_entropy_valid(idxs: np.ndarray, L: int, thr: float) -> np.ndarray:
+    # H = log L - (1/L) * sum_i c_i log c_i ; maintain S = sum c log c
+    n = len(idxs)
+    m = n - L + 1
+    if m <= 0:
+        return np.zeros(0, dtype=bool)
+
+    counts = {}
+    S = 0.0
+    for x in idxs[:L]:
+        c0 = counts.get(x, 0)
+        if c0: S -= c0 * math.log(c0)
+        c1 = c0 + 1
+        counts[x] = c1
+        S += c1 * math.log(c1)
+
+    logL = math.log(L)
+    valid = np.empty(m, dtype=bool)
+    valid[0] = (logL - S / L) >= thr
+
+    for start in range(1, m):
+        out_x = idxs[start - 1]
+        c0 = counts[out_x]
+        S -= c0 * math.log(c0)
+        if c0 == 1:
+            del counts[out_x]
+        else:
+            c1 = c0 - 1
+            counts[out_x] = c1
+            S += c1 * math.log(c1)
+
+        in_x = idxs[start + L - 1]
+        c0 = counts.get(in_x, 0)
+        if c0:
+            S -= c0 * math.log(c0)
+        c1 = c0 + 1
+        counts[in_x] = c1
+        S += c1 * math.log(c1)
+
+        valid[start] = (logL - S / L) >= thr
+
+    return valid
+
+def save_clip_between(start_meta, end_meta, BUCKET_NAME, rank, s3):
+    match_file_path = "/".join(start_meta["video_path"].split("/")[1:])
+    download_prefix(bucket=BUCKET_NAME, prefix=match_file_path, s3=s3)
+    local_path = "cache/" + match_file_path
+
+    dec = VideoDecoder(local_path)
+    fps = getattr(dec, "fps", None) or getattr(dec, "frame_rate", None)
+
+    try:
+        s_idx = int(start_meta["sampled_frame_index"])
+        e_idx = int(end_meta["sampled_frame_index"])
+        if e_idx <= s_idx:
+            e_idx = s_idx + 1
+
+        # Open with OpenCV for frame-accurate slicing
+        cap = cv2.VideoCapture(local_path)
+        if not cap.isOpened():
+            raise RuntimeError(f"Failed to open video: {local_path}")
+
+        # Prefer decoder FPS; fall back to container FPS
+        fps_cv = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        fps_out = float(fps or fps_cv or 30.0)
+
+        # Seek to start frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, s_idx)
+
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        os.makedirs("cache", exist_ok=True)
+        out_path = f"cache/seq_{rank:02d}.mp4"
+
+        # Use mp4v for broad compatibility (no external ffmpeg call)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(out_path, fourcc, fps_out, (w, h))
+        if not writer.isOpened():
+            cap.release()
+            raise RuntimeError(f"Failed to open writer for: {out_path}")
+
+        frames_to_write = max(e_idx - s_idx, 1)
+        written = 0
+        while written < frames_to_write:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            writer.write(frame)
+            written += 1
+
+        writer.release()
+        cap.release()
+        return out_path
+    finally:
+        close_fn = getattr(dec, "close", None)
+        if callable(close_fn):
+            close_fn()
+
+def entropy_of_range(idxs: np.ndarray, start: int, end: int) -> float:
+    vals, counts = np.unique(idxs[start:end+1], return_counts=True)
+    p = counts / counts.sum()
+    return float(-(p * np.log(p + 1e-12)).sum())
 
 def main():
     BUCKET_NAME = "b4schnei"
-    KEY = "pokeagent/internet_data/--v7Jat84PE.mp4"
-    LOCAL_VIDEO = f"cache/{KEY}"
-    FRAME_INDEX = 190
-    EMB_DIR = "cache/embeddings"
+    EMB_DIR = ".cache/clip32"
+    torch.cuda.set_device(3)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     s3 = init_boto3_client()
-    download_prefix(bucket=BUCKET_NAME, prefix=KEY, s3=s3)
-    frame = get_frame_at_index(LOCAL_VIDEO, FRAME_INDEX)
-    Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).save("cache/original.png")
-
-    # TEMP
-    pil_img = Image.open("cache/test1.png")
-
-    query_emb = clip_embed_pil(pil_img)
-    meta, E = load_embeddings_and_metadata(EMB_DIR)
+    query_emb = clip_embeddings_every(".cache/2.mp4", device=device)
+    meta, E = load_embeddings_and_metadata(EMB_DIR, device=device)
     if E.numel() == 0:
         raise ValueError(f"No embeddings found in {EMB_DIR}")
+    sims, idxs = multi_cosine_search_gpu(E, query_emb)
+    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.92, max_workers=8)
 
-    sims = cosine_search_gpu(E, query_emb)
-    threshold = np.quantile(sims, 0.6)
-    top_runs = top_k_runs_threshold(sims, threshold, k=10)
+    results = []
+    for start, end, _ in top_runs:
+        start_meta = meta[start]
+        end_meta = meta[end]
+        results.append({
+            "start": int(start_meta.get("sampled_frame_index", start)),
+            "end": int(end_meta.get("sampled_frame_index", end)),
+            "video_path": start_meta.get("video_path", ""),
+            "video_fps": float(start_meta.get("video_fps", start_meta.get("fps", 0.0))),
+        })
 
-    for rank, (start, end) in enumerate(top_runs, start=1):
-        for tag, i in (("start", start), ("end", end)):
-            m = meta[i]
-            match_file_path = "/".join(m["video_path"].split("/")[1:])
-            match_frame_index = int(m["sampled_frame_index"])
-            download_prefix(bucket=BUCKET_NAME, prefix=match_file_path, s3=s3)
-            f = get_frame_at_index("cache/" + match_file_path, match_frame_index)
-            Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB)).save(f"cache/seq_{rank:02d}_{tag}.png")
-        print(f"#{rank} sequence: start={start}, end={end}")
-
-    return top_runs
+    with open("results.json", "w") as f:
+        json.dump(results, f)
 
 if __name__ == "__main__":
-    sys.exit(0 if main() is not None else 1)
+    main()
