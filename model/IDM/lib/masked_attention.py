@@ -3,7 +3,7 @@ import functools
 import torch as th
 from torch import nn
 
-import IDM.lib.xf as xf
+import model.IDM.lib.xf as xf
 from model.IDM.lib.store_args import store_args
 from model.IDM.lib.tree_util import tree_map
 

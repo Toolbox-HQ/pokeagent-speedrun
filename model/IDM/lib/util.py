@@ -3,7 +3,7 @@ from typing import Dict, Optional
 import torch as th
 from torch import nn
 from torch.nn import functional as F
-import IDM.lib.torch_util as tu
+import model.IDM.lib.torch_util as tu
 from model.IDM.lib.masked_attention import MaskedAttention
 from model.IDM.lib.store_args import store_args
 from model.IDM.lib.tree_util import tree_map
