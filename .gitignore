@@ -26,3 +26,5 @@ agent_direct_save.state
 /docker_build
 .cache
 .venv
+core.*
+slurm*
