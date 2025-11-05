@@ -1,6 +1,5 @@
 import os
 import json
-import math
 import torch
 import einops
 import numpy as np
@@ -10,8 +9,10 @@ from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from model.IDM.policy import InverseActionPolicy as IDModel
 from policy.policy import CLASS_TO_KEY
+from typing import List
+from functools import partial
 
-DEVICE = "cuda:0"
+DEVICE = "cpu"
 IDM_FPS = 4
 WINDOW = 128  # non-overlapping IDM windows
 AGENT_FPS = 2
@@ -20,7 +21,7 @@ AGENT_WINDOW = 64
 def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
     m = IDModel()
     m.load_state_dict(torch.load(chkpt, map_location="cpu"))
-    m.to(DEVICE).eval()
+    m.eval()
     return m
 
 def decode_idm_rate_frames(video_path, start, end, video_fps, idm_fps=IDM_FPS):
@@ -34,6 +35,9 @@ def decode_idm_rate_frames(video_path, start, end, video_fps, idm_fps=IDM_FPS):
 
 class IDMWindowDataset(Dataset):
     def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW):
+        
+        self.processor = None
+
         with open(intervals_json, "r", encoding="utf-8") as f:
             items = json.load(f)
         self.samples = []
@@ -56,17 +60,36 @@ class IDMWindowDataset(Dataset):
                     "video_fps": fps,
                 })
 
+    @staticmethod
+    def collate_fn(batch: List[torch.Tensor]):
+        
+        return {
+            "pixel_values": torch.stack([ item["pixel_values"] for item in batch ], dim=0),
+            "labels": torch.stack([ item["labels"] for item in batch ], dim=0)
+            }
+
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         s = self.samples[idx]
-        x = decode_idm_rate_frames(
+        idm_frames = decode_idm_rate_frames(
             s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS
         )
-        return x  # (T,C,H,W) RGB
+
+        inputs = None
+        if self.processor:
+            agent_frames = downsample(idm_frames, 2)
+            inputs = self.processor(
+            images=agent_frames,
+            return_tensors="pt"
+            )
+            inputs["labels"] = resize(idm_frames, (128, 128))
+
+        return inputs if inputs else idm_frames # (T,C,HW) RGB
 
 def _to_bgr_u8(x):
+
     if isinstance(x, torch.Tensor):
         x = x.detach().cpu()
         if x.ndim == 3 and x.shape[0] in (1,3):
@@ -97,6 +120,7 @@ def save_mp4_with_keys(x, labels, out_path, fps):
         writer.write(img)
     writer.release()
 
+
 def infer_idm_labels(x, idm):
     x_resize = resize(x.clone(), (128, 128))
     frames_thwc = einops.rearrange(x_resize, "t c h w -> t h w c") # (128, 128, 128, 3)
@@ -110,13 +134,44 @@ def infer_idm_labels(x, idm):
     logits = idm({"img": f}, labels=None, **dummy).logits  # (1, T, K)
     return torch.argmax(logits, dim=-1).squeeze(0).cpu()   # (T,)
 
+def get_idm_labeller(device):
+    idm = load_model()
+    idm.to(device)
+    idm.eval()
+    return partial(batched_infer_idm_labels, idm=idm)
+
+def batched_infer_idm_labels(x, idm=None):
+    with torch.no_grad():
+        (B, S, C, H, W) = x.shape
+        assert (S, C, H, W) == (128, 3, 128, 128)
+
+        frames_bthwc = einops.rearrange(x, "b t c h w -> b t h w c") # (128, 128, 128, 3)
+
+        dummy = {
+            "first": torch.zeros((frames_bthwc.shape[0], 1)).to(frames_bthwc.device),
+            "state_in": idm.initial_state(frames_bthwc.shape[0])
+        }
+
+        logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
+        labels = torch.argmax(logits, dim=-1)
+        labels = labels[:,::2] # strided downsampling
+
+    return labels
+
+
+
 def get_dataloader(intervals_json, batch_size=1, num_workers=0, shuffle=False):
     ds = IDMWindowDataset(intervals_json, IDM_FPS, WINDOW)
     return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
 
-def downsample(x, labels, stride):
+def downsample(x, stride):
     idxs = list(range(0, x.shape[0], stride))
-    return x[idxs], labels[idxs]
+    return x[idxs]
+
+def downsample_batched(x, stride):
+    idxs = list(range(0, x.shape[-1], stride))
+    assert torch.all(x[:, idxs] == x[:,::stride])
+    return x[:,idxs]
 
 
 def main():
@@ -125,10 +180,12 @@ def main():
 
     with torch.no_grad():
         for i, batch in enumerate(loader):
-            x = batch[0]  # (T,C,H,W) RGB
+            x = batch[0]  # (B,T,C,H,W) RGB
+
             labels = infer_idm_labels(x, idm)
-            #x = x[:labels.shape[0]]
-            agent_frames, agent_labels = downsample(x, labels, 2)
+            agent_frames = downsample(x, 2)
+            agent_labels = downsample(labels, 2)
+
             save_mp4_with_keys(agent_frames, agent_labels, os.path.join(".cache/pokeagent/idm_videos", f"clip_{i:05d}.mp4"), AGENT_FPS)
             if i == 30:
                 break

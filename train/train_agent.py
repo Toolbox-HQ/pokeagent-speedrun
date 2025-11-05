@@ -8,6 +8,8 @@ from util.trainer import Trainer
 from torch.utils.data import Dataset
 from model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from util.repro import repro_init
+from inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
+import os
 
 @dataclass
 class ModelArguments:
@@ -46,41 +48,11 @@ def rank0_print(*args):
         print(*args)
 
 
-class DummyData(Dataset):
-
-    def __init__(self):
-        self.processor = None
-
-    def __len__(self):
-        return 6000
-
-    # tensor uint8 (64 x 3 x 224 x 224) , int32 tensor(64) 
-    def __getitem__(self, _):
-        # data, labels
-        t = torch.zeros((64,3,224,224), dtype=torch.uint8),
-        labels = torch.ones((64), dtype=torch.int32)                
-
-        if self.processor:
-            t = self.processor.image_processor(t, return_tensors="pt")
-
-        return  t, labels
-    
-    @staticmethod
-    def collate_fn(batch):
-        pixels, inps = [], []
-
-        for pixel, ids in batch:
-            pixels.append(pixel["pixel_values"])
-            inps.append(ids)
-
-        return {
-            "pixel_values": torch.stack(pixels, dim=0),
-            "input_ids": torch.stack(inps, dim=0),
-        }
-    
-
 def train() -> None:
     global local_rank
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    device = torch.device(f"cuda:{local_rank}")
+    
     from argparse import ArgumentParser
 
     parser: ArgumentParser = ArgumentParser()
@@ -103,19 +75,20 @@ def train() -> None:
     # model stuff
     model = init_lm_agent(lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
-    
+    model.idm_labelling_fn = get_idm_labeller(device)
+
     if training_args.gradient_checkpointing:
         model.text_model.gradient_checkpointing_enable()
         model.vision_tower.gradient_checkpointing_enable()
         training_args.gradient_checkpointing = False
 
     # data stuff
-    training_dataset = DummyData()
+    training_dataset = IDMWindowDataset(".cache/pokeagent/intervals.json")
     training_dataset.processor = processor
 
     # Start trainer
     trainer = Trainer(
-        model=model, args=training_args, data_collator=DummyData.collate_fn, train_dataset=training_dataset
+        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=training_dataset
     )
 
     trainer.train()

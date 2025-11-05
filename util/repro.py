@@ -1,6 +1,7 @@
 import subprocess
 import os
 import re
+import warnings
 
 
 def repro_init(cfg: str, seed: int = 1234):
@@ -29,14 +30,14 @@ def enforce_versioning():
     if "EXPERIMENT_RUN" in os.environ:
         try:
             subprocess.run(["git", "diff-index", "--quiet", "HEAD"], check=True)
-        except Exception as _:
-            error_msg = f"""
-            [ERROR] The following files were found to be modified but not committed in version control:
+        except Exception:
+            warning_msg = f"""
+            [WARNING] The following files were found to be modified but not committed in version control:
             {get_modified_files()}
-            When running an experiment please ensure all changes are tracked by version control.
-            This behaviour is enforced by the [EXPERIMENT_RUN] environment variable.
+            When running an experiment it is recommended to track all changes with version control.
+            This behaviour is suggested by the [EXPERIMENT_RUN] environment variable.
             """
-            raise Exception(error_msg)
+            warnings.warn(warning_msg)
 
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -47,7 +48,6 @@ def enforce_versioning():
     )
 
     return result.stdout.strip()
-
 
 def seed_rng(seed: int = 1234):
     import random

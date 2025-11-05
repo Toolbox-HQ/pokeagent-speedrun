@@ -32,6 +32,8 @@ from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
 from torch.nn import Module
 from policy import NUM_ACTION_CLASSES
+from inference.idm_inference_dataloader import infer_idm_labels, downsample
+ 
 
 class MLP(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -63,6 +65,7 @@ class LMAgent(Module, GenerationMixin):
         self.tconfig = config["text_config"]
         self.vconfig = config["vision_config"].vision_config
         self.num_actions = config["num_actions"]
+        self.idm_labelling_fn = None
 
         with ContextManagers(PreTrainedModel.get_init_context(False, False)):
             self.text_model = Qwen3Model(self.tconfig)
@@ -153,6 +156,10 @@ class LMAgent(Module, GenerationMixin):
         pixel_mask: Optional[torch.LongTensor] = None,
         **kwargs,
     ) -> CausalLMOutputWithPast:
+
+        # TODO All these vars should be re-named
+        if labels is not None:
+            input_ids = self.idm_labelling_fn(labels)
 
         B, T, C, H, W = pixel_values.shape
         device = pixel_values.device

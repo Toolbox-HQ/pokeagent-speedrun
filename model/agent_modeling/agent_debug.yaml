@@ -2,18 +2,19 @@ lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 output_dir: "./checkpoints"
 num_train_epochs: 1
-per_device_train_batch_size: 4
+per_device_train_batch_size: 2
 #gradient_accumulation_steps: 10
 save_strategy: "steps"
 save_steps: 500
 save_total_limit: 10
-learning_rate: 5.0e-5 # this is very low
+learning_rate: 5.0e-5
 weight_decay: 0.00001
 adam_beta2: 0.95
-warmup_ratio: 0.05
+warmup_ratio: 0.005
 lr_scheduler_type: "linear"
 logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "no"
-dataloader_num_workers: 8
+dataloader_num_workers: 0
+max_steps: 2000

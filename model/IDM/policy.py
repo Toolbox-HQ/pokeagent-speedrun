@@ -315,6 +315,9 @@ class InverseActionPolicy(nn.Module):
         if activation_checkpoint:
             raise Exception("Activation checkpointing not implemented")
 
+    def get_device(self):
+        return self.out_head.weight.device
+
     def reset_parameters(self):
         self.out_head.reset_parameters()
 
