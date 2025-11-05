@@ -73,7 +73,6 @@ def generate_clip_frame_embeddings(video_path: str, interval_sec: float = 2.0, b
 
         with torch.no_grad():
             image_embeds = model.get_image_features(**inputs)
-            # Normalize embeddings
             image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
 
         all_embeddings.append(image_embeds.cpu())
