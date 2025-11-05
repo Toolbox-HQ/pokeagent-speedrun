@@ -1,0 +1,35 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --time=08:00:00
+#SBATCH --gpus-per-node=4
+#SBATCH --job-name=chimeraaudio_job
+#SBATCH --output=/scratch/bsch/chimeraaudio_output_%j.txt
+#SBATCH --mail-type=ALL
+
+cd /scratch/bsch/pokeagent-speedrun
+source .venv/bin/activate
+
+# Environment variables
+export EXPERIMENT_RUN="1"
+export WANDB_MODE="offline"
+export PYTHONPATH=$(pwd)
+export WANDB_DIR="./wandb"
+
+export WORK="/scratch/bsch"
+export CUDA_HOME="$WORK/anaconda3/envs/cuda"
+export HF_HOME="$WORK/hf_cache"
+export APPTAINER_CACHEDIR="$WORK/.apptainer"
+export TRITON_CACHE_DIR="$WORK/.triton"
+
+# Automatically detect all available GPUs
+NUM_GPUS=$(nvidia-smi -L | wc -l)
+
+# Run torchrun using all GPUs on this node
+./.venv/bin/torchrun \
+  --nproc_per_node=$NUM_GPUS \
+  --nnodes=1 \
+  --node_rank=0 \
+  --master_addr=localhost \
+  --master_port=6605 \
+  ./train/train_agent.py \
+  --config ./config/agent.yaml

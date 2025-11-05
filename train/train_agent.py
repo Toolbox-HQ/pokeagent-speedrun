@@ -86,6 +86,9 @@ def train() -> None:
     training_dataset = IDMWindowDataset(".cache/pokeagent/intervals.json")
     training_dataset.processor = processor
 
+    for param in model.parameters():
+        param.requires_grad = True
+
     # Start trainer
     trainer = Trainer(
         model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=training_dataset
