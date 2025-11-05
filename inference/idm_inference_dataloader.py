@@ -1,0 +1,137 @@
+import os
+import json
+import math
+import torch
+import einops
+import numpy as np
+import cv2
+from torch.utils.data import Dataset, DataLoader
+from torchvision.transforms.functional import resize
+from torchcodec.decoders import VideoDecoder
+from model.IDM.policy import InverseActionPolicy as IDModel
+from policy.policy import CLASS_TO_KEY
+
+DEVICE = "cuda:0"
+IDM_FPS = 4
+WINDOW = 128  # non-overlapping IDM windows
+AGENT_FPS = 2
+AGENT_WINDOW = 64
+
+def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
+    m = IDModel()
+    m.load_state_dict(torch.load(chkpt, map_location="cpu"))
+    m.to(DEVICE).eval()
+    return m
+
+def decode_idm_rate_frames(video_path, start, end, video_fps, idm_fps=IDM_FPS):
+    stride = max(1, int(round(video_fps / idm_fps)))
+    idxs = list(range(int(start), int(end), stride))
+    if not idxs:
+        return torch.empty(0, 3, 128, 128)
+    dec = VideoDecoder(video_path)
+    x = dec.get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
+    return x
+
+class IDMWindowDataset(Dataset):
+    def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW):
+        with open(intervals_json, "r", encoding="utf-8") as f:
+            items = json.load(f)
+        self.samples = []
+        for it in items:
+            start = int(it["start"])
+            end = int(it["end"])
+            fps = float(it["video_fps"])
+            stride = max(1, int(round(fps / idm_fps)))
+            n_raw = max(0, end - start)
+            n_idm = n_raw // stride
+            n_full = (n_idm // window) * window
+            n_windows = n_full // window
+            for w in range(n_windows):
+                win_start = start + w * window * stride
+                win_end = win_start + window * stride
+                self.samples.append({
+                    "video_path": it["video_path"],
+                    "start": win_start,
+                    "end": win_end,
+                    "video_fps": fps,
+                })
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        s = self.samples[idx]
+        x = decode_idm_rate_frames(
+            s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS
+        )
+        return x  # (T,C,H,W) RGB
+
+def _to_bgr_u8(x):
+    if isinstance(x, torch.Tensor):
+        x = x.detach().cpu()
+        if x.ndim == 3 and x.shape[0] in (1,3):
+            x = x.permute(1,2,0)  # (H,W,C)
+        x = x.numpy()
+    if x.dtype != np.uint8:
+        if x.max() <= 1.0:
+            x = (np.clip(x,0,1)*255).astype(np.uint8)
+        else:
+            x = x.astype(np.uint8)
+    if x.ndim == 2:
+        x = np.repeat(x[...,None], 3, axis=2)
+    if x.shape[2] == 1:
+        x = np.repeat(x, 3, axis=2)
+    return x[..., ::-1].copy()  # RGB->BGR
+
+def save_mp4_with_keys(x, labels, out_path, fps):
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    if len(x) == 0:
+        return
+    first = _to_bgr_u8(x[0])
+    h, w = first.shape[:2]
+    writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), float(fps), (w, h))
+    for f, l in zip(x, labels):
+        img = _to_bgr_u8(f)
+        text = CLASS_TO_KEY.get(int(l), str(int(l)))
+        cv2.putText(img, text, (8, 22), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1, cv2.LINE_AA)
+        writer.write(img)
+    writer.release()
+
+def infer_idm_labels(x, idm):
+    x_resize = resize(x.clone(), (128, 128))
+    frames_thwc = einops.rearrange(x_resize, "t c h w -> t h w c") # (128, 128, 128, 3)
+
+    T = (frames_thwc.shape[0] // WINDOW) * WINDOW
+    if T == 0:
+        return torch.empty(0, dtype=torch.long)
+    f = frames_thwc[:T].to(DEVICE).unsqueeze(0)  # (1, T, H, W, C)
+    dummy = {"first": torch.zeros((1,1), device=DEVICE),
+             "state_in": idm.initial_state(1)}
+    logits = idm({"img": f}, labels=None, **dummy).logits  # (1, T, K)
+    return torch.argmax(logits, dim=-1).squeeze(0).cpu()   # (T,)
+
+def get_dataloader(intervals_json, batch_size=1, num_workers=0, shuffle=False):
+    ds = IDMWindowDataset(intervals_json, IDM_FPS, WINDOW)
+    return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
+
+def downsample(x, labels, stride):
+    idxs = list(range(0, x.shape[0], stride))
+    return x[idxs], labels[idxs]
+
+
+def main():
+    idm = load_model()
+    loader = get_dataloader(".cache/pokeagent/intervals.json", batch_size=1, num_workers=0, shuffle=False)
+
+    with torch.no_grad():
+        for i, batch in enumerate(loader):
+            x = batch[0]  # (T,C,H,W) RGB
+            labels = infer_idm_labels(x, idm)
+            #x = x[:labels.shape[0]]
+            agent_frames, agent_labels = downsample(x, labels, 2)
+            save_mp4_with_keys(agent_frames, agent_labels, os.path.join(".cache/pokeagent/idm_videos", f"clip_{i:05d}.mp4"), AGENT_FPS)
+            if i == 30:
+                break
+
+if __name__ == "__main__":
+    main()
