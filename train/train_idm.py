@@ -52,6 +52,7 @@ def setup_distributed():
     return local_rank, world_size
 
 def gather_and_stack(t: torch.Tensor):
+    t = t.contiguous()
     world_size = dist.get_world_size()
     gather_list = [torch.zeros_like(t) for _ in range(world_size)]
     dist.all_gather(gather_list, t)

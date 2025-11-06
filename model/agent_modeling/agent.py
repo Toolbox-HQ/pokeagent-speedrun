@@ -32,8 +32,10 @@ from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
 from torch.nn import Module
 from policy import NUM_ACTION_CLASSES
-from inference.idm_inference_dataloader import infer_idm_labels, downsample
- 
+
+# TODO this should refactored to be a util
+from train.train_idm import compute_accuracy
+
 
 class MLP(nn.Module):
     def __init__(self, in_dim, out_dim):
@@ -205,6 +207,7 @@ class LMAgent(Module, GenerationMixin):
             **kwargs,
         )
 
+        # loss comp
         hidden_states = outputs.last_hidden_state
         action_hiddens = hidden_states[last_token_mask].view(B,T,H)
         
@@ -212,13 +215,21 @@ class LMAgent(Module, GenerationMixin):
         labels = input_ids.detach()
         loss = linear_cross_entropy(action_hiddens, classifier, labels)
 
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=None,
-            past_key_values=outputs.past_key_values,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
-        )
+        with torch.no_grad():
+            logits = self.output_actions(action_hiddens)
+            metrics = compute_accuracy(logits, labels)
+        # TODO make this cleaner
+        return {
+            "loss": loss
+        } | metrics
+
+        # return CausalLMOutputWithPast(
+        #     loss=loss,
+        #     logits=None,
+        #     past_key_values=outputs.past_key_values,
+        #     hidden_states=outputs.hidden_states,
+        #     attentions=outputs.attentions,
+        # )
 
 def init_vision_prcoessor(vision: str = None):
     from util.misc import local_model_map
