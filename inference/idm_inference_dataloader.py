@@ -154,8 +154,8 @@ def batched_infer_idm_labels(x, idm=None):
 
         logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
         labels = torch.argmax(logits, dim=-1)
-        labels = labels[:,::2] # strided downsampling
-
+        labels = labels[:,1::2] # strided downsampling, offset by 1
+        
     return labels
 
 
