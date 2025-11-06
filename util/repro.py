@@ -15,6 +15,7 @@ def get_config_file(path):
     config_name = re.search(r"/([^/]+?)(?:\.[^./]+)?$", path)
     assert config_name, "Did not find config file name in path."
     os.environ["WANDB_NAME"] = config_name.group(1)
+    os.environ["WANDB_PROJECT"] = "pokeagent"
     return config_name.group(1)
 
 
