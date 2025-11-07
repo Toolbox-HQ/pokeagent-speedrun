@@ -3,7 +3,6 @@ import orjson
 import re 
 import os.path as path
 from typing import Dict, List
-import torchvision.transforms.functional as F
 import random
 
 def sample_transform_params():
@@ -29,6 +28,7 @@ def sample_transform_params():
 
 def apply_video_transform(img):
 
+    import torchvision.transforms.functional as F
     B, C, W, H = img.shape
     assert C == 3, "Channel dim must be first"
 
