@@ -1,6 +1,6 @@
-from policy.policy import Policy, KEY_TO_MGBA
+from emulator.policy.policy import Policy, KEY_TO_MGBA
 import random
-from dataclass import PolicyConfig
+from emulator.dataclass import PolicyConfig
 
 class RandomPolicy(Policy):
 

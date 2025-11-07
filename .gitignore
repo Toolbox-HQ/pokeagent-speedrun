@@ -12,16 +12,16 @@ CLAUDE.md
 .vscode
 **.s3cfg**
 # Ignore everything inside Data/
-Data/*
+emulator/data/*
 
 # Ignore everything inside Emerald-GBAdvance/
-Emerald-GBAdvance/*
+emulator/Emerald-GBAdvance/*
 
-agent_direct_save.state
+emulator/agent_direct_save.state
 /wandb
 # Keep the folders themselves (optional)
-!Data/.gitkeep
-!Emerald-GBAdvance/.gitkeep
+!emulator/data/.gitkeep
+!emulator/Emerald-GBAdvance/.gitkeep
 /state
 /docker_build
 .cache
