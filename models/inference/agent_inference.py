@@ -8,7 +8,7 @@ class Pokeagent:
         self.device = torch.device(device)
 
         self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224")
-        state_dict = load_file(".cache/model.safetensors")
+        state_dict = load_file(".cache/agent1500.safetensors")
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
 
