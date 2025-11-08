@@ -11,6 +11,9 @@ def main():
     from PIL import Image
     import numpy as np
     import torch
+    from models.inference.agent_inference import Pokeagent
+    
+    agent = Pokeagent()
 
     ctx = mp.get_context("spawn")
     parent_conn, child_conn = ctx.Pipe(duplex=True)
@@ -18,38 +21,16 @@ def main():
     c = ctx.Process(target=child_proc, args=(child_conn, MAX_STEPS))
     c.start()
 
-    last_img_bytes = None
-
-    reply = ''
     for i in range(MAX_STEPS):
         msg_type, payload = parent_conn.recv()
         assert msg_type == "image" and isinstance(payload, (bytes, bytearray))
-        last_img_bytes = payload
+        img = Image.open(io.BytesIO(payload)).convert("RGB")
+        np_img = np.array(img)                           # HWC, uint8
+        tensor = torch.from_numpy(np_img).permute(2, 0, 1).float() / 255.0
+        action = agent.infer_action(tensor)
+        parent_conn.send(("char", action))  # child now unblocks and continues
         
-        if i % 6 == 0:
-            reply = 'a'
-        if i % 6 == 1:
-            reply = 'b'
-        if i % 6 == 2:
-            reply = 'up'
-        if i % 6 == 3:
-            reply = 'down'
-        if i % 6 == 4:
-            reply = 'left'
-        if i % 6 == 5:
-            reply = 'right'
-        
-        parent_conn.send(("char", reply))  # child now unblocks and continues
-    
     c.join()
-    print("success!")
-
-    Path("last_frame.png").write_bytes(last_img_bytes)
-    img = Image.open(io.BytesIO(last_img_bytes)).convert("RGB")
-    np_img = np.array(img)                           # HWC, uint8
-    tensor = torch.from_numpy(np_img).permute(2, 0, 1).float() / 255.0
-    print("tensor shape:", tuple(tensor.shape), "dtype:", tensor.dtype, "min/max:", float(tensor.min()), float(tensor.max()))
-
 
 if __name__ == "__main__":
     main()
