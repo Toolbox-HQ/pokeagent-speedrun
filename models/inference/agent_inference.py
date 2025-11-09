@@ -1,5 +1,5 @@
 import torch
-from models.model.agent_modeling.agent import init_lm_agent, init_vision_processor
+from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.policy.policy import CLASS_TO_KEY
 from safetensors.torch import load_file
 
@@ -12,7 +12,7 @@ class Pokeagent:
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
 
-        self.processor = init_vision_processor("google/siglip-base-patch16-224")
+        self.processor = init_vision_prcoessor("google/siglip-base-patch16-224")
 
         self.agent_frames = torch.zeros(64, 3, 160, 240)            
         self.input_ids = torch.zeros(1, 64, dtype=torch.long)       

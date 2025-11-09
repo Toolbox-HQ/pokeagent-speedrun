@@ -8,9 +8,9 @@ import torch as th
 from torch import nn
 from torch.nn import functional as F
 
-from model.IDM.lib import misc, mlp
-from model.IDM.lib import torch_util as tu
-from model.IDM.lib import util
+from models.model.IDM.lib import misc, mlp
+from models.model.IDM.lib import torch_util as tu
+from models.model.IDM.lib import util
 
 SENTINEL = 0.1337
 

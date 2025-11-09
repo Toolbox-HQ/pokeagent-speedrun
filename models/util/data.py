@@ -27,10 +27,6 @@ def sample_transform_params():
     }
 
 def apply_video_transform(img):
-<<<<<<< HEAD:util/data.py
-
-=======
->>>>>>> 2060aa6 (Refactor and add multiprocess architecture):models/util/data.py
     import torchvision.transforms.functional as F
     B, C, W, H = img.shape
     assert C == 3, "Channel dim must be first"

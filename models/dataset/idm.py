@@ -1,14 +1,14 @@
 import torch
 from torch.utils.data import Dataset
 import os
-from util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4, save_json
-from policy import KEY_TO_CLASS
+from models.util.data import load_json, download_s3_folder, list_files_with_extentions, map_json_to_mp4, save_json
+from models.policy import KEY_TO_CLASS
 import torch 
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from typing import Tuple,List
 import einops
-from util.data import ValueInterval, apply_video_transform
+from models.util.data import ValueInterval, apply_video_transform
 from joblib import Parallel, delayed, cpu_count
 
 

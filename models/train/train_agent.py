@@ -4,11 +4,11 @@ from typing import  Optional
 import torch
 from torch.utils.data import Dataset
 import transformers
-from util.trainer import Trainer
+from models.util.trainer import Trainer
 from torch.utils.data import Dataset
 from model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
-from util.repro import repro_init
-from inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
+from models.util.repro import repro_init
+from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
 
 @dataclass

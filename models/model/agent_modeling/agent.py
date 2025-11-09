@@ -31,10 +31,10 @@ from cut_cross_entropy import linear_cross_entropy
 from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
 from torch.nn import Module
-from policy import NUM_ACTION_CLASSES
+from models.policy import NUM_ACTION_CLASSES
 
 # TODO this should refactored to be a util
-from train.train_idm import compute_accuracy
+from models.train.train_idm import compute_accuracy
 
 
 class MLP(nn.Module):
@@ -232,11 +232,11 @@ class LMAgent(Module, GenerationMixin):
         # )
 
 def init_vision_prcoessor(vision: str = None):
-    from util.misc import local_model_map
+    from models.util.misc import local_model_map
     return AutoProcessor.from_pretrained(local_model_map(vision))
 
 def init_lm_agent(lm: str = None, vision: str = None)  -> LMAgent:
-    from util.misc import local_model_map
+    from models.util.misc import local_model_map
 
     lm_config_path = local_model_map(lm)
     vision_config_path = local_model_map(vision)

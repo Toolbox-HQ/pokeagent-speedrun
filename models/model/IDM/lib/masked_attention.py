@@ -3,9 +3,9 @@ import functools
 import torch as th
 from torch import nn
 
-import model.IDM.lib.xf as xf
-from model.IDM.lib.store_args import store_args
-from model.IDM.lib.tree_util import tree_map
+import models.model.IDM.lib.xf as xf
+from models.model.IDM.lib.store_args import store_args
+from models.model.IDM.lib.tree_util import tree_map
 
 @functools.lru_cache()
 def get_band_diagonal_mask(t: int, T: int, maxlen: int, batchsize: int, device: th.device) -> th.Tensor:

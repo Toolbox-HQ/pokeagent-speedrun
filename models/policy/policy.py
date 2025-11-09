@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from emulator.dataclass import PolicyConfig
+from models.dataclass import PolicyConfig
 
 class Policy(ABC):
 
