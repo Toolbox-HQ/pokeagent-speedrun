@@ -7,14 +7,14 @@ class Pokeagent:
     def __init__(self, device: str):
         self.device = torch.device(device)
 
-        self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224")
+        self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=False)
         state_dict = load_file(".cache/agent1500.safetensors")
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
+        self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=False)
+        self.model.training = False
 
-        self.processor = init_vision_prcoessor("google/siglip-base-patch16-224")
-
-        self.agent_frames = torch.zeros(64, 3, 160, 240)            
+        self.agent_frames = torch.zeros(64, 3, 160, 240, dtype=torch.uint8)            
         self.input_ids = torch.zeros(1, 64, dtype=torch.long)       
         self.idx = 0
 
@@ -31,7 +31,7 @@ class Pokeagent:
         input_ids_dev = self.input_ids.to(self.device)
 
         output = self.model(input_ids=input_ids_dev, pixel_values=pixel_values)
-        cls = torch.argmax(output.logits[0, self.idx], dim=-1)
+        cls = torch.argmax(output['logits'][0, self.idx], dim=-1)
 
         if self.idx == 63:
             self.input_ids = torch.cat((self.input_ids[:, 1:], cls.view(1, 1).to('cpu')), dim=1)

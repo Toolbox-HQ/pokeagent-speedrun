@@ -209,19 +209,19 @@ class LMAgent(Module, GenerationMixin):
 
         # loss comp
         hidden_states = outputs.last_hidden_state
-        action_hiddens = hidden_states[last_token_mask].view(B,T,H)
+        # action_hiddens = hidden_states[last_token_mask].view(B,T,H)
         
-        classifier = self.output_actions.weight
-        labels = input_ids.detach()
-        loss = linear_cross_entropy(action_hiddens, classifier, labels)
+        # classifier = self.output_actions.weight
+        # labels = input_ids.detach()
+        # loss = linear_cross_entropy(action_hiddens, classifier, labels)
 
-        with torch.no_grad():
-            logits = self.output_actions(action_hiddens)
-            metrics = compute_accuracy(logits, labels)
-        # TODO make this cleaner
-        return {
-            "loss": loss
-        } | metrics
+        # with torch.no_grad():
+        #     logits = self.output_actions(action_hiddens)
+        #     metrics = compute_accuracy(logits, labels)
+        # # TODO make this cleaner
+        # return {
+        #     "loss": loss
+        # } | metrics
 
         # return CausalLMOutputWithPast(
         #     loss=loss,
@@ -231,21 +231,49 @@ class LMAgent(Module, GenerationMixin):
         #     attentions=outputs.attentions,
         # )
 
-def init_vision_prcoessor(vision: str = None):
-    from models.util.misc import local_model_map
-    return AutoProcessor.from_pretrained(local_model_map(vision))
+        action_hiddens = hidden_states[last_token_mask].view(B, T, H)
+        logits = self.output_actions(action_hiddens)
 
-def init_lm_agent(lm: str = None, vision: str = None)  -> LMAgent:
+        out = {"logits": logits}  # always expose logits for inference
+
+        if labels is not None:
+            loss = linear_cross_entropy(action_hiddens, self.output_actions.weight, labels)
+            out["loss"] = loss
+
+        if self.training and labels is not None:
+            with torch.no_grad():
+                out |= compute_accuracy(logits, labels)
+
+        return out
+
+def init_vision_prcoessor(vision: str = None, use_cache: bool = True):
+    from models.util.misc import local_model_map
+    if use_cache:
+        return AutoProcessor.from_pretrained(local_model_map(vision))
+    else:
+        return AutoProcessor.from_pretrained(vision)
+
+def init_lm_agent(lm: str = None, vision: str = None, use_cache: bool = True)  -> LMAgent:
     from models.util.misc import local_model_map
 
-    lm_config_path = local_model_map(lm)
-    vision_config_path = local_model_map(vision)
-    
-    config = {
-        "num_actions": NUM_ACTION_CLASSES,
-        "text_config": AutoConfig.from_pretrained(lm_config_path),
-        "vision_config": AutoConfig.from_pretrained(vision_config_path)
-    }
+    if use_cache:
+        lm_config_path = local_model_map(lm)
+        vision_config_path = local_model_map(vision)
+        
+        config = {
+            "num_actions": NUM_ACTION_CLASSES,
+            "text_config": AutoConfig.from_pretrained(lm_config_path),
+            "vision_config": AutoConfig.from_pretrained(vision_config_path)
+        }
+    else:
+        lm_config_path = lm
+        vision_config_path = vision
+        config = {
+            "num_actions": NUM_ACTION_CLASSES,
+            "text_config": AutoConfig.from_pretrained(lm),
+            "vision_config": AutoConfig.from_pretrained(vision)
+        }
+
     model = LMAgent(config)
 
     # init pretraiend weights

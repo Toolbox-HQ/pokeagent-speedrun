@@ -30,6 +30,9 @@ def main():
     #     tensor = torch.from_numpy(np_img).permute(2, 0, 1).float() / 255.0
     #     action = agent.infer_action(tensor)
     #     parent_conn.send(("char", action))  # child now unblocks and continues
+
+    frame = torch.zeros(3, 160, 240, dtype=torch.uint8)
+    print(agent.infer_action(frame))
         
     # c.join()
 
