@@ -13,28 +13,23 @@ def main():
     import torch
     from models.inference.agent_inference import Pokeagent
     
-    agent = Pokeagent("cuda")
+    agent = Pokeagent(device="cuda", temperature=0.5)
+    ctx = mp.get_context("spawn")
+    parent_conn, child_conn = ctx.Pipe(duplex=True)
+    MAX_STEPS = 10
+    c = ctx.Process(target=child_proc, args=(child_conn, MAX_STEPS))
+    c.start()
 
-
-    # ctx = mp.get_context("spawn")
-    # parent_conn, child_conn = ctx.Pipe(duplex=True)
-    # MAX_STEPS = 100
-    # c = ctx.Process(target=child_proc, args=(child_conn, MAX_STEPS))
-    # c.start()
-
-    # for i in range(MAX_STEPS):
-    #     msg_type, payload = parent_conn.recv()
-    #     assert msg_type == "image" and isinstance(payload, (bytes, bytearray))
-    #     img = Image.open(io.BytesIO(payload)).convert("RGB")
-    #     np_img = np.array(img)                           # HWC, uint8
-    #     tensor = torch.from_numpy(np_img).permute(2, 0, 1).float() / 255.0
-    #     action = agent.infer_action(tensor)
-    #     parent_conn.send(("char", action))  # child now unblocks and continues
-
-    frame = torch.zeros(3, 160, 240, dtype=torch.uint8)
-    print(agent.infer_action(frame))
+    for i in range(MAX_STEPS):
+        msg_type, payload = parent_conn.recv()
+        assert msg_type == "image" and isinstance(payload, (bytes, bytearray))
+        img = Image.open(io.BytesIO(payload)).convert("RGB")
+        np_img = np.array(img)                           # HWC, uint8
+        tensor = torch.from_numpy(np_img).permute(2, 0, 1) # CHW, uint8
+        action = agent.infer_action(tensor)
+        parent_conn.send(("char", action))  # child now unblocks and continues
         
-    # c.join()
+    c.join()
 
 if __name__ == "__main__":
     main()

@@ -4,8 +4,9 @@ from models.policy.policy import CLASS_TO_KEY
 from safetensors.torch import load_file
 
 class Pokeagent:
-    def __init__(self, device: str):
+    def __init__(self, device: str, temperature = 0.01):
         self.device = torch.device(device)
+        self.temperature = temperature
 
         self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=False)
         state_dict = load_file(".cache/agent1500.safetensors")
@@ -31,7 +32,10 @@ class Pokeagent:
         input_ids_dev = self.input_ids.to(self.device)
 
         output = self.model(input_ids=input_ids_dev, pixel_values=pixel_values)
-        cls = torch.argmax(output['logits'][0, self.idx], dim=-1)
+        logits = output["logits"][0, self.idx]                         # (num_classes,)
+        probs = torch.softmax(logits / self.temperature, dim=-1)            # temperature sampling
+        cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
+        print(probs)
 
         if self.idx == 63:
             self.input_ids = torch.cat((self.input_ids[:, 1:], cls.view(1, 1).to('cpu')), dim=1)

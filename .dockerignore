@@ -1,6 +1,5 @@
 .vscode
 .venv
-.cache
 docker_build
 /Data
 checkpoints
