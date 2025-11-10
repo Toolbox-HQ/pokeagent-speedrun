@@ -1,8 +1,8 @@
 # This code is based on the revised code from fastchat based on tatsu-lab/stanford_alpaca.
 from dataclasses import dataclass, field
-from typing import  Optional
+from typing import  Optional, Tuple
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Subset, Dataset
 import transformers
 from util.trainer import Trainer
 from torch.utils.data import Dataset
@@ -10,6 +10,29 @@ from model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from util.repro import repro_init
 from inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
+import random
+
+def compute_metrics(batch):
+
+    print(batch)
+
+    return {
+        "metric": 0
+    }
+
+def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Dataset]:
+    num_samples = len(dataset)
+    indices = list(range(num_samples))
+    eval_idx = random.sample(indices, round(num_samples*split))
+    train_idx = [i for i in indices if i not in eval_idx]
+
+
+
+    # TODO REMOVE THIS
+    eval_idx = list(range(10))
+
+    # train, eval
+    return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
 
 @dataclass
 class ModelArguments:
@@ -83,15 +106,17 @@ def train() -> None:
         training_args.gradient_checkpointing = False
 
     # data stuff
-    training_dataset = IDMWindowDataset(".cache/pokeagent/intervals.json")
-    training_dataset.processor = processor
+    dataset = IDMWindowDataset(".cache/pokeagent/intervals.json")
+    dataset.processor = processor
+    train_ds, eval_ds = train_val_split(dataset, split=0.05) 
+
 
     for param in model.parameters():
         param.requires_grad = True
 
     # Start trainer
     trainer = Trainer(
-        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=training_dataset
+        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds, compute_metrics=compute_metrics
     )
 
     trainer.train()

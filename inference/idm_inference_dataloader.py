@@ -9,8 +9,9 @@ from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from model.IDM.policy import InverseActionPolicy as IDModel
 from policy.policy import CLASS_TO_KEY
-from typing import List
+from typing import List, Dict, Union
 from functools import partial
+
 
 DEVICE = "cpu"
 IDM_FPS = 4
@@ -24,7 +25,7 @@ def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
     m.eval()
     return m
 
-def decode_idm_rate_frames(video_path, start, end, video_fps, idm_fps=IDM_FPS):
+def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps=IDM_FPS):
     stride = max(1, int(round(video_fps / idm_fps)))
     idxs = list(range(int(start), int(end), stride))
     if not idxs:
@@ -155,7 +156,7 @@ def batched_infer_idm_labels(x, idm=None):
         logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
         labels = torch.argmax(logits, dim=-1)
         labels = labels[:,1::2] # strided downsampling, offset by 1
-        
+
     return labels
 
 

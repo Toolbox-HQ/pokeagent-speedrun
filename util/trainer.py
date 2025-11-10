@@ -4875,12 +4875,7 @@ class Trainer:
 
         start_time = time.time()
 
-        eval_loop = (
-            self.prediction_loop
-            if self.args.use_legacy_prediction_loop
-            else self.evaluation_loop
-        )
-        output = eval_loop(
+        output = self.evaluation_loop(
             eval_dataloader,
             description="Evaluation",
             # No point gathering the predictions if there are no metrics, otherwise we defer to
@@ -5019,10 +5014,6 @@ class Trainer:
             else args.prediction_loss_only
         )
 
-        # if eval is called w/o train, handle model prep here
-        if self.is_deepspeed_enabled and self.deepspeed is None:
-            _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
-
         model = self._wrap_model(self.model, training=False, dataloader=dataloader)
 
         if len(self.accelerator._models) == 0 and model is self.model:
@@ -5078,19 +5069,6 @@ class Trainer:
         if args.past_index >= 0:
             self._past = None
 
-        # Initialize containers
-        all_losses = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-        all_preds = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-        all_labels = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-        all_inputs = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
 
         metrics = None
         eval_set_kwargs = {}
@@ -5121,36 +5099,6 @@ class Trainer:
 
             if is_torch_xla_available():
                 xm.mark_step()
-
-            # Update containers
-            if losses is not None:
-                losses = self.gather_function(losses.repeat(batch_size))
-                all_losses.add(losses)
-            if inputs_decode is not None:
-                inputs_decode = self.accelerator.pad_across_processes(
-                    inputs_decode, dim=1, pad_index=-100
-                )
-                inputs_decode = self.gather_function(inputs_decode)
-                if not self.args.batch_eval_metrics or description == "Prediction":
-                    all_inputs.add(inputs_decode)
-            if labels is not None:
-                # Pad labels here, preparing for preprocess_logits_for_metrics in next logits block.
-                labels = self.accelerator.pad_across_processes(
-                    labels, dim=1, pad_index=-100
-                )
-            if logits is not None:
-                logits = self.accelerator.pad_across_processes(
-                    logits, dim=1, pad_index=-100
-                )
-                if self.preprocess_logits_for_metrics is not None:
-                    logits = self.preprocess_logits_for_metrics(logits, labels)
-                logits = self.gather_function(logits)
-                if not self.args.batch_eval_metrics or description == "Prediction":
-                    all_preds.add(logits)
-            if labels is not None:
-                labels = self.gather_function(labels)
-                if not self.args.batch_eval_metrics or description == "Prediction":
-                    all_labels.add(labels)
 
             self.control = self.callback_handler.on_prediction_step(
                 args, self.state, self.control
@@ -5359,60 +5307,34 @@ class Trainer:
             labels = None
 
         with torch.no_grad():
-            if is_sagemaker_mp_enabled():
-                raw_outputs = smp_forward_only(model, inputs)
-                if has_labels or loss_without_labels:
-                    if isinstance(raw_outputs, dict):
-                        loss_mb = raw_outputs["loss"]
-                        logits_mb = tuple(
-                            v
-                            for k, v in raw_outputs.items()
-                            if k not in ignore_keys + ["loss"]
-                        )
-                    else:
-                        loss_mb = raw_outputs[0]
-                        logits_mb = raw_outputs[1:]
+            if has_labels or loss_without_labels:
+                with self.compute_loss_context_manager():
+                    loss, outputs = self.compute_loss(
+                        model, inputs, return_outputs=True
+                    )
+                loss = loss.detach().mean()
 
-                    loss = loss_mb.reduce_mean().detach().cpu()
-                    logits = smp_nested_concat(logits_mb)
+                if isinstance(outputs, dict):
+                    logits = tuple(
+                        v
+                        for k, v in outputs.items()
+                        if k not in ignore_keys + ["loss"]
+                    )
                 else:
-                    loss = None
-                    if isinstance(raw_outputs, dict):
-                        logits_mb = tuple(
-                            v for k, v in raw_outputs.items() if k not in ignore_keys
-                        )
-                    else:
-                        logits_mb = raw_outputs
-                    logits = smp_nested_concat(logits_mb)
+                    logits = outputs[1:]
             else:
-                if has_labels or loss_without_labels:
-                    with self.compute_loss_context_manager():
-                        loss, outputs = self.compute_loss(
-                            model, inputs, return_outputs=True
-                        )
-                    loss = loss.detach().mean()
-
-                    if isinstance(outputs, dict):
-                        logits = tuple(
-                            v
-                            for k, v in outputs.items()
-                            if k not in ignore_keys + ["loss"]
-                        )
-                    else:
-                        logits = outputs[1:]
+                loss = None
+                with self.compute_loss_context_manager():
+                    outputs = model(**inputs)
+                if isinstance(outputs, dict):
+                    logits = tuple(
+                        v for k, v in outputs.items() if k not in ignore_keys
+                    )
                 else:
-                    loss = None
-                    with self.compute_loss_context_manager():
-                        outputs = model(**inputs)
-                    if isinstance(outputs, dict):
-                        logits = tuple(
-                            v for k, v in outputs.items() if k not in ignore_keys
-                        )
-                    else:
-                        logits = outputs
-                    # TODO: this needs to be fixed and made cleaner later.
-                    if self.args.past_index >= 0:
-                        self._past = outputs[self.args.past_index - 1]
+                    logits = outputs
+                # TODO: this needs to be fixed and made cleaner later.
+                if self.args.past_index >= 0:
+                    self._past = outputs[self.args.past_index - 1]
 
         if prediction_loss_only:
             return (loss, None, None)
