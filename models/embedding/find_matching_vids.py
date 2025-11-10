@@ -240,7 +240,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     s3 = init_boto3_client()
-    query_emb = clip_embeddings_every(".cache/2.mp4", device=device)
+    query_emb = clip_embeddings_every(".cache/query.mp4", device=device)
     meta, E = load_embeddings_and_metadata(EMB_DIR, device=device)
     if E.numel() == 0:
         raise ValueError(f"No embeddings found in {EMB_DIR}")

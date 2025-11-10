@@ -13,10 +13,10 @@ def main():
     import torch
     from models.inference.agent_inference import Pokeagent
     
-    agent = Pokeagent(device="cuda", temperature=0.5)
+    agent = Pokeagent(device="cuda", temperature=1)
     ctx = mp.get_context("spawn")
     parent_conn, child_conn = ctx.Pipe(duplex=True)
-    MAX_STEPS = 10
+    MAX_STEPS = 5000
     c = ctx.Process(target=child_proc, args=(child_conn, MAX_STEPS))
     c.start()
 

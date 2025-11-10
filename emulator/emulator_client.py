@@ -154,7 +154,7 @@ def game_loop(max_steps: int=0, connection = None, agent_fps = None) -> None:
     print(f"[EMULATOR] max_steps={max_steps}")
 
     frame_interval = int(round(60 / agent_fps))
-    pbar: tqdm = tqdm(total=max_steps * frame_interval) if max_steps else None
+    pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:
         start = time.perf_counter()
@@ -199,7 +199,7 @@ def game_loop(max_steps: int=0, connection = None, agent_fps = None) -> None:
         if agent_mode:
             if frame_index >= max_steps * frame_interval:
                 break
-            elif pbar:
+            elif pbar and frame_index % frame_interval == 0:
                 pbar.update(1)
                 pbar.set_postfix({"MGBA ACTION" : keys})
 

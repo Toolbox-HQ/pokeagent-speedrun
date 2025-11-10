@@ -9,7 +9,7 @@ class Pokeagent:
         self.temperature = temperature
 
         self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=False)
-        state_dict = load_file(".cache/agent1500.safetensors")
+        state_dict = load_file(".cache/agent.safetensors")
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
         self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=False)
@@ -35,7 +35,10 @@ class Pokeagent:
         logits = output["logits"][0, self.idx]                         # (num_classes,)
         probs = torch.softmax(logits / self.temperature, dim=-1)            # temperature sampling
         cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
-        print(probs)
+        #print(probs)
+
+        if self.idx == 0:
+            cls = torch.tensor(7, dtype=torch.long, device=probs.device)
 
         if self.idx == 63:
             self.input_ids = torch.cat((self.input_ids[:, 1:], cls.view(1, 1).to('cpu')), dim=1)
