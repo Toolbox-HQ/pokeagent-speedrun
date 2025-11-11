@@ -12,7 +12,7 @@ def init_boto3_client():
         endpoint_url=f"https://{config['default']['host_base']}",
     )
 
-def download_prefix(bucket: str, prefix: str, cache_root: str = "cache", s3=None):
+def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=None):
     """
     Accepts either a folder-like prefix or a full object key.
     Downloads to cache/{key}, skipping files that already exist.

@@ -16,7 +16,7 @@ def main():
     agent = Pokeagent(device="cuda", temperature=1)
     ctx = mp.get_context("spawn")
     parent_conn, child_conn = ctx.Pipe(duplex=True)
-    MAX_STEPS = 5000
+    MAX_STEPS = 20000
     c = ctx.Process(target=child_proc, args=(child_conn, MAX_STEPS))
     c.start()
 

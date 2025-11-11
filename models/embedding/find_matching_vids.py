@@ -175,7 +175,7 @@ def _rolling_entropy_valid(idxs: np.ndarray, L: int, thr: float) -> np.ndarray:
 def save_clip_between(start_meta, end_meta, BUCKET_NAME, rank, s3):
     match_file_path = "/".join(start_meta["video_path"].split("/")[1:])
     download_prefix(bucket=BUCKET_NAME, prefix=match_file_path, s3=s3)
-    local_path = "cache/" + match_file_path
+    local_path = start_meta["video_path"]
 
     dec = VideoDecoder(local_path)
     fps = getattr(dec, "fps", None) or getattr(dec, "frame_rate", None)
@@ -201,8 +201,7 @@ def save_clip_between(start_meta, end_meta, BUCKET_NAME, rank, s3):
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        os.makedirs("cache", exist_ok=True)
-        out_path = f"cache/seq_{rank:02d}.mp4"
+        out_path = f".cache/seq_{rank:02d}.mp4"
 
         # Use mp4v for broad compatibility (no external ffmpeg call)
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -247,8 +246,9 @@ def main():
     sims, idxs = multi_cosine_search_gpu(E, query_emb)
     top_runs = find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.92, max_workers=8)
 
+    total_seconds = 0
     results = []
-    for start, end, _ in top_runs:
+    for i, (start, end, _) in enumerate(top_runs):
         start_meta = meta[start]
         end_meta = meta[end]
         results.append({
@@ -257,7 +257,12 @@ def main():
             "video_path": start_meta.get("video_path", ""),
             "video_fps": float(start_meta.get("video_fps", start_meta.get("fps", 0.0))),
         })
+        total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
 
+        if i < 5:
+            save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
+
+    print(f"hrs: {total_seconds / 3600}")
     with open("results.json", "w") as f:
         json.dump(results, f)
 
