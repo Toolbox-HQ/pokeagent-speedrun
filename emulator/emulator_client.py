@@ -151,10 +151,12 @@ def game_loop(max_steps: int=0, connection = None, agent_fps = None) -> None:
     global latest_png_b64
     global frame_index
     print(f"[EMULATOR] begin emulation loop")
-    print(f"[EMULATOR] max_steps={max_steps}")
+    if agent_mode:
+        print(f"[EMULATOR] max_steps={max_steps}")
 
     frame_interval = int(round(60 / agent_fps))
-    pbar: tqdm = tqdm(total=max_steps) if max_steps else None
+    if agent_mode:
+        pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:
         start = time.perf_counter()
