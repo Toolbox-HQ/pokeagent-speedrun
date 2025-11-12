@@ -3,7 +3,7 @@ set -e
 
 # Variables
 IMAGE_NAME="pokeagent"
-BUILD_DIR=".cache/containers"
+BUILD_DIR="./.cache/pokeagent/containers"
 TAG="latest"
 
 docker build -f dconfig/Dockerfile -t "$IMAGE_NAME:$TAG" .
