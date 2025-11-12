@@ -3,7 +3,7 @@
 #SBATCH --time=08:00:00
 #SBATCH --gpus-per-node=1
 #SBATCH --job-name=agent_job
-#SBATCH --output=/scratch/bsch/agent_job_output_%j.txt
+#SBATCH --output=/scratch/bsch/slurm_out/agent_job_output_%j.txt
 #SBATCH --mail-type=ALL
 
 cd /scratch/bsch/pokeagent-speedrun
@@ -31,5 +31,5 @@ NUM_GPUS=$(nvidia-smi -L | wc -l)
   --node_rank=0 \
   --master_addr=localhost \
   --master_port=6605 \
-  ./train/train_agent.py \
+  ./models/train/train_agent.py \
   --config ./config/agent.yaml

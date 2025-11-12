@@ -28,3 +28,4 @@ emulator/agent_direct_save.state
 .venv
 core.*
 slurm*
+scratch

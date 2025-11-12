@@ -1,4 +1,10 @@
 #!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --time=08:00:00
+#SBATCH --gpus-per-node=1
+#SBATCH --job-name=agent_job
+#SBATCH --output=/scratch/bsch/slurm_out/agent_job_output_%j.txt
+#SBATCH --mail-type=ALL
 
 source .venv/bin/activate
 export PYTHONPATH=$(pwd)
@@ -16,5 +22,5 @@ NUM_GPUS=${NUM_GPUS:-8}
   --node_rank=0 \
   --master_addr=localhost \
   --master_port=6602 \
-  ./train/train_idm.py \
+  ./models/train/train_idm.py \
   --config $1

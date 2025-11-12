@@ -1,10 +1,11 @@
+# TODO maybe delete this file?
 import sys
 import pickle
 from argparse import ArgumentParser
 import torch as th
 from lib.torch_util import default_device_type, set_default_torch_device
 from policy import InverseActionPolicy
-from agent import resize_image, AGENT_RESOLUTION
+from agent import resize_image, AGENT_RESOLUTION # unclear where this is from 
 import numpy as np
 import cv2
 
