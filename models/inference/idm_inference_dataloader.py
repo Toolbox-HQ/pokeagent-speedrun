@@ -3,7 +3,6 @@ import json
 import torch
 import einops
 import numpy as np
-import cv2
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
@@ -24,7 +23,7 @@ def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
     m.eval()
     return m
 
-def decode_idm_rate_frames(video_path, start, end, video_fps, idm_fps=IDM_FPS):
+def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps: int =IDM_FPS):
     stride = max(1, int(round(video_fps / idm_fps)))
     idxs = list(range(int(start), int(end), stride))
     if not idxs:
@@ -107,6 +106,7 @@ def _to_bgr_u8(x):
     return x[..., ::-1].copy()  # RGB->BGR
 
 def save_mp4_with_keys(x, labels, out_path, fps):
+    import cv2
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     if len(x) == 0:
         return
@@ -154,8 +154,7 @@ def batched_infer_idm_labels(x, idm=None):
 
         logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
         labels = torch.argmax(logits, dim=-1)
-        labels = labels[:,::2] # strided downsampling
-
+        labels = labels[:,1::2] # strided downsampling, offset by 1
     return labels
 
 
