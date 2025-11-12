@@ -169,7 +169,7 @@ def game_loop(max_steps: int=0, connection = None, agent_fps = None) -> None:
         frame = emulator.get_frame()
 
 
-          # increment AFTER using this frame number
+        # increment AFTER using this frame number
     
         if frame is None:
             print("frame is none")
@@ -279,7 +279,7 @@ def quit(signum, _frame, save_s3: str = None):
 
     sys.exit(0)
 
-def run(rom: str = "./emulator/Emerald-GBAdvance/rom.gba", mp4_path: str = "./emulator/data/output.mp4", port: int = 8000, manual_mode: bool = False, fps: int = None, keys_json_path_local: str = "./emulator/data/keys.json", save_s3: str = None, save_state: str = None, max_steps: int = 3000, agent_fps: int = 2, connection = None):
+def run(rom: str = "./emulator/Emerald-GBAdvance/rom.gba", mp4_path: str = "./emulator/data/output.mp4", port: int = 8000, manual_mode: bool = False, fps: int = None, keys_json_path_local: str = "./emulator/data/keys.json", save_s3: str = None, save_state: str = None, max_steps: int = 3000, agent_fps: int = 2, connection = None, do_random_sampling = False, random_sample_interval = 10):
     
     if manual_mode:
         global agent_mode

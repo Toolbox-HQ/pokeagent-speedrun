@@ -114,7 +114,23 @@ class MGBAEmulator:
                         self.core.run_frame()
         except Exception as e:
             return
-        
+
+    def get_state_bytes(self):
+        raw_data = self.core.save_raw_state()
+            
+        # Convert CFFI object to bytes if needed
+        if hasattr(raw_data, 'buffer'):
+            data = bytes(raw_data.buffer)
+        elif hasattr(raw_data, '__len__'):
+            data = bytes(raw_data)
+        else:
+            data = raw_data
+        return data
+
+    def load_state_bytes(self, state_bytes):
+        self.core.load_raw_state(state_bytes)
+        self.core.run_frame()
+
     def save_state(self, path: str):
         """Save current emulator state to file or return as bytes"""
         if not self.core:
