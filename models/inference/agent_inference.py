@@ -1,6 +1,6 @@
 import torch
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
-from models.policy.policy import CLASS_TO_KEY
+from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 
 class Pokeagent:

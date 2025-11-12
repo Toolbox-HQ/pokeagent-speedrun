@@ -1,4 +1,5 @@
-from models.policy.policy import Policy, KEY_TO_MGBA
+from models.policy.policy import Policy
+from emulator.keys import KEY_TO_MGBA
 import random
 from models.dataclass import PolicyConfig
 

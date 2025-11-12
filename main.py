@@ -1,10 +1,3 @@
-import multiprocessing as mp
-
-def child_proc(connection, max_steps):
-    from emulator.emulator_client import run
-    run(connection=connection, max_steps=max_steps, manual_mode=False, agent_fps=2, save_state='./emulator/agent_direct_save.state')
-    connection.close()
-
 def main():
     from pathlib import Path
     import io
@@ -12,24 +5,21 @@ def main():
     import numpy as np
     import torch
     from models.inference.agent_inference import Pokeagent
+    from emulator.emulator_connection import EmulatorConnection
+    from tqdm import tqdm
     
     agent = Pokeagent(device="cuda", temperature=1)
-    ctx = mp.get_context("spawn")
-    parent_conn, child_conn = ctx.Pipe(duplex=True)
-    MAX_STEPS = 20000
-    c = ctx.Process(target=child_proc, args=(child_conn, MAX_STEPS))
-    c.start()
-
-    for i in range(MAX_STEPS):
-        msg_type, payload = parent_conn.recv()
-        assert msg_type == "image" and isinstance(payload, (bytes, bytearray))
-        img = Image.open(io.BytesIO(payload)).convert("RGB")
-        np_img = np.array(img)                           # HWC, uint8
-        tensor = torch.from_numpy(np_img).permute(2, 0, 1) # CHW, uint8
-        action = agent.infer_action(tensor)
-        parent_conn.send(("char", action))  # child now unblocks and continues
-        
-    c.join()
+    conn = EmulatorConnection("emulator/Emerald-GBAdvance/rom.gba", "emulator/data/output")
+    with open("emulator/agent_direct_save.state", 'rb') as f:
+        state_bytes = f.read()
+    conn.load_state(state_bytes)
+    MAX_STEPS = 100
+    for i in tqdm(range(MAX_STEPS)):
+        tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
+        key = agent.infer_action(tensor)
+        conn.set_key(key)
+        conn.run_frames(30)
+    conn.close()
 
 if __name__ == "__main__":
     main()

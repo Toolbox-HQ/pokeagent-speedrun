@@ -156,3 +156,8 @@ class MGBAEmulator:
         except Exception as e:
             logger.error(f"Failed to save state: {e}")
             return None
+    
+    def stop(self):
+        """Stop emulator and cleanup"""
+        if self.core:
+            self.core = None
