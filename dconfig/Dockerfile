@@ -1,11 +1,8 @@
-# Use a Python base image for convenience with uv
 FROM ubuntu:24.04
 
-# Set environment variables for non-interactive installs
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/.local/bin:$PATH"
 
-# Install system dependencies
 RUN apt-get update && \
     apt-get install -y \
     git \
@@ -22,10 +19,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install uv using the official script
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Set a working directory inside the container
 WORKDIR /app
 
 RUN curl -L -o mGBA-0.10.5-ubuntu64-noble.tar.xz https://github.com/mgba-emu/mgba/releases/download/0.10.5/mGBA-0.10.5-ubuntu64-noble.tar.xz && \
@@ -37,5 +32,4 @@ COPY pyproject.toml uv.lock .python-version ./
 RUN uv sync
 COPY . .
 
-# /app/.venv/bin/python /app/main.py --fps 60 --max-steps 120 --save-s3
 CMD ["bash","./script/run_agent.sh"]
