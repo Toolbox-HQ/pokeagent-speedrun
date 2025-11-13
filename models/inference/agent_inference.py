@@ -37,7 +37,7 @@ class Pokeagent:
         cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
         #print(probs)
 
-        if self.idx == 0:
+        if self.idx == 0: # Go right
             cls = torch.tensor(7, dtype=torch.long, device=probs.device)
 
         if self.idx == 63:

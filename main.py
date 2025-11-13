@@ -9,8 +9,8 @@ def main():
     from tqdm import tqdm
     
     agent = Pokeagent(device="cuda", temperature=1)
-    conn = EmulatorConnection("emulator/Emerald-GBAdvance/rom.gba", "emulator/data/output")
-    with open("emulator/agent_direct_save.state", 'rb') as f:
+    conn = EmulatorConnection(".cache/pokeagent/rom/rom.gba", ".cache/pokeagent/output")
+    with open(".cache/pokeagent/save_state/agent_direct_save.state", 'rb') as f:
         state_bytes = f.read()
     conn.load_state(state_bytes)
     MAX_STEPS = 100
