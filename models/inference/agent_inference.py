@@ -8,11 +8,11 @@ class Pokeagent:
         self.device = torch.device(device)
         self.temperature = temperature
 
-        self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=False)
-        state_dict = load_file(".cache/agent.safetensors")
+        self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=True)
+        state_dict = load_file(".cache/pokeagent/checkpoints/agent.safetensors")
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
-        self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=False)
+        self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=True)
         self.model.training = False
 
         self.agent_frames = torch.zeros(64, 3, 160, 240, dtype=torch.uint8)            

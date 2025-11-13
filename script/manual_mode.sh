@@ -6,5 +6,4 @@ python -m emulator.emulator_client \
     --keys-json-path "./emulator/data/keys_${RND}.json" \
     --mp4-path "./emulator/data/output_${RND}.mp4" \
     --manual-mode \
-    --fps 60 \
-    --save-state "./emulator/agent_direct_save.state"
+    --fps 60

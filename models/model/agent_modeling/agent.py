@@ -257,28 +257,22 @@ def init_lm_agent(lm: str = None, vision: str = None, use_cache: bool = True)  -
     from models.util.misc import local_model_map
 
     if use_cache:
-        lm_config_path = local_model_map(lm)
-        vision_config_path = local_model_map(vision)
-        
-        config = {
-            "num_actions": NUM_ACTION_CLASSES,
-            "text_config": AutoConfig.from_pretrained(lm_config_path),
-            "vision_config": AutoConfig.from_pretrained(vision_config_path)
-        }
-    else:
-        lm_config_path = lm
-        vision_config_path = vision
-        config = {
-            "num_actions": NUM_ACTION_CLASSES,
-            "text_config": AutoConfig.from_pretrained(lm),
-            "vision_config": AutoConfig.from_pretrained(vision)
-        }
+        lm = local_model_map(lm)
+        vision = local_model_map(vision) 
+
+    print(f"use_cache set to {use_cache}")
+    print(f"loading vision encoder from {vision}")
+    print(f"loading llm from {lm}")
+
+    config = {
+        "num_actions": NUM_ACTION_CLASSES,
+        "text_config": AutoConfig.from_pretrained(lm),
+        "vision_config": AutoConfig.from_pretrained(vision)
+    }
 
     model = LMAgent(config)
-
-    # init pretraiend weights
-    model.text_model = Qwen3Model.from_pretrained(lm_config_path)
-    model.vision_tower = SiglipVisionModel.from_pretrained(vision_config_path)
+    model.text_model = Qwen3Model.from_pretrained(lm)
+    model.vision_tower = SiglipVisionModel.from_pretrained(vision)
     model.finish_init()
 
     return model
