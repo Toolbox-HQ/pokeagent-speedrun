@@ -16,9 +16,10 @@ def main():
     MAX_STEPS = 100
     for i in tqdm(range(MAX_STEPS)):
         tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
+        conn.run_frames(7)
         key = agent.infer_action(tensor)
         conn.set_key(key)
-        conn.run_frames(30)
+        conn.run_frames(23)
     conn.close()
 
 if __name__ == "__main__":
