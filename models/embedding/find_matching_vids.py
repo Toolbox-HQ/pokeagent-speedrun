@@ -239,7 +239,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     s3 = init_boto3_client()
-    query_emb = clip_embeddings_every(".cache/query.mp4", device=device)
+    query_emb = clip_embeddings_every(".cache/query1.mp4", device=device)
     meta, E = load_embeddings_and_metadata(EMB_DIR, device=device)
     if E.numel() == 0:
         raise ValueError(f"No embeddings found in {EMB_DIR}")
@@ -259,7 +259,7 @@ def main():
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
 
-        if i < 5:
+        if i > len(top_runs) - 10:
             save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
 
     print(f"hrs: {total_seconds / 3600}")
