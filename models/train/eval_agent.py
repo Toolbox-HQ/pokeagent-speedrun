@@ -18,6 +18,11 @@ def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Data
     eval_idx = random.sample(indices, round(num_samples*split))
     train_idx = [i for i in indices if i not in eval_idx]
 
+
+
+    # TODO REMOVE THIS
+    eval_idx = list(range(10))
+
     # train, eval
     return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
 
@@ -102,10 +107,11 @@ def train() -> None:
 
     # Start trainer
     trainer = Trainer(
-        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds
+        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds
     )
 
-    trainer.evaluate()
+    trainer.train()
+    trainer.save_model()
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 import torch
 from dataset.idm import IDMDataset
 from model.IDM.policy import InverseActionPolicy as IDModel
-from policy.policy import CLASS_TO_KEY
+from emulator.keys import CLASS_TO_KEY
 from util.data import save_json
 import os
 from tqdm import tqdm

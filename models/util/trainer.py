@@ -4855,32 +4855,14 @@ class Trainer:
         # handle multiple eval datasets
         override = eval_dataset is not None
         eval_dataset = eval_dataset if override else self.eval_dataset
-        if isinstance(eval_dataset, dict):
-            metrics = {}
-            for eval_dataset_name, _eval_dataset in eval_dataset.items():
-                dataset_metrics = self.evaluate(
-                    eval_dataset=_eval_dataset if override else eval_dataset_name,
-                    ignore_keys=ignore_keys,
-                    metric_key_prefix=f"{metric_key_prefix}_{eval_dataset_name}",
-                )
-                metrics.update(dataset_metrics)
-            return metrics
 
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
 
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
-        if self.is_fsdp_xla_v2_enabled:
-            eval_dataloader = tpu_spmd_dataloader(eval_dataloader)
-
         start_time = time.time()
 
-        eval_loop = (
-            self.prediction_loop
-            if self.args.use_legacy_prediction_loop
-            else self.evaluation_loop
-        )
-        output = eval_loop(
+        output = self.prediction_loop(
             eval_dataloader,
             description="Evaluation",
             # No point gathering the predictions if there are no metrics, otherwise we defer to

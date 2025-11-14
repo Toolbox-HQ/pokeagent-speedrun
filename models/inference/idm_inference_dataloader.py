@@ -6,8 +6,8 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
-from model.IDM.policy import InverseActionPolicy as IDModel
-from policy.policy import CLASS_TO_KEY
+from models.model.IDM.policy import InverseActionPolicy as IDModel
+from emulator.keys import CLASS_TO_KEY
 from typing import List
 from functools import partial
 
