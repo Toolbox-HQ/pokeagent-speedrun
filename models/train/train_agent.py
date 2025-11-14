@@ -82,7 +82,6 @@ def train() -> None:
     local_rank = training_args.local_rank
     training_args.output_dir = save_path
 
-    # model stuff
     model = init_lm_agent(lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
     model.idm_labelling_fn = get_idm_labeller(device)
@@ -92,15 +91,13 @@ def train() -> None:
         model.vision_tower.gradient_checkpointing_enable()
         training_args.gradient_checkpointing = False
 
-    # data stuff
-    dataset = IDMWindowDataset(".cache/pokeagent/intervals.json")
+    dataset = IDMWindowDataset(data_args.data_path)
     dataset.processor = processor
     train_ds, eval_ds = train_val_split(dataset, split=0.05)
 
     for param in model.parameters():
         param.requires_grad = True
 
-    # Start trainer
     trainer = Trainer(
         model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds
     )

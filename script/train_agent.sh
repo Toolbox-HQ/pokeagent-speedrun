@@ -32,4 +32,4 @@ NUM_GPUS=$(nvidia-smi -L | wc -l)
   --master_addr=localhost \
   --master_port=6605 \
   ./models/train/train_agent.py \
-  --config ./config/agent.yaml
+  --config $1
