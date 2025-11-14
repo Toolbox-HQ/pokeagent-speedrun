@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=08:00:00
+#SBATCH --time=12:00:00
 #SBATCH --gpus-per-node=1
 #SBATCH --job-name=agent_job
 #SBATCH --output=/scratch/bsch/slurm_out/agent_job_output_%j.txt
