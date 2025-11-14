@@ -361,7 +361,7 @@ class LMStateAgent(Module, GenerationMixin):
         )
 
         hidden_states = outputs.last_hidden_state
-        action_hiddens = hidden_states[:,::S,:]
+        action_hiddens = hidden_states[:,S-1::S,:]
         out = {}
 
         if input_ids is not None:
