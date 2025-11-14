@@ -30,3 +30,4 @@ core.*
 slurm*
 scratch
 wandb
+__pycache__
