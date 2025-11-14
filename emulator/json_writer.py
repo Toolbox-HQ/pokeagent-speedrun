@@ -9,8 +9,14 @@ class JsonWriter:
         fp.write("[\n")
         fp.flush()
         self.fp = fp
+        self.first = True
 
     def log(self, frame_num, key):
+        if not self.first:
+            self.fp.write(",\n")
+        else:
+            self.first = False
+
         entry = {"frame": frame_num, "keys": key}
         self.fp.write(json.dumps(entry, ensure_ascii=False))
         self.fp.flush()
