@@ -36,7 +36,7 @@ import warnings
 from collections.abc import Iterator, Mapping
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, Dict, List
 
 def log_scalars(outputs):
     log = {}
@@ -4862,35 +4862,23 @@ class Trainer:
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         start_time = time.time()
 
-        output = self.prediction_loop(
+        output = self.evaluation_loop(
             eval_dataloader,
             description="Evaluation",
             # No point gathering the predictions if there are no metrics, otherwise we defer to
             # self.args.prediction_loss_only
-            prediction_loss_only=True if self.compute_metrics is None else None,
+            prediction_loss_only=False,
             ignore_keys=ignore_keys,
             metric_key_prefix=metric_key_prefix,
         )
 
-        total_batch_size = self.args.eval_batch_size * self.args.world_size
-        if f"{metric_key_prefix}_jit_compilation_time" in output.metrics:
-            start_time += output.metrics[f"{metric_key_prefix}_jit_compilation_time"]
-        if f"{metric_key_prefix}_model_preparation_time" in output.metrics:
-            start_time += output.metrics[f"{metric_key_prefix}_model_preparation_time"]
         output.metrics.update(
             speed_metrics(
                 metric_key_prefix,
-                start_time,
-                num_samples=output.num_samples,
-                num_steps=math.ceil(output.num_samples / total_batch_size),
+                start_time
             )
         )
-
         self.log(output.metrics)
-
-        if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
-            # tpu-comment: Logging debug metrics for PyTorch/XLA (compile, execute times, ops, etc.)
-            xm.master_print(met.metrics_report())
 
         self.control = self.callback_handler.on_evaluate(
             self.args, self.state, self.control, output.metrics
@@ -4980,6 +4968,40 @@ class Trainer:
             metrics=output.metrics,
         )
 
+    @staticmethod
+    def detach_dict(output: Dict):
+
+        for key in output.keys():
+            if isinstance(output[key], torch.Tensor):
+                output[key] = output[key].detach()
+
+        return output
+
+
+    @staticmethod
+    def reduce_metrics(outputs: List):
+        
+        metrics = {}
+        keys = set()
+
+        [keys.update(output.keys()) for output in outputs]
+
+        for key in keys:
+            count = 0
+            total = []
+
+            for output in outputs:
+                if key in output:
+                    total.append(output[key])
+                    count += 1
+
+            av = sum(total) / count
+            if isinstance(av, torch.Tensor):
+                av = av.item()
+            metrics[key] = av
+
+        return metrics
+
     def evaluation_loop(
         self,
         dataloader: DataLoader,
@@ -5060,28 +5082,12 @@ class Trainer:
         if args.past_index >= 0:
             self._past = None
 
-        # Initialize containers
-        all_losses = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-        all_preds = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-        all_labels = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-        all_inputs = EvalLoopContainer(
-            self.args.eval_do_concat_batches, padding_index=-100
-        )
-
-        metrics = None
-        eval_set_kwargs = {}
-
+        outputs = []
         # Will be useful when we have an iterable dataset so don't know its length.
         observed_num_examples = 0
 
         # Main evaluation loop
-        for step, inputs in enumerate(dataloader):
+        for _, inputs in enumerate(dataloader):
             # Update the observed num examples
             observed_batch_size = find_batch_size(inputs)
             if observed_batch_size is not None:
@@ -5091,169 +5097,19 @@ class Trainer:
                     batch_size = observed_batch_size
 
             # Prediction step
-            losses, logits, labels = self.prediction_step(
-                model, inputs, prediction_loss_only, ignore_keys=ignore_keys
-            )
-            main_input_name = getattr(self.model, "main_input_name", "input_ids")
-            inputs_decode = (
-                self._prepare_input(inputs[main_input_name])
-                if "inputs" in args.include_for_metrics
-                else None
-            )
-
-            if is_torch_xla_available():
-                xm.mark_step()
-
-            # Update containers
-            if losses is not None:
-                losses = self.gather_function(losses.repeat(batch_size))
-                all_losses.add(losses)
-            if inputs_decode is not None:
-                inputs_decode = self.accelerator.pad_across_processes(
-                    inputs_decode, dim=1, pad_index=-100
-                )
-                inputs_decode = self.gather_function(inputs_decode)
-                if not self.args.batch_eval_metrics or description == "Prediction":
-                    all_inputs.add(inputs_decode)
-            if labels is not None:
-                # Pad labels here, preparing for preprocess_logits_for_metrics in next logits block.
-                labels = self.accelerator.pad_across_processes(
-                    labels, dim=1, pad_index=-100
-                )
-            if logits is not None:
-                logits = self.accelerator.pad_across_processes(
-                    logits, dim=1, pad_index=-100
-                )
-                if self.preprocess_logits_for_metrics is not None:
-                    logits = self.preprocess_logits_for_metrics(logits, labels)
-                logits = self.gather_function(logits)
-                if not self.args.batch_eval_metrics or description == "Prediction":
-                    all_preds.add(logits)
-            if labels is not None:
-                labels = self.gather_function(labels)
-                if not self.args.batch_eval_metrics or description == "Prediction":
-                    all_labels.add(labels)
-
+            losses, logits, labels = self.prediction_step(model, inputs, prediction_loss_only, ignore_keys=ignore_keys)
+            outputs.append(Trainer.detach_dict(logits))
             self.control = self.callback_handler.on_prediction_step(
                 args, self.state, self.control
             )
 
-            if self.args.batch_eval_metrics:
-                if (
-                    self.compute_metrics is not None
-                    and logits is not None
-                    and labels is not None
-                ):
-                    is_last_step = self.accelerator.gradient_state.end_of_dataloader
-                    batch_kwargs = {}
-                    batch_kwargs["losses"] = (
-                        losses if "loss" in args.include_for_metrics else None
-                    )
-                    batch_kwargs["inputs"] = (
-                        inputs if "inputs" in args.include_for_metrics else None
-                    )
-                    metrics = self.compute_metrics(
-                        EvalPrediction(
-                            predictions=logits, label_ids=labels, **batch_kwargs
-                        ),
-                        compute_result=is_last_step,
-                    )
-
-                del losses, logits, labels, inputs
-                torch.cuda.empty_cache()
-
-            # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
-            elif (
-                args.eval_accumulation_steps is not None
-                and (step + 1) % args.eval_accumulation_steps == 0
-            ):
-                all_losses.to_cpu_and_numpy()
-                all_preds.to_cpu_and_numpy()
-                all_labels.to_cpu_and_numpy()
-                all_inputs.to_cpu_and_numpy()
-
-                del losses, logits, labels, inputs
-                torch.cuda.empty_cache()
-
-        # After all calls to `.gather_function`, reset to `gather_for_metrics`:
-        self.gather_function = self.accelerator.gather_for_metrics
-        if args.past_index and hasattr(self, "_past"):
-            # Clean the state at the end of the evaluation loop
-            delattr(self, "_past")
-
-        # Gather all remaining tensors and put them back on the CPU
-        all_losses = all_losses.get_arrays()
-        all_preds = all_preds.get_arrays()
-        all_labels = all_labels.get_arrays()
-        all_inputs = all_inputs.get_arrays()
-
-        # Number of samples
-        if has_length(eval_dataset):
-            num_samples = len(eval_dataset)
-        # The instance check is weird and does not actually check for the type, but whether the dataset has the right
-        # methods. Therefore we need to make sure it also has the attribute.
-        elif (
-            isinstance(eval_dataset, IterableDatasetShard)
-            and getattr(eval_dataset, "num_examples", 0) > 0
-        ):
-            num_samples = eval_dataset.num_examples
-        else:
-            if has_length(dataloader):
-                num_samples = self.num_examples(dataloader)
-            else:  # both len(dataloader.dataset) and len(dataloader) fail
-                num_samples = observed_num_examples
-        if num_samples == 0 and observed_num_examples > 0:
-            num_samples = observed_num_examples
-
-        # Metrics!
-        if (
-            self.compute_metrics is not None
-            and all_preds is not None
-            and all_labels is not None
-            and not self.args.batch_eval_metrics
-        ):
-            eval_set_kwargs["losses"] = (
-                all_losses if "loss" in args.include_for_metrics else None
-            )
-            eval_set_kwargs["inputs"] = (
-                all_inputs if "inputs" in args.include_for_metrics else None
-            )
-            metrics = self.compute_metrics(
-                EvalPrediction(
-                    predictions=all_preds, label_ids=all_labels, **eval_set_kwargs
-                )
-            )
-        elif metrics is None:
-            metrics = {}
-
-        # To be JSON-serializable, we need to remove numpy types or zero-d tensors
-        metrics = denumpify_detensorize(metrics)
-
-        if isinstance(all_losses, list) and all_losses:
-            metrics[f"{metric_key_prefix}_loss"] = (
-                np.concatenate(all_losses).mean().item()
-            )
-        elif isinstance(all_losses, np.ndarray):
-            metrics[f"{metric_key_prefix}_loss"] = all_losses.mean().item()
-        if hasattr(self, "jit_compilation_time"):
-            metrics[f"{metric_key_prefix}_jit_compilation_time"] = (
-                self.jit_compilation_time
-            )
-        if hasattr(self, "model_preparation_time"):
-            metrics[f"{metric_key_prefix}_model_preparation_time"] = (
-                self.model_preparation_time
-            )
-
-        # Prefix all keys with metric_key_prefix + '_'
-        for key in list(metrics.keys()):
-            if not key.startswith(f"{metric_key_prefix}_"):
-                metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
+        metrics = Trainer.reduce_metrics(outputs)
 
         return EvalLoopOutput(
-            predictions=all_preds,
-            label_ids=all_labels,
+            predictions=None,
+            label_ids=None,
             metrics=metrics,
-            num_samples=num_samples,
+            num_samples=None,
         )
 
     def _nested_gather(self, tensors, name=None):
@@ -5341,32 +5197,6 @@ class Trainer:
             labels = None
 
         with torch.no_grad():
-            if is_sagemaker_mp_enabled():
-                raw_outputs = smp_forward_only(model, inputs)
-                if has_labels or loss_without_labels:
-                    if isinstance(raw_outputs, dict):
-                        loss_mb = raw_outputs["loss"]
-                        logits_mb = tuple(
-                            v
-                            for k, v in raw_outputs.items()
-                            if k not in ignore_keys + ["loss"]
-                        )
-                    else:
-                        loss_mb = raw_outputs[0]
-                        logits_mb = raw_outputs[1:]
-
-                    loss = loss_mb.reduce_mean().detach().cpu()
-                    logits = smp_nested_concat(logits_mb)
-                else:
-                    loss = None
-                    if isinstance(raw_outputs, dict):
-                        logits_mb = tuple(
-                            v for k, v in raw_outputs.items() if k not in ignore_keys
-                        )
-                    else:
-                        logits_mb = raw_outputs
-                    logits = smp_nested_concat(logits_mb)
-            else:
                 if has_labels or loss_without_labels:
                     with self.compute_loss_context_manager():
                         loss, outputs = self.compute_loss(
@@ -5374,24 +5204,11 @@ class Trainer:
                         )
                     loss = loss.detach().mean()
 
-                    if isinstance(outputs, dict):
-                        logits = tuple(
-                            v
-                            for k, v in outputs.items()
-                            if k not in ignore_keys + ["loss"]
-                        )
-                    else:
-                        logits = outputs[1:]
                 else:
                     loss = None
                     with self.compute_loss_context_manager():
                         outputs = model(**inputs)
-                    if isinstance(outputs, dict):
-                        logits = tuple(
-                            v for k, v in outputs.items() if k not in ignore_keys
-                        )
-                    else:
-                        logits = outputs
+
                     # TODO: this needs to be fixed and made cleaner later.
                     if self.args.past_index >= 0:
                         self._past = outputs[self.args.past_index - 1]
@@ -5399,11 +5216,7 @@ class Trainer:
         if prediction_loss_only:
             return (loss, None, None)
 
-        logits = nested_detach(logits)
-        if len(logits) == 1:
-            logits = logits[0]
-
-        return (loss, logits, labels)
+        return (loss, outputs, labels)
 
     def floating_point_ops(self, inputs: dict[str, Union[torch.Tensor, Any]]):
         """
@@ -5692,275 +5505,7 @@ class Trainer:
             ignore_patterns=["_*", f"{PREFIX_CHECKPOINT_DIR}-*"],
             revision=revision,
         )
-
-    #
-    # Deprecated code
-    #
-
-    def prediction_loop(
-        self,
-        dataloader: DataLoader,
-        description: str,
-        prediction_loss_only: Optional[bool] = None,
-        ignore_keys: Optional[list[str]] = None,
-        metric_key_prefix: str = "eval",
-    ) -> EvalLoopOutput:
-        """
-        Prediction/evaluation loop, shared by `Trainer.evaluate()` and `Trainer.predict()`.
-
-        Works both with or without labels.
-        """
-        args = self.args
-
-        if not has_length(dataloader):
-            raise ValueError("dataloader must implement a working __len__")
-
-        prediction_loss_only = (
-            prediction_loss_only
-            if prediction_loss_only is not None
-            else args.prediction_loss_only
-        )
-
-        # if eval is called w/o train, handle model prep here
-        if self.is_deepspeed_enabled and self.deepspeed is None:
-            _, _ = deepspeed_init(self, num_training_steps=0, inference=True)
-
-        model = self._wrap_model(self.model, training=False, dataloader=dataloader)
-
-        if len(self.accelerator._models) == 0 and model is self.model:
-            model = (
-                self.accelerator.prepare(model)
-                if self.is_deepspeed_enabled or self.is_fsdp_enabled
-                else self.accelerator.prepare_model(model, evaluation_mode=True)
-            )
-
-            if self.is_fsdp_enabled:
-                self.model = model
-
-            # for the rest of this function `model` is the outside model, whether it was wrapped or not
-            if model is not self.model:
-                self.model_wrapped = model
-
-            # backward compatibility
-            if self.is_deepspeed_enabled:
-                self.deepspeed = self.model_wrapped
-
-        # if full fp16 or bf16 eval is wanted and this ``evaluation`` or ``predict`` isn't called
-        # while ``train`` is running, cast it to the right dtype first and then put on device
-        if not self.is_in_train:
-            if args.fp16_full_eval:
-                model = model.to(dtype=torch.float16, device=args.device)
-            elif args.bf16_full_eval:
-                model = model.to(dtype=torch.bfloat16, device=args.device)
-
-        batch_size = (
-            dataloader.total_batch_size
-            if getattr(dataloader, "_is_accelerate_prepared", False)
-            else dataloader.batch_size
-        )
-
-        if batch_size is None:
-            raise ValueError(
-                "Batch size cannot be None. Ensure the dataloader has a valid batch_size or total_batch_size."
-            )
-
-        num_examples = self.num_examples(dataloader)
-        logger.info(f"\n***** Running {description} *****")
-        logger.info(f"  Num examples = {num_examples}")
-        logger.info(f"  Batch size = {batch_size}")
-
-        losses_host: Optional[torch.Tensor] = None
-        preds_host: Union[torch.Tensor, list[torch.Tensor], None] = None
-        labels_host: Union[torch.Tensor, list[torch.Tensor], None] = None
-        inputs_host: Union[torch.Tensor, list[torch.Tensor], None] = None
-        metrics: Optional[dict] = None
-        eval_set_kwargs: dict = {}
-
-        world_size = max(1, args.world_size)
-
-        eval_losses_gatherer = DistributedTensorGatherer(
-            world_size, num_examples, make_multiple_of=batch_size
-        )
-        if not prediction_loss_only:
-            # The actual number of eval_sample can be greater than num_examples in distributed settings (when we pass
-            # a batch size to the sampler)
-            make_multiple_of = None
-            if hasattr(dataloader, "sampler") and isinstance(
-                dataloader.sampler, SequentialDistributedSampler
-            ):
-                make_multiple_of = dataloader.sampler.batch_size
-            preds_gatherer = DistributedTensorGatherer(
-                world_size, num_examples, make_multiple_of=make_multiple_of
-            )
-            labels_gatherer = DistributedTensorGatherer(
-                world_size, num_examples, make_multiple_of=make_multiple_of
-            )
-            inputs_gatherer = DistributedTensorGatherer(
-                world_size, num_examples, make_multiple_of=make_multiple_of
-            )
-
-        model.eval()
-        if hasattr(self.optimizer, "eval") and callable(self.optimizer.eval):
-            self.optimizer.eval()
-
-        if args.past_index >= 0:
-            self._past = None
-
-        self.callback_handler.eval_dataloader = dataloader
-
-        for step, inputs in enumerate(dataloader):
-            loss, logits, labels = self.prediction_step(
-                model, inputs, prediction_loss_only, ignore_keys=ignore_keys
-            )
-            main_input_name = getattr(self.model, "main_input_name", "input_ids")
-            inputs_decode = (
-                self._prepare_input(inputs[main_input_name])
-                if "inputs" in args.include_for_metrics
-                else None
-            )
-
-            if loss is not None:
-                losses = loss.repeat(batch_size)
-                losses_host = (
-                    losses
-                    if losses_host is None
-                    else torch.cat((losses_host, losses), dim=0)
-                )
-            if logits is not None:
-                preds_host = (
-                    logits
-                    if preds_host is None
-                    else nested_concat(preds_host, logits, padding_index=-100)
-                )
-            if labels is not None:
-                labels_host = (
-                    labels
-                    if labels_host is None
-                    else nested_concat(labels_host, labels, padding_index=-100)
-                )
-            if inputs_decode is not None:
-                inputs_host = (
-                    inputs_decode
-                    if inputs_host is None
-                    else nested_concat(inputs_host, inputs_decode, padding_index=-100)
-                )
-            self.control = self.callback_handler.on_prediction_step(
-                args, self.state, self.control
-            )
-
-            if self.args.batch_eval_metrics:
-                if (
-                    self.compute_metrics is not None
-                    and preds_host is not None
-                    and labels_host is not None
-                ):
-                    is_last_step = self.accelerator.gradient_state.end_of_dataloader
-                    batch_kwargs = {}
-                    batch_kwargs["losses"] = (
-                        losses_host if "loss" in args.include_for_metrics else None
-                    )
-                    batch_kwargs["inputs"] = (
-                        inputs_host if "inputs" in args.include_for_metrics else None
-                    )
-                    metrics = self.compute_metrics(
-                        EvalPrediction(
-                            predictions=preds_host,
-                            label_ids=labels_host,
-                            **batch_kwargs,
-                        ),
-                        compute_result=is_last_step,
-                    )
-
-            if self.args.batch_eval_metrics or (
-                args.eval_accumulation_steps is not None
-                and (step + 1) % args.eval_accumulation_steps == 0
-            ):
-                # Gather all tensors and put them back on the CPU if we have done enough accumulation steps.
-                eval_losses_gatherer.add_arrays(
-                    self._gather_and_numpify(losses_host, "eval_losses")
-                )
-                if not prediction_loss_only:
-                    preds_gatherer.add_arrays(
-                        self._gather_and_numpify(preds_host, "eval_preds")
-                    )
-                    labels_gatherer.add_arrays(
-                        self._gather_and_numpify(labels_host, "eval_label_ids")
-                    )
-                    inputs_gatherer.add_arrays(
-                        self._gather_and_numpify(inputs_host, "eval_inputs_ids")
-                    )
-
-                # Set back to None to begin a new accumulation
-                del losses_host, preds_host, labels_host, inputs_host
-                torch.cuda.empty_cache()
-                losses_host, preds_host, labels_host, inputs_host = (
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-
-        if args.past_index and hasattr(self, "_past"):
-            # Clean the state at the end of the evaluation loop
-            delattr(self, "_past")
-
-        # Gather all remaining tensors and put them back on the CPU
-        eval_losses_gatherer.add_arrays(
-            self._gather_and_numpify(losses_host, "eval_losses")
-        )
-        if not prediction_loss_only:
-            preds_gatherer.add_arrays(
-                self._gather_and_numpify(preds_host, "eval_preds")
-            )
-            labels_gatherer.add_arrays(
-                self._gather_and_numpify(labels_host, "eval_label_ids")
-            )
-            inputs_gatherer.add_arrays(
-                self._gather_and_numpify(inputs_host, "eval_inputs_ids")
-            )
-
-        eval_loss = eval_losses_gatherer.finalize()
-        preds = preds_gatherer.finalize() if not prediction_loss_only else None
-        label_ids = labels_gatherer.finalize() if not prediction_loss_only else None
-        inputs_ids = inputs_gatherer.finalize() if not prediction_loss_only else None
-
-        if (
-            self.compute_metrics is not None
-            and preds is not None
-            and label_ids is not None
-            and not self.args.batch_eval_metrics
-        ):
-            eval_set_kwargs["losses"] = (
-                eval_loss if "loss" in args.include_for_metrics else None
-            )
-            eval_set_kwargs["inputs"] = (
-                inputs_ids if "inputs" in args.include_for_metrics else None
-            )
-            metrics = self.compute_metrics(
-                EvalPrediction(
-                    predictions=preds, label_ids=label_ids, **eval_set_kwargs
-                )
-            )
-        elif metrics is None:
-            metrics = {}
-
-        # To be JSON-serializable, we need to remove numpy types or zero-d tensors
-        metrics = denumpify_detensorize(metrics)
-
-        if eval_loss is not None:
-            metrics[f"{metric_key_prefix}_loss"] = eval_loss.mean().item()
-
-        # Prefix all keys with metric_key_prefix + '_'
-        for key in list(metrics.keys()):
-            if not key.startswith(f"{metric_key_prefix}_"):
-                metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
-
-        return EvalLoopOutput(
-            predictions=preds,
-            label_ids=label_ids,
-            metrics=metrics,
-            num_samples=num_examples,
-        )
+  
 
     def _gather_and_numpify(self, tensors, name):
         """

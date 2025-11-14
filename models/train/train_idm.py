@@ -73,7 +73,8 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -
         l = gather_and_stack(labels)
         c = gather_and_stack(correct)
         c = c[l == label]
-        accuracy[f"{s}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item() if c.numel() else -1
+        if c.numel():
+            accuracy[f"{s}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item()
 
     return accuracy
 
