@@ -161,7 +161,7 @@ class LMAgent(Module, GenerationMixin):
 
         # TODO All these vars should be re-named
         if labels is not None:
-            input_ids = self.idm_labelling_fn(labels)
+            input_ids = self.idm_labelling_fn(labels).detach()
 
         B, T, C, H, W = pixel_values.shape
         device = pixel_values.device
@@ -207,42 +207,21 @@ class LMAgent(Module, GenerationMixin):
             **kwargs,
         )
 
-        # loss comp
         hidden_states = outputs.last_hidden_state
-        # action_hiddens = hidden_states[last_token_mask].view(B,T,H)
-        
-        # classifier = self.output_actions.weight
-        # labels = input_ids.detach()
-        # loss = linear_cross_entropy(action_hiddens, classifier, labels)
-
-        # with torch.no_grad():
-        #     logits = self.output_actions(action_hiddens)
-        #     metrics = compute_accuracy(logits, labels)
-        # # TODO make this cleaner
-        # return {
-        #     "loss": loss
-        # } | metrics
-
-        # return CausalLMOutputWithPast(
-        #     loss=loss,
-        #     logits=None,
-        #     past_key_values=outputs.past_key_values,
-        #     hidden_states=outputs.hidden_states,
-        #     attentions=outputs.attentions,
-        # )
-
         action_hiddens = hidden_states[last_token_mask].view(B, T, H)
-        logits = self.output_actions(action_hiddens)
+        out = {}
 
-        out = {"logits": logits}  # always expose logits for inference
+        if input_ids is not None:
+            out["loss"] = linear_cross_entropy(action_hiddens.contiguous(), self.output_actions.weight, input_ids)
 
-        if labels is not None:
-            loss = linear_cross_entropy(action_hiddens, self.output_actions.weight, labels)
-            out["loss"] = loss
-
-        if self.training and labels is not None:
-            with torch.no_grad():
-                out |= compute_accuracy(logits, labels)
+        # eval and inference
+        with torch.no_grad():
+            logits = self.output_actions(action_hiddens)
+            
+            if input_ids is not None:
+                out |= compute_accuracy(logits, input_ids)
+            else:
+                out = {"logits": self.output_actions(action_hiddens)}
 
         return out
 
