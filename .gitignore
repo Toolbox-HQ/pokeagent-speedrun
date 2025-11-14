@@ -29,3 +29,5 @@ emulator/agent_direct_save.state
 core.*
 slurm*
 scratch
+wandb
+__pycache__
