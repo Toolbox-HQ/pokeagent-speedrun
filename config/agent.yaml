@@ -15,5 +15,5 @@ logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "steps"
-eval_every: 370 # 1/4 epoch
+eval_steps: 370 # 1/4 epoch
 dataloader_num_workers: 8
