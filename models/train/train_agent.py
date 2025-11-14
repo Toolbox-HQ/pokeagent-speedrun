@@ -105,8 +105,8 @@ def train() -> None:
         model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds
     )
 
-    trainer.evaluate()
-
+    trainer.train()
+    trainer.save_model()
 
 if __name__ == "__main__":
     train()

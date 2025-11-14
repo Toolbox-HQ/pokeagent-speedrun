@@ -110,8 +110,7 @@ def train() -> None:
         model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds
     )
 
-    trainer.train()
-    trainer.save_model()
+    trainer.evaluate()
 
 
 if __name__ == "__main__":
