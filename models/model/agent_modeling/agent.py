@@ -259,7 +259,6 @@ class LMStateAgent(Module, GenerationMixin):
 
     def cast_mixed_precision(self):
         self.text_model.to(dtype=torch.bfloat16)
-        self.action_embedding.to(dtype=torch.bfloat16)
         self.output_actions.to(dtype=torch.bfloat16)
         self.mlp.to(dtype=torch.bfloat16)
         self.vision_tower.to(dtype=torch.float32)
@@ -341,12 +340,11 @@ class LMStateAgent(Module, GenerationMixin):
         vision_tokens = self.mlp(vision_tokens)
         B, T, S, H = vision_tokens.shape
         hiddens: torch.Tensor = einops.rearrange(vision_tokens, "b t s h -> b (t s) h", b=B, t=T, s=S, h=H).to(torch.bfloat16)
-        last_token_mask = torch.zeros((B,T*S,1), dtype=torch.int32, device=hiddens.device)
-        last_token_mask[:,::S,:] = 1
+
 
         if not attention_mask:
-            B, S, H = hiddens.shape
-            attention_mask = torch.ones((B, S), dtype=torch.int32, device=device)
+            B, X, H = hiddens.shape
+            attention_mask = torch.ones((B, X), dtype=torch.int32, device=device)
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs: BaseModelOutputWithPast = self.text_model(
@@ -363,7 +361,7 @@ class LMStateAgent(Module, GenerationMixin):
         )
 
         hidden_states = outputs.last_hidden_state
-        action_hiddens = hidden_states[last_token_mask].view(B, T, H)
+        action_hiddens = hidden_states[:,::S,:]
         out = {}
 
         if input_ids is not None:
