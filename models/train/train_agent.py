@@ -23,7 +23,7 @@ def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Data
 
 @dataclass
 class ModelArguments:
-
+    architecture: Optional[str] = field(default=None)
     lm_name_or_path: Optional[str] = field(default=None)
     vision_name_or_path: Optional[str] = field(default=None)
 
@@ -82,7 +82,7 @@ def train() -> None:
     local_rank = training_args.local_rank
     training_args.output_dir = save_path
 
-    model = init_lm_agent(lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
+    model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
     model.idm_labelling_fn = get_idm_labeller(device)
 
