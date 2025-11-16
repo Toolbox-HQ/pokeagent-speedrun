@@ -3,7 +3,7 @@
 #SBATCH --time=12:00:00
 #SBATCH --gpus-per-node=1
 #SBATCH --job-name=agent_job
-#SBATCH --output=/scratch/bsch/slurm_out/agent_job_output_%j.txt
+#SBATCH --output=/scratch/bsch/slurm_out/%j_agent_job_output.txt
 #SBATCH --mail-type=ALL
 
 cd /scratch/bsch/pokeagent-speedrun
