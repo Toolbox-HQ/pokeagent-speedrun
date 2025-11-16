@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import os
 import json
 import glob
+import numpy as np
 
 def _clip_embeddings_every(video_path: str, interval_s: float = 2.0, model_id: str = "openai/clip-vit-base-patch32", device=None):
     decoder = VideoDecoder(video_path)
@@ -63,12 +64,108 @@ def _get_meta_similarity_pairs(metadata_list, similarity_tensor, data_embedding_
         idx += len(metadata)
     return meta_similarity_pairs
 
+# def _get_runs_from_meta_similarity_pair(metadata, similarity_arr, data_embedding_tensor, embeds_per_run):
+#     n = len(similarity_arr)
+#     if n == 0 or embeds_per_run <= 0 or embeds_per_run > n:
+#         return []
+
+#     # score for every possible run of length embeds_per_run
+#     window = np.ones(embeds_per_run, dtype=similarity_arr.dtype)
+#     scores = np.convolve(similarity_arr, window, mode="valid")  # len = n - embeds_per_run + 1
+
+#     # greedy: pick highest scoring non-overlapping windows
+#     sorted_starts = np.argsort(scores)[::-1]
+#     used = np.zeros(n, dtype=bool)
+#     runs = []
+
+#     for start in sorted_starts:
+#         end = start + embeds_per_run  # end index is exclusive
+#         if not used[start:end].any():
+#             runs.append((scores[start], metadata[start]['video_path'], metadata[start]['sampled_frame_index'], metadata[end - 1]['sampled_frame_index']))
+#             used[start:end] = True
+
+#     return runs
+
+
+def _get_runs_from_meta_similarity_pair(metadata, similarity_arr, data_embedding_tensor, embeds_per_run):
+    n = len(similarity_arr)
+    if n == 0 or embeds_per_run <= 0 or embeds_per_run > n:
+        return []
+
+    # --- entropy-based filtering setup ---
+    with torch.no_grad():
+        # dot product of embeddings with themselves
+        sim_mat = data_embedding_tensor @ data_embedding_tensor.T  # (n, n)
+        # remove diagonal self-similarities
+        diag = torch.diag(sim_mat)
+        sim_mat = sim_mat - torch.diag(diag)
+        # argmax over off-diagonal similarities -> list of indices
+        nn_indices = sim_mat.argmax(dim=1).cpu().numpy()  # shape (n,)
+
+    num_windows = n - embeds_per_run + 1
+
+    # similarity-based score for every possible run
+    window = np.ones(embeds_per_run, dtype=similarity_arr.dtype)
+    scores = np.convolve(similarity_arr, window, mode="valid")  # len = num_windows
+
+    # compute an entropy-like measure per window and mark valid ones
+    entropy_threshold = 0.8  # fraction of unique nn_indices required in a window
+    valid_mask = np.zeros(num_windows, dtype=bool)
+
+    for start in range(num_windows):
+        end = start + embeds_per_run
+        window_nn = nn_indices[start:end]
+        unique_ratio = np.unique(window_nn).size / window_nn.size
+        if unique_ratio >= entropy_threshold:
+            valid_mask[start] = True  # high-entropy interval, keep it
+
+    # keep only high-entropy windows for scoring / selection
+    valid_starts = np.where(valid_mask)[0]
+    if valid_starts.size == 0:
+        return []
+
+    valid_scores = scores[valid_starts]
+    sorted_valid = np.argsort(valid_scores)[::-1]  # indices into valid_starts
+
+    used = np.zeros(n, dtype=bool)
+    runs = []
+
+    # greedy: pick highest-scoring non-overlapping high-entropy windows
+    for idx in sorted_valid:
+        start = valid_starts[idx]
+        end = start + embeds_per_run
+        if used[start:end].any():
+            continue
+
+        runs.append((
+            scores[start],
+            metadata[start]["video_path"],
+            metadata[start]["sampled_frame_index"],
+            metadata[end - 1]["sampled_frame_index"],
+        ))
+        used[start:end] = True
+
+    return runs
+
+    
+def _get_top_k_runs(meta_similarity_pairs, embeds_per_run, k):
+    runs = []
+    for meta_similarity_pair in meta_similarity_pairs:
+        runs.extend(_get_runs_from_meta_similarity_pair(*meta_similarity_pair, embeds_per_run))
+    runs.sort(key=lambda x: x[0], reverse=True)
+    return runs[:k]
+
 def get_video_metadata():
     EMB_DIR = ".cache/clip32"
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
     query_embedding_tensor = _clip_embeddings_every(".cache/query.mp4", device=device)
     metadata_list, data_embedding_tensor = _load_embeddings_and_metadata(EMB_DIR, device=device)
-    similarity_tensor = _multi_cosine_search_gpu(data_embedding_tensor, query_embedding_tensor)
-    meta_similarity_pairs = _get_meta_similarity_pairs(metadata_list, similarity_tensor, data_embedding_tensor)
+    similarity_tensor_arr = _multi_cosine_search_gpu(data_embedding_tensor, query_embedding_tensor)
+    meta_similarity_pairs = _get_meta_similarity_pairs(metadata_list, similarity_tensor_arr, data_embedding_tensor)
+    top_runs = _get_top_k_runs(meta_similarity_pairs, 150, 10)
+    print(top_runs[0][1])
+
+if __name__ == "__main__":
+    get_video_metadata()
+
     
