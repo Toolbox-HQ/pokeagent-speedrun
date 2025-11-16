@@ -24,24 +24,11 @@ export TRITON_CACHE_DIR="$WORK/.triton"
 # Automatically detect all available GPUs
 NUM_GPUS=$(nvidia-smi -L | wc -l)
 
-for p in $(seq 6600 6900); do
-    if ! lsof -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1; then
-        MASTER_PORT=$p
-        break
-    fi
-done
-
-if [ -z "$MASTER_PORT" ]; then
-    echo "No free port found" >&2
-    exit 1
-fi
-
 # Run torchrun using all GPUs on this node
 ./.venv/bin/torchrun \
   --nproc_per_node=$NUM_GPUS \
   --nnodes=1 \
   --node_rank=0 \
   --master_addr=localhost \
-  --master_port=$MASTER_PORT \
   ./models/train/train_agent.py \
   --config $1
