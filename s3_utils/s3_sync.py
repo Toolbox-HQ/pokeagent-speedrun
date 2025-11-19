@@ -23,8 +23,8 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=Non
     s3 = s3 or init_boto3_client()
     prefix = prefix.lstrip("/")
 
-    if prefix != ".cache":
-        print(f"[WARNING]: Non-standard downdload location")
+    if cache_root != ".cache":
+        print(f"[WARNING]: Non-standard download location")
 
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -36,6 +36,8 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=Non
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             if os.path.exists(local_path):
                 continue
+
+            print(f"[DOWNLOAD] s3://{bucket}/{key} => {local_path}")
             s3.download_file(bucket, key, local_path)
 
 def check_s3_existing_videos(bucket_name: str, s3_prefix: str = "youtube_videos", video_ids: list = None):
@@ -124,14 +126,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.sync == "upload":
+    if args.mode == "upload":
         sync_folder(
             local=args.local,
             remote=args.remote,
             bucket=args.bucket,
             dry_run=args.dry_run,
         )
-    elif args.sync == "sync":
+    elif args.mode == "sync":
         download_prefix(args.bucket, args.remote, args.local)
     else:
         raise Exception("MalformedCommandError")
