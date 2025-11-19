@@ -1,7 +1,8 @@
 # This code is based on the revised code from fastchat based on tatsu-lab/stanford_alpaca.
 from dataclasses import dataclass, field
-from typing import  Optional, Tuple
+from typing import  Optional, Tuple, Callable
 import torch
+import torch.nn as nn
 from torch.utils.data import Subset, Dataset
 import transformers
 from models.util.trainer import Trainer
@@ -57,8 +58,7 @@ def rank0_print(*args):
     if local_rank == 0:
         print(*args)
 
-
-def train() -> None:
+def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArguments]:
     global local_rank
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     device = torch.device(f"cuda:{local_rank}")
@@ -90,20 +90,25 @@ def train() -> None:
         model.text_model.gradient_checkpointing_enable()
         model.vision_tower.gradient_checkpointing_enable()
         training_args.gradient_checkpointing = False
+    
+    return model, processor, data_args, training_args
 
+def create_dataset(dataset: Dataset, processor: Callable) -> Tuple[Dataset, Dataset]:
     dataset = IDMWindowDataset(data_args.data_path)
     dataset.processor = processor
     train_ds, eval_ds = train_val_split(dataset, split=0.05)
+    return train_ds, eval_ds
 
-    for param in model.parameters():
-        param.requires_grad = True
+def train(model: nn.Module, training_args, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
 
-    trainer = Trainer(
-        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds
-    )
-
+    for param in model.parameters(): param.requires_grad = True
+    trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.train()
-    trainer.save_model()
+
+    #TODO do I want to save the weights here? 
+    #trainer.save_model()
 
 if __name__ == "__main__":
-    train()
+    model, processor, data_args, training_args = setup_training()
+    train_ds, eval_ds = create_dataset(data_args, processor)
+    train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
