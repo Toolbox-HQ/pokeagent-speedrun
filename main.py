@@ -55,6 +55,9 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
         conn.run_frames(23)
     conn.close()    
 
+
+
+
 def main():
     with open(".cache/pokeagent/save_state/agent_direct_save.state", 'rb') as f:
         state_bytes = f.read()

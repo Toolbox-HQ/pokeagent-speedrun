@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
@@ -8,12 +9,11 @@ class Pokeagent:
         self.device = torch.device(device)
         self.temperature = temperature
 
-        self.model = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=True)
+        self.model: nn.Module = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=True)
         state_dict = load_file(".cache/pokeagent/checkpoints/agent.safetensors")
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
         self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=True)
-        self.model.training = False
 
         self.agent_frames = torch.zeros(64, 3, 160, 240, dtype=torch.uint8)            
         self.input_ids = torch.zeros(1, 64, dtype=torch.long)       
