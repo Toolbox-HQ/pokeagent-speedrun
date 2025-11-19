@@ -21,7 +21,10 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=Non
     Downloads to cache/{key}, skipping files that already exist.
     """
     s3 = s3 or init_boto3_client()
-    prefix = prefix.lstrip("/")  # do NOT force a trailing slash
+    prefix = prefix.lstrip("/")
+
+    if prefix != ".cache":
+        print(f"[WARNING]: Non-standard downdload location")
 
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -112,11 +115,23 @@ if __name__ == "__main__":
         help="Print operations without uploading",
     )
 
+    parser.add_argument(
+        "--mode",
+        type=str,
+        required=True,
+        help="Upload or download the directory",
+    )
+
     args = parser.parse_args()
 
-    sync_folder(
-        local=args.local,
-        remote=args.remote,
-        bucket=args.bucket,
-        dry_run=args.dry_run,
-    )
+    if args.sync == "upload":
+        sync_folder(
+            local=args.local,
+            remote=args.remote,
+            bucket=args.bucket,
+            dry_run=args.dry_run,
+        )
+    elif args.sync == "sync":
+        download_prefix(args.bucket, args.remote, args.local)
+    else:
+        raise Exception("MalformedCommandError")
