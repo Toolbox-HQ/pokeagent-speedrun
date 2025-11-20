@@ -209,18 +209,13 @@ class LMAgent(Module, GenerationMixin):
 
         hidden_states = outputs.last_hidden_state
         action_hiddens = hidden_states[last_token_mask].view(B, T, H)
-        out = {}
 
-        if input_ids is not None:
-            out["loss"] = linear_cross_entropy(action_hiddens.contiguous(), self.output_actions.weight, input_ids)
-
-        # eval and inference
-        with torch.no_grad():
-            logits = self.output_actions(action_hiddens)
-            
-            if input_ids is not None:
-                out |= compute_accuracy(logits, input_ids)
-            else:
+        if labels is not None: # training
+            out = {"loss": linear_cross_entropy(action_hiddens.contiguous(), self.output_actions.weight, input_ids)}
+            with torch.no_grad():
+                out |= compute_accuracy(self.output_actions(action_hiddens), input_ids)
+        else: # inference
+            with torch.no_grad():
                 out = {"logits": self.output_actions(action_hiddens)}
 
         return out

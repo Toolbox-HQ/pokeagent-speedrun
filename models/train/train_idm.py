@@ -62,9 +62,6 @@ def gather_and_stack(t: torch.Tensor):
 @torch.no_grad()
 def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -> float:
 
-    # add a guard for if torch.distributed is not inited
-    if not dist.is_initialized(): return {}
-
     s = "val_" if is_val else ""
 
     predictions = torch.argmax(logits, dim=-1)
