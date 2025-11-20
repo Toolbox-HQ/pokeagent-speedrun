@@ -18,6 +18,18 @@ import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+
+# def prcoess_batch(model, processor, path: str, batch: List[List]):
+#     vr = VideoDecoder(path)
+#     frames = vr.get_frames_at(batch).data
+#     inputs = processor(images=frames, return_tensors="pt")
+#     with torch.no_grad():
+#         image_embeds = model.get_image_features(**inputs)
+#         image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
+#     return image_embeds
+
+
+
 def clip_embeddings_every(video_path: str, interval_s: float = 2.0, model_id: str = "openai/clip-vit-base-patch32", device=None):
     decoder = VideoDecoder(video_path)
     duration = float(decoder.metadata.duration_seconds)
@@ -112,7 +124,7 @@ def _process_chunk_p(args):
         out.extend((score / L, a + s, b + s) for score, a, b in local)
     return out
 
-def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.8, max_workers=None):
+def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=240, max_workers=None):
     segments = list(_segments_by_video(meta))
     if not segments:
         return []
@@ -127,7 +139,8 @@ def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.8, max_workers
             scored.extend(f.result())
 
     scored.sort(key=lambda t: t[0], reverse=True)
-    return [(a, b, score) for score, a, b in scored if score >= threshold]
+    scored = scored[:threshold]
+    return [(a, b, score) for score, a, b in scored]
 
 def _rolling_entropy_valid(idxs: np.ndarray, L: int, thr: float) -> np.ndarray:
     # H = log L - (1/L) * sum_i c_i log c_i ; maintain S = sum c log c
@@ -244,7 +257,7 @@ def main():
     if E.numel() == 0:
         raise ValueError(f"No embeddings found in {EMB_DIR}")
     sims, idxs = multi_cosine_search_gpu(E, query_emb)
-    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.92, max_workers=8)
+    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=90, threshold=400, max_workers=8)
 
     total_seconds = 0
     results = []
@@ -259,7 +272,7 @@ def main():
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
 
-        if i > len(top_runs) - 10:
+        if i > 200 and i < 210 or i > 390:
             save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
 
     print(f"hrs: {total_seconds / 3600}")

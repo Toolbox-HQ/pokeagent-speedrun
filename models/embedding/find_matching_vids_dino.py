@@ -6,7 +6,7 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 import torch
 import numpy as np
 from PIL import Image
-from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
+from transformers import AutoImageProcessor, AutoModel
 import json
 import glob
 from torchcodec.decoders import VideoDecoder
@@ -17,31 +17,33 @@ import math
 import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+from typing import List
 
-def clip_embeddings_every(video_path: str, interval_s: float = 2.0, model_id: str = "openai/clip-vit-base-patch32", device=None):
-    decoder = VideoDecoder(video_path)
+def prcoess_batch(model, processor, path: str, device=None):
+    decoder = VideoDecoder(path)
     duration = float(decoder.metadata.duration_seconds)
-
     t, timestamps = 0.0, []
     while t <= duration + 1e-6:
         timestamps.append(round(t, 3))
-        t += interval_s
+        t += 2
+    frames = decoder.get_frames_played_at(seconds=timestamps).data
 
-    processor = CLIPImageProcessor.from_pretrained(model_id)
-    model = CLIPVisionModelWithProjection.from_pretrained(model_id).to(device).eval()
-
+    inputs = processor(images=frames, return_tensors="pt")
     with torch.no_grad():
-        frames = decoder.get_frames_played_at(seconds=timestamps).data  # (N, C, H, W) uint8
-        imgs = frames.permute(0, 2, 3, 1).cpu().numpy()                 # (N, H, W, C) uint8
-        inputs = processor(images=list(imgs), return_tensors="pt")
         inputs = {k: v.to(device) for k, v in inputs.items()}
-        embeds = model(**inputs).image_embeds.float()                    # (N, D) on device
-        embeds = F.normalize(embeds, p=2, dim=1, eps=1e-12).to(device)   # norm + device here
+        outputs = model(**inputs)
+        image_embeds = outputs.last_hidden_state[:, 0]  # CLS token
+        image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
+    return image_embeds
 
-    return timestamps, embeds
+def clip_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base", device=None):
+    processor = AutoImageProcessor.from_pretrained(model_id)
+    model = AutoModel.from_pretrained(model_id).to(device).eval()
+    embeds = prcoess_batch(model, processor, video_path, device)
+    return embeds
 
 def multi_cosine_search_gpu(db_embeddings, query_result):
-    _, query_embeddings = query_result
+    query_embeddings = query_result
     E = db_embeddings
     Q = query_embeddings
     sims = Q @ E.T
@@ -65,7 +67,7 @@ def load_embeddings_and_metadata(folder_path: str, device):
 
     out_tensor = torch.cat(tensors, dim=0) if tensors else torch.empty((0, 512), dtype=torch.float32)
     if out_tensor.numel() > 0:
-        out_tensor = F.normalize(out_tensor, p=2, dim=1, eps=1e-12).to(device)  # norm + device here
+        out_tensor = F.normalize(out_tensor, p=2, dim=1, eps=1e-12).to(device)
     return all_meta, out_tensor
 
 def _segments_by_video(meta):
@@ -112,7 +114,7 @@ def _process_chunk_p(args):
         out.extend((score / L, a + s, b + s) for score, a, b in local)
     return out
 
-def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.8, max_workers=None):
+def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=240, max_workers=None):
     segments = list(_segments_by_video(meta))
     if not segments:
         return []
@@ -127,7 +129,8 @@ def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.8, max_workers
             scored.extend(f.result())
 
     scored.sort(key=lambda t: t[0], reverse=True)
-    return [(a, b, score) for score, a, b in scored if score >= threshold]
+    scored = scored[:threshold]
+    return [(a, b, score) for score, a, b in scored]
 
 def _rolling_entropy_valid(idxs: np.ndarray, L: int, thr: float) -> np.ndarray:
     # H = log L - (1/L) * sum_i c_i log c_i ; maintain S = sum c log c
@@ -234,7 +237,7 @@ def entropy_of_range(idxs: np.ndarray, start: int, end: int) -> float:
 
 def main():
     BUCKET_NAME = "b4schnei"
-    EMB_DIR = ".cache/clip32"
+    EMB_DIR = ".cache/pokeagent/dinov2"
     torch.cuda.set_device(7)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -244,7 +247,7 @@ def main():
     if E.numel() == 0:
         raise ValueError(f"No embeddings found in {EMB_DIR}")
     sims, idxs = multi_cosine_search_gpu(E, query_emb)
-    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=0.92, max_workers=8)
+    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=90, threshold=400, max_workers=8)
 
     total_seconds = 0
     results = []
@@ -259,7 +262,7 @@ def main():
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
 
-        if i > len(top_runs) - 10:
+        if i > 200 and i < 210 or i > 390:
             save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
 
     print(f"hrs: {total_seconds / 3600}")
