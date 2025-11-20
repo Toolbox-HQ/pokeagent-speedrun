@@ -8,24 +8,26 @@ from models.util.trainer import Trainer
 from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.util.repro import repro_init
-from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
+from models.inference.idm_inference_dataloader import IDMWindowDataset, LabelledWindowDataset, get_idm_labeller
 import os
 import random
+from pprint import pprint
+from safetensors.torch import load_file
 
 def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Dataset]:
     num_samples = len(dataset)
     indices = list(range(num_samples))
     eval_idx = random.sample(indices, round(num_samples*split))
     train_idx = [i for i in indices if i not in eval_idx]
-
     # train, eval
     return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
 
 @dataclass
 class ModelArguments:
-
+    architecture: Optional[str] = field(default=None)
     lm_name_or_path: Optional[str] = field(default=None)
     vision_name_or_path: Optional[str] = field(default=None)
+    load_path: Optional[str] = field(default=None)
 
 @dataclass
 class DataArguments:
@@ -49,7 +51,6 @@ class TrainingArguments(transformers.TrainingArguments):
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
 
-
 local_rank = None
 
 
@@ -58,7 +59,7 @@ def rank0_print(*args):
         print(*args)
 
 
-def train() -> None:
+def evaluate() -> None:
     global local_rank
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     device = torch.device(f"cuda:{local_rank}")
@@ -82,31 +83,28 @@ def train() -> None:
     local_rank = training_args.local_rank
     training_args.output_dir = save_path
 
-    # model stuff
-    model = init_lm_agent(lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
+    model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
     model.idm_labelling_fn = get_idm_labeller(device)
+
+    if model_args.load_path:
+        print(f"[LOADING WEIGHTS] {model_args.load_path}")
+        model.load_state_dict(load_file(model_args.load_path))
 
     if training_args.gradient_checkpointing:
         model.text_model.gradient_checkpointing_enable()
         model.vision_tower.gradient_checkpointing_enable()
         training_args.gradient_checkpointing = False
 
-    # data stuff
-    dataset = IDMWindowDataset(".cache/pokeagent/intervals.json")
-    dataset.processor = processor
-    train_ds, eval_ds = train_val_split(dataset, split=0.05)
+    dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/validation_intervals.json")}
+    dataset["clock"].processor = processor
 
-    for param in model.parameters():
-        param.requires_grad = True
-
-    # Start trainer
     trainer = Trainer(
-        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds
+        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=None, eval_dataset=dataset
     )
 
-    trainer.evaluate()
-
+    pprint(trainer.evaluate())
+    
 
 if __name__ == "__main__":
-    train()
+    evaluate()

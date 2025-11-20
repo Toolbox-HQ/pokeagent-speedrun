@@ -37,6 +37,8 @@ from collections.abc import Iterator, Mapping
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, Dict, List
+import functools
+import operator
 
 def log_scalars(outputs):
     log = {}
@@ -4852,12 +4854,13 @@ class Trainer:
             A dictionary containing the evaluation loss and the potential metrics computed from the predictions. The
             dictionary also contains the epoch number which comes from the training state.
         """
-        # handle multiple eval datasets
-        override = eval_dataset is not None
-        eval_dataset = eval_dataset if override else self.eval_dataset
 
-        # memory metrics - must set up as early as possible
-        self._memory_tracker.start()
+        eval_dataset = eval_dataset if eval_dataset else self.eval_dataset
+
+        if isinstance(eval_dataset, dict):
+            return functools.reduce(operator.ior,
+                            [self.evaluate(eval_dataset=v, ignore_keys=None, metric_key_prefix=f"{metric_key_prefix}_{k}")
+                            for (k,v) in eval_dataset.items()])
 
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         start_time = time.time()
@@ -4865,8 +4868,6 @@ class Trainer:
         output = self.evaluation_loop(
             eval_dataloader,
             description="Evaluation",
-            # No point gathering the predictions if there are no metrics, otherwise we defer to
-            # self.args.prediction_loss_only
             prediction_loss_only=False,
             ignore_keys=ignore_keys,
             metric_key_prefix=metric_key_prefix,
@@ -4883,8 +4884,6 @@ class Trainer:
         self.control = self.callback_handler.on_evaluate(
             self.args, self.state, self.control, output.metrics
         )
-
-        self._memory_tracker.stop_and_update_metrics(output.metrics)
 
         return output.metrics
 

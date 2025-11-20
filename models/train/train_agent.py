@@ -105,9 +105,6 @@ def train(model: nn.Module, training_args, train_ds: Dataset = None, eval_ds: Da
     trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.train()
 
-    #TODO do I want to save the weights here? 
-    #trainer.save_model()
-
 if __name__ == "__main__":
     model, processor, data_args, training_args = setup_training()
     train_ds, eval_ds = create_dataset(data_args, processor)

@@ -7,9 +7,10 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from models.model.IDM.policy import InverseActionPolicy as IDModel
-from emulator.keys import CLASS_TO_KEY
+from emulator.keys import CLASS_TO_KEY, KEY_TO_CLASS
 from typing import List
 from functools import partial
+import orjson 
 
 DEVICE = "cpu"
 IDM_FPS = 4
@@ -23,14 +24,18 @@ def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
     m.eval()
     return m
 
-def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps: int =IDM_FPS):
+def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps: int =IDM_FPS, labels=False):
     stride = max(1, int(round(video_fps / idm_fps)))
     idxs = list(range(int(start), int(end), stride))
-    if not idxs:
-        return torch.empty(0, 3, 128, 128)
+
+    if labels:
+        with open(os.path.splitext(video_path)[0]+'.json', "rb") as f:
+            actions = torch.tensor([ KEY_TO_CLASS[action["keys"]] for i, action in enumerate(orjson.loads(f.read())) if i in idxs ], dtype=torch.int64)
+
     dec = VideoDecoder(video_path)
     x = dec.get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
-    return x
+    
+    return x, actions if labels else x 
 
 class IDMWindowDataset(Dataset):
     def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW):
@@ -60,12 +65,11 @@ class IDMWindowDataset(Dataset):
                 })
 
     @staticmethod
-    def collate_fn(batch: List[torch.Tensor]):
-        
+    def collate_fn(batch: List[dict]):
         return {
-            "pixel_values": torch.stack([ item["pixel_values"] for item in batch ], dim=0),
-            "labels": torch.stack([ item["labels"] for item in batch ], dim=0)
-            }
+            k: torch.stack([item[k] for item in batch], dim=0)
+            for k in batch[0].keys()
+        }
 
     def __len__(self):
         return len(self.samples)
@@ -86,6 +90,26 @@ class IDMWindowDataset(Dataset):
             inputs["labels"] = resize(idm_frames, (128, 128))
 
         return inputs if inputs else idm_frames # (T,C,HW) RGB
+
+class LabelledWindowDataset(IDMWindowDataset):
+
+    def __getitem__(self, idx):
+        s = self.samples[idx]
+        idm_frames, labels = decode_idm_rate_frames(
+            s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS, labels=True
+        )
+
+        inputs = None
+        if self.processor:
+            agent_frames = downsample(idm_frames, 2)
+            inputs = self.processor(
+            images=agent_frames,
+            return_tensors="pt"
+            )
+            inputs["labels"] = resize(idm_frames, (128, 128))
+            inputs["ground_labels"] = downsample(labels, 2)
+
+        return inputs if inputs else idm_frames
 
 def _to_bgr_u8(x):
 

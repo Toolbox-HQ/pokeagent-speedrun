@@ -144,6 +144,7 @@ class LMAgent(Module, GenerationMixin):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None, # important
+        ground_labels: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None, # important
@@ -217,6 +218,9 @@ class LMAgent(Module, GenerationMixin):
         else: # inference
             with torch.no_grad():
                 out = {"logits": self.output_actions(action_hiddens)}
+
+        if ground_labels:
+            out |= compute_accuracy(self.output_actions(action_hiddens), ground_labels.to(device=action_hiddens.device), prefix="ground_")
 
         return out
 

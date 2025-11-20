@@ -60,22 +60,20 @@ def gather_and_stack(t: torch.Tensor):
 
 
 @torch.no_grad()
-def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -> float:
-
-    s = "val_" if is_val else ""
+def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, prefix: str = "") -> float:
 
     predictions = torch.argmax(logits, dim=-1)
     correct = (predictions == labels).float()
     acc = correct.mean()
     dist.all_reduce(acc, op=dist.ReduceOp.AVG)
-    accuracy = { f"{s}accuracy": acc.mean().item()}
+    accuracy = { f"{prefix}accuracy": acc.mean().item()}
 
     for label in list(CLASS_TO_KEY.keys()):
         l = gather_and_stack(labels)
         c = gather_and_stack(correct)
         c = c[l == label]
         if c.numel():
-            accuracy[f"{s}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item()
+            accuracy[f"{prefix}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item()
 
     return accuracy
 

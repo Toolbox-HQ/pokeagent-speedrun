@@ -1,4 +1,5 @@
 architecture: "default"
+load_path: ".cache/pokeagent/checkpoints/agent.safetensors"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 output_dir: ".cache/pokeagent/checkpoints"
