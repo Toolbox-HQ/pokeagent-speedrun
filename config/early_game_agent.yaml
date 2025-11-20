@@ -1,3 +1,4 @@
+architecture: "default"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 output_dir: "./cache/pokeagent/checkpoints"
@@ -15,6 +16,6 @@ logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "steps"
-eval_steps: 370 # 1/4 epoch
+eval_steps: 237 # 1/2 epoch
 dataloader_num_workers: 8
 data_path: ".cache/pokeagent/agent_data/early_game.json"

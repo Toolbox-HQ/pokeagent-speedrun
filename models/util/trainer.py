@@ -5104,7 +5104,8 @@ class Trainer:
             )
 
         metrics = Trainer.reduce_metrics(outputs)
-
+        metrics = {f"{metric_key_prefix}_{k}":v for (k,v) in metrics.items()}
+        
         return EvalLoopOutput(
             predictions=None,
             label_ids=None,
