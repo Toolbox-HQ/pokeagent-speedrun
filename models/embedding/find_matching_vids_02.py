@@ -6,6 +6,64 @@ import os
 import json
 import glob
 import numpy as np
+from s3_utils.s3_sync import init_boto3_client, download_prefix
+import cv2
+import time
+
+def save_clip_between(video_path, start, end, BUCKET_NAME, rank, s3):
+    match_file_path = "/".join(video_path.split("/")[1:])
+    download_prefix(bucket=BUCKET_NAME, prefix=match_file_path, s3=s3)
+    local_path = video_path
+
+    dec = VideoDecoder(local_path)
+    fps = getattr(dec, "fps", None) or getattr(dec, "frame_rate", None)
+
+    try:
+        s_idx = int(start)
+        e_idx = int(end)
+        if e_idx <= s_idx:
+            e_idx = s_idx + 1
+
+        # Open with OpenCV for frame-accurate slicing
+        cap = cv2.VideoCapture(local_path)
+        if not cap.isOpened():
+            raise RuntimeError(f"Failed to open video: {local_path}")
+
+        # Prefer decoder FPS; fall back to container FPS
+        fps_cv = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        fps_out = float(fps or fps_cv or 30.0)
+
+        # Seek to start frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, s_idx)
+
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        out_path = f".cache/seq_{rank:02d}.mp4"
+
+        # Use mp4v for broad compatibility (no external ffmpeg call)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(out_path, fourcc, fps_out, (w, h))
+        if not writer.isOpened():
+            cap.release()
+            raise RuntimeError(f"Failed to open writer for: {out_path}")
+
+        frames_to_write = max(e_idx - s_idx, 1)
+        written = 0
+        while written < frames_to_write:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            writer.write(frame)
+            written += 1
+
+        writer.release()
+        cap.release()
+        return out_path
+    finally:
+        close_fn = getattr(dec, "close", None)
+        if callable(close_fn):
+            close_fn()
 
 def _clip_embeddings_every(video_path: str, interval_s: float = 2.0, model_id: str = "openai/clip-vit-base-patch32", device=None):
     decoder = VideoDecoder(video_path)
@@ -64,28 +122,6 @@ def _get_meta_similarity_pairs(metadata_list, similarity_tensor, data_embedding_
         idx += len(metadata)
     return meta_similarity_pairs
 
-# def _get_runs_from_meta_similarity_pair(metadata, similarity_arr, data_embedding_tensor, embeds_per_run):
-#     n = len(similarity_arr)
-#     if n == 0 or embeds_per_run <= 0 or embeds_per_run > n:
-#         return []
-
-#     # score for every possible run of length embeds_per_run
-#     window = np.ones(embeds_per_run, dtype=similarity_arr.dtype)
-#     scores = np.convolve(similarity_arr, window, mode="valid")  # len = n - embeds_per_run + 1
-
-#     # greedy: pick highest scoring non-overlapping windows
-#     sorted_starts = np.argsort(scores)[::-1]
-#     used = np.zeros(n, dtype=bool)
-#     runs = []
-
-#     for start in sorted_starts:
-#         end = start + embeds_per_run  # end index is exclusive
-#         if not used[start:end].any():
-#             runs.append((scores[start], metadata[start]['video_path'], metadata[start]['sampled_frame_index'], metadata[end - 1]['sampled_frame_index']))
-#             used[start:end] = True
-
-#     return runs
-
 
 def _get_runs_from_meta_similarity_pair(metadata, similarity_arr, data_embedding_tensor, embeds_per_run):
     n = len(similarity_arr)
@@ -142,6 +178,7 @@ def _get_runs_from_meta_similarity_pair(metadata, similarity_arr, data_embedding
             metadata[start]["video_path"],
             metadata[start]["sampled_frame_index"],
             metadata[end - 1]["sampled_frame_index"],
+            metadata[start]["video_fps"]
         ))
         used[start:end] = True
 
@@ -158,12 +195,38 @@ def _get_top_k_runs(meta_similarity_pairs, embeds_per_run, k):
 def get_video_metadata():
     EMB_DIR = ".cache/clip32"
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    query_embedding_tensor = _clip_embeddings_every(".cache/query.mp4", device=device)
+    BUCKET_NAME = "b4schnei"
+    s3 = init_boto3_client()
+
+
+    query_embedding_tensor = _clip_embeddings_every(".cache/query1.mp4", device=device)
     metadata_list, data_embedding_tensor = _load_embeddings_and_metadata(EMB_DIR, device=device)
     similarity_tensor_arr = _multi_cosine_search_gpu(data_embedding_tensor, query_embedding_tensor)
     meta_similarity_pairs = _get_meta_similarity_pairs(metadata_list, similarity_tensor_arr, data_embedding_tensor)
-    top_runs = _get_top_k_runs(meta_similarity_pairs, 150, 10)
-    print(top_runs[0][1])
+
+    start = time.perf_counter()
+    top_runs = _get_top_k_runs(meta_similarity_pairs, 150, 240)
+    end = time.perf_counter()
+    print(end - start)
+
+    total_seconds = 0
+    results = []
+    for i, (score, video_path, start, end, fps) in enumerate(top_runs):
+        results.append({
+            "start": int(start),
+            "end": int(end),
+            "video_path": video_path,
+            "video_fps": float(fps),
+        })
+        total_seconds += (end - start) / fps
+        if i < 10:
+            save_clip_between(video_path, start, end, BUCKET_NAME, i, s3)
+
+    print(f"hrs: {total_seconds / 3600}")
+    with open("results.json", "w") as f:
+        json.dump(results, f)
+
+   
 
 if __name__ == "__main__":
     get_video_metadata()
