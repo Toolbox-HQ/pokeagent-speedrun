@@ -159,6 +159,7 @@ def game_loop(max_steps: int=0, connection = None, agent_fps = None) -> None:
         pbar: tqdm = tqdm(total=max_steps) if max_steps else None
 
     while True:
+
         start = time.perf_counter()
 
         keys = get_keys_for_frame(frame_interval, frame_index, connection)
