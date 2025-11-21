@@ -1,10 +1,11 @@
 # This code is based on the revised code from fastchat based on tatsu-lab/stanford_alpaca.
-from dataclasses import dataclass, field
-from typing import  Optional, Tuple, Callable
+
+from typing import Tuple, Callable
 import torch
 import torch.nn as nn
 from torch.utils.data import Subset, Dataset
 import transformers
+from models.dataclass import TrainingArguments, DataArguments, ModelArguments
 from models.util.trainer import Trainer
 from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
@@ -12,6 +13,8 @@ from models.util.repro import repro_init
 from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
 import random
+
+local_rank = None
 
 def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Dataset]:
     num_samples = len(dataset)
@@ -21,38 +24,6 @@ def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Data
 
     # train, eval
     return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
-
-@dataclass
-class ModelArguments:
-    architecture: Optional[str] = field(default=None)
-    lm_name_or_path: Optional[str] = field(default=None)
-    vision_name_or_path: Optional[str] = field(default=None)
-
-@dataclass
-class DataArguments:
-
-    data_path: str | None = field(
-        default=None, metadata={"help": "Path to the training data."}
-    )
-
-    subset: int | None = field(
-        default=None,
-        metadata={"help": "Choose a random subset of the dataset to train on"},
-    )
-
-    eval_data_path: str | None = field(
-        default=None, metadata={"help": "Path to the evaluation data."}
-    )
-
-@dataclass
-class TrainingArguments(transformers.TrainingArguments):
-
-    cache_dir: Optional[str] = field(default=None)
-    optim: str = field(default="adamw_torch")
-
-
-local_rank = None
-
 
 def rank0_print(*args):
     if local_rank == 0:

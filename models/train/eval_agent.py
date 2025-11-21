@@ -13,6 +13,9 @@ import os
 import random
 from pprint import pprint
 from safetensors.torch import load_file
+from models.dataclass import TrainingArguments, ModelArguments, DataArguments
+
+local_rank = None
 
 def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Dataset]:
     num_samples = len(dataset)
@@ -21,38 +24,6 @@ def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Data
     train_idx = [i for i in indices if i not in eval_idx]
     # train, eval
     return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
-
-@dataclass
-class ModelArguments:
-    architecture: Optional[str] = field(default=None)
-    lm_name_or_path: Optional[str] = field(default=None)
-    vision_name_or_path: Optional[str] = field(default=None)
-    load_path: Optional[str] = field(default=None)
-
-@dataclass
-class DataArguments:
-
-    data_path: str | None = field(
-        default=None, metadata={"help": "Path to the training data."}
-    )
-
-    subset: int | None = field(
-        default=None,
-        metadata={"help": "Choose a random subset of the dataset to train on"},
-    )
-
-    eval_data_path: str | None = field(
-        default=None, metadata={"help": "Path to the evaluation data."}
-    )
-
-@dataclass
-class TrainingArguments(transformers.TrainingArguments):
-
-    cache_dir: Optional[str] = field(default=None)
-    optim: str = field(default="adamw_torch")
-
-local_rank = None
-
 
 def rank0_print(*args):
     if local_rank == 0:
@@ -96,8 +67,7 @@ def evaluate() -> None:
         model.vision_tower.gradient_checkpointing_enable()
         training_args.gradient_checkpointing = False
 
-    dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/validation_intervals.json")}
-    dataset["clock"].processor = processor
+    dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/agent_eval_data/intervals_1f6ef6b5.json", processor = processor)}
 
     trainer = Trainer(
         model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=None, eval_dataset=dataset

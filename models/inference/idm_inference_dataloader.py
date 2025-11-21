@@ -38,9 +38,9 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     return x, actions if labels else x 
 
 class IDMWindowDataset(Dataset):
-    def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW):
+    def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW, processor = None):
         
-        self.processor = None
+        self.processor = processor
 
         with open(intervals_json, "r", encoding="utf-8") as f:
             items = json.load(f)
