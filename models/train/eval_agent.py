@@ -13,7 +13,7 @@ import os
 import random
 from pprint import pprint
 from safetensors.torch import load_file
-from models.dataclass import TrainingArguments, ModelArguments, DataArguments
+from models.dataclass import TrainingArguments, ModelArguments, DataArguments, EvalArguments
 
 local_rank = None
 
@@ -43,37 +43,35 @@ def evaluate() -> None:
     save_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(
-        (ModelArguments, DataArguments, TrainingArguments)
+        (ModelArguments, DataArguments, TrainingArguments, EvalArguments)
     )
     (
         model_args,
         data_args,
         training_args,
+        eval_args,
     ) = parser.parse_yaml_file(yaml_file=args.config)
 
     local_rank = training_args.local_rank
     training_args.output_dir = save_path
 
-    model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
-    processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
-    model.idm_labelling_fn = get_idm_labeller(device)
+    for arch, path in zip(eval_args.eval_architectures, eval_args.eval_checkpoints):
 
-    if model_args.load_path:
-        print(f"[LOADING WEIGHTS] {model_args.load_path}")
-        model.load_state_dict(load_file(model_args.load_path))
+        model = init_lm_agent(arch=arch, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
+        processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
+        model.idm_labelling_fn = get_idm_labeller(device)
 
-    if training_args.gradient_checkpointing:
-        model.text_model.gradient_checkpointing_enable()
-        model.vision_tower.gradient_checkpointing_enable()
-        training_args.gradient_checkpointing = False
+        
+        print(f"[LOADING WEIGHTS] {path}")
+        model.load_state_dict(load_file(path))
 
-    dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/agent_eval_data/intervals_1f6ef6b5.json", processor = processor)}
+        dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/agent_eval_data/intervals_1f6ef6b5.json", processor = processor)}
 
-    trainer = Trainer(
-        model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=None, eval_dataset=dataset
-    )
+        trainer = Trainer(
+            model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=None, eval_dataset=dataset
+        )
 
-    pprint(trainer.evaluate())
+        pprint(trainer.evaluate())
     
 
 if __name__ == "__main__":

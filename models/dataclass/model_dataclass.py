@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 import transformers
 
 @dataclass
@@ -27,6 +27,11 @@ class DataArguments:
 
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
-
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
+
+
+@dataclass
+class EvalArguments:
+    eval_checkpoints: List[str] = field(default_factory = lambda: [])
+    eval_architectures: List[str] = field(default_factory = lambda: [])
