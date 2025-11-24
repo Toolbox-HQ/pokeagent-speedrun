@@ -55,20 +55,17 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
         conn.run_frames(23)
     conn.close()    
 
-
-
-
 def main():
     with open(".cache/pokeagent/save_state/agent_direct_save.state", 'rb') as f:
         state_bytes = f.read()
-    AGENT_STEPS = 1000
+    AGENT_STEPS = 2000
     RANDOM_STEPS = 1000
     INTERVAL = 20
     ROM_PATH = ".cache/pokeagent/rom/rom.gba"
     OUTPUT_PATH = ".cache/pokeagent/runs"
 
-    run_exploration_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS, RANDOM_STEPS, INTERVAL)
-    #run_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS)
+    #run_exploration_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS, RANDOM_STEPS, INTERVAL)
+    run_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS)
 
 if __name__ == "__main__":
     main()
