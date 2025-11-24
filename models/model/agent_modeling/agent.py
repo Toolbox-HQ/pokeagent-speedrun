@@ -219,7 +219,7 @@ class LMAgent(Module, GenerationMixin):
             with torch.no_grad():
                 out = {"logits": self.output_actions(action_hiddens)}
 
-        if ground_labels:
+        if ground_labels is not None:
             out |= compute_accuracy(self.output_actions(action_hiddens), ground_labels.to(device=action_hiddens.device), prefix="ground_")
 
         return out
@@ -311,6 +311,7 @@ class LMStateAgent(Module, GenerationMixin):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None, # important
+        ground_labels: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         pixel_values: Optional[torch.FloatTensor] = None, # important
@@ -366,14 +367,17 @@ class LMStateAgent(Module, GenerationMixin):
         if input_ids is not None:
             out["loss"] = linear_cross_entropy(action_hiddens.contiguous(), self.output_actions.weight, input_ids)
 
-        # eval and inference
-        with torch.no_grad():
-            logits = self.output_actions(action_hiddens)
-            
-            if input_ids is not None:
-                out |= compute_accuracy(logits, input_ids)
-            else:
+
+        if labels is not None: # training
+            out = {"loss": linear_cross_entropy(action_hiddens.contiguous(), self.output_actions.weight, input_ids)}
+            with torch.no_grad():
+                out |= compute_accuracy(self.output_actions(action_hiddens), input_ids)
+        else: # inference
+            with torch.no_grad():
                 out = {"logits": self.output_actions(action_hiddens)}
+
+        if ground_labels is not None:
+            out |= compute_accuracy(self.output_actions(action_hiddens), ground_labels.to(device=action_hiddens.device), prefix="ground_")
 
         return out
 

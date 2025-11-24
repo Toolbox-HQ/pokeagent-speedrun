@@ -65,6 +65,7 @@ def evaluate() -> None:
         print(f"[LOADING WEIGHTS] {path}")
         model.load_state_dict(load_file(path))
 
+        # TODO add eval strcutures to config
         dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/agent_eval_data/intervals_1f6ef6b5.json", processor = processor)}
 
         trainer = Trainer(

@@ -107,7 +107,7 @@ class LabelledWindowDataset(IDMWindowDataset):
             return_tensors="pt"
             )
             inputs["labels"] = resize(idm_frames, (128, 128))
-            inputs["ground_labels"] = downsample(labels, 2)
+            inputs["ground_labels"] = downsample(labels, 2, offset=1)
 
         return inputs if inputs else idm_frames
 
@@ -187,8 +187,8 @@ def get_dataloader(intervals_json, batch_size=1, num_workers=0, shuffle=False):
     ds = IDMWindowDataset(intervals_json, IDM_FPS, WINDOW)
     return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
 
-def downsample(x, stride):
-    idxs = list(range(0, x.shape[0], stride))
+def downsample(x, stride, offset=0):
+    idxs = list(range(offset, x.shape[0], stride))
     return x[idxs]
 
 def downsample_batched(x, stride):
