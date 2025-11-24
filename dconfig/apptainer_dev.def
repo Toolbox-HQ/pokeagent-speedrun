@@ -22,9 +22,13 @@ From: ubuntu:24.04
         apt-get clean && \
         rm -rf /var/lib/apt/lists/*
 
+    # Install uv
+    curl -LsSf https://astral.sh/uv/install.sh | \
+    UV_INSTALL_DIR=/app sh
+
     # Create work directory
-    mkdir -p /install
-    cd /install
+    mkdir -p /app
+    cd /app
 
     # Download and install mGBA
     curl -L -o mGBA-0.10.5-ubuntu64-noble.tar.xz \
@@ -34,3 +38,16 @@ From: ubuntu:24.04
     rm mGBA-0.10.5-ubuntu64-noble.tar.xz
 
     dpkg -i mGBA-0.10.5-ubuntu64-noble/libmgba.deb
+
+%files
+    pyproject.toml /app/
+    .python-version /app/
+
+%post
+    cd /app
+    . /app/env
+    uv sync
+    
+%runscript
+    cd /app
+    exec "$@"

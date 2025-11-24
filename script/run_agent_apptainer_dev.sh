@@ -4,30 +4,31 @@ set -e
 IMAGE_NAME="pokeagent"
 TAG="latest"
 
-# Base bind mounts
-BIND_MOUNTS="--bind ./:/app --bind ${HF_HOME:-$HOME/.cache/huggingface}:/hf_cache"
+INDIVIDUAL_BINDS=" \
+    --bind ./config:/app/config \
+    --bind ./dconfig:/app/dconfig \
+    --bind ./emulator:/app/emulator \
+    --bind ./models:/app/models \
+    --bind ./s3_utils:/app/s3_utils \
+    --bind ./script:/app/script \
+    --bind ./.s3cfg:/app/.s3cfg \
+    --bind ./main.py:/app/main.py \
+"
 
-# Conditionally bind /cvmfs if it exists
-if [ -d "/cvmfs" ]; then
-    BIND_MOUNTS="$BIND_MOUNTS --bind /cvmfs:/cvmfs"
-else
-    echo "Warning: /cvmfs does not exist, skipping bind."
-fi
+# Combine all binds
+BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
 
-
-# Conditionally bind /scratch if it exists
-if [ -d "/scratch" ]; then
-    BIND_MOUNTS="$BIND_MOUNTS --bind /scratch:/scratch"
-else
-    echo "Warning: /scratch does not exist, skipping bind."
-fi
+# Build cmd for dev is:
+# apptainer build ./.cache/pokeagent/containers/dev.sif ./dconfig/apptainer_dev.def
 
 # Run Apptainer
 apptainer exec \
     --contain \
     --nv \
-    $BIND_MOUNTS \
-    --env PATH="/app/.venv/bin:$PATH" \
+    $INDIVIDUAL_BINDS \
+    --bind ./.cache/pokeagent/tmp:/tmp \
+    --bind ./.cache:/app/.cache \
+    --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
-    ../test_container.sif \
+    .cache/pokeagent/containers/dev.sif \
     bash
