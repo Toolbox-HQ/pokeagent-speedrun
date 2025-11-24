@@ -1,37 +1,18 @@
 ## ASH: Agents that Self-Hone from Starter to Pokémon Master via Embodied Lifelong Learning
+<p align="center">
+  <img src="info.png" width="700">
+</p>
 
-Command-Line Arguments
 
---rom
-Path to the ROM file to be loaded. Default: Emerald-GBAdvance/rom.gba.
+## 💡 ASH in a Nutshell
 
---mp4-path
-Path where the emulator’s MP4 output will be saved. Default: Data/output.mp4.
+Pokemon is a *long* game, with an aveage playthrough ranging from 30-100 hours of gameplay. This makes it very difficult to train a model that can "solve" pokemon upfront, especially as the visual and dynamics of the game evolve from the basics of starting the game to the more difficult tasks and areas in the late game. This makes it impossible to train a strong IDM (and by extension, an action agent) up front, as many dynamics are only revealed late game. To address this, ASH works by continually bootstrapping a both an IDM model and Embodied agent model. The key insight is that data artifacts obtained throughout agent gameplay are exetrmemly useful for refining the agent. In particular:
 
---port
-Port number for hosting the web interface. Default: 8000.
+1. Data from the agent playing the game is useful for adapting the IDM to newer environment dynamics. 
+2. Data from the agent playing the game is useful for retrieving relevant gameplay videos (scraped from the internet) which the agent can use to update its policy via behavioural cloning. 
+3. A better IDM can be used to train a better Agent.
 
---manual-mode
-Starts the emulator in manual mode (no agent control) if specified.
 
---fps
-Emulator frames per second. If not set, FPS is uncapped.
+## 🔧 Project State
 
---keys-json-path
-Path to a JSON file that logs per-frame key inputs. Default: Data/keys.json.
-
-Keyboard Controls (Game Boy Advance Mappings)
-
-Z → A button
-
-X → B button
-
-Enter → Start
-
-Right Shift → Select
-
-Arrow Keys → D-pad (Up / Down / Left / Right)
-
-1 → Save state
-
-2 → Load state
+ASH is under heavy development currently, feel free to check out our code today or come back soon to try the completed agent!
