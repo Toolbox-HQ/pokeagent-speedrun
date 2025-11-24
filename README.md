@@ -1,5 +1,4 @@
-### 
-
+## ASH: Agents that Self-Hone from Starter to Pokémon Master via Embodied Lifelong Learning
 
 Command-Line Arguments
 
