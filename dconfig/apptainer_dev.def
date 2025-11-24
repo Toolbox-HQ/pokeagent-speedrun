@@ -40,22 +40,14 @@ From: ubuntu:24.04
     dpkg -i mGBA-0.10.5-ubuntu64-noble/libmgba.deb
 
 %files
-    config /app/
-    dconfig /app/
-    emulator /app/
-    models /app/
-    s3_utils /app/
-    script /app/
-    .python-version /app/
-    .s3cfg /app/
-    main.py /app/
     pyproject.toml /app/
+    .python-version /app/
 
 %post
     cd /app
     . /app/env
     uv sync
-
+    
 %runscript
     cd /app
     exec "$@"
