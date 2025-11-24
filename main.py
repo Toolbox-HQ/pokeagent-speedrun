@@ -47,12 +47,17 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
     agent = PokeagentStateOnly(device="cuda", temperature=1)
     conn = EmulatorConnection(rom_path, output_path + "/output")
     conn.load_state(start_state)
+    # for i in tqdm(range(agent_steps), desc="Exploration Agent"):
+    #     tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
+    #     conn.run_frames(7)
+    #     key = agent.infer_action(tensor)
+    #     conn.set_key(key)
+    #     conn.run_frames(23)
     for i in tqdm(range(agent_steps), desc="Exploration Agent"):
         tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
-        conn.run_frames(7)
         key = agent.infer_action(tensor)
         conn.set_key(key)
-        conn.run_frames(23)
+        conn.run_frames(1)
     conn.close()    
 
 def main():
