@@ -10,7 +10,8 @@ apptainer exec \
     --nv \
     --bind ./.cache/pokeagent/tmp:/tmp \
     --bind ./.cache:/app/.cache \
-    --bind "$HF_DIR":/hf_cache \
+    --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     .cache/pokeagent/containers/pokeagent_latest.sif \
     bash -c "cd /app && . .venv/bin/activate && python main.py"
+
