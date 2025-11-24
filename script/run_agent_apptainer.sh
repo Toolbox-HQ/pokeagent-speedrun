@@ -3,7 +3,7 @@ set -e
 
 IMAGE_NAME="pokeagent"
 TAG="latest"
-HF_DIR="${HF_HOME:-$HOME/.cache/huggingface}"
+
 # TODO make it auto run  
 apptainer exec \
     --contain \
