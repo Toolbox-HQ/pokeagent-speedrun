@@ -44,7 +44,7 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
     from emulator.emulator_connection import EmulatorConnection
     import numpy as np
 
-    agent = PokeagentStateOnly(device="cuda", temperature=1)
+    agent = PokeagentStateOnly(model_path=".cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors", device="cuda", temperature=1)
     conn = EmulatorConnection(rom_path, output_path + "/output")
     conn.load_state(start_state)
     # for i in tqdm(range(agent_steps), desc="Exploration Agent"):
@@ -63,7 +63,7 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
 def main():
     with open(".cache/pokeagent/save_state/agent_direct_save.state", 'rb') as f:
         state_bytes = f.read()
-    AGENT_STEPS = 1000
+    AGENT_STEPS = 50000
     RANDOM_STEPS = 1000
     INTERVAL = 20
     ROM_PATH = ".cache/pokeagent/rom/rom.gba"

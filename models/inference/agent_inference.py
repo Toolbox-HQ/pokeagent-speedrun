@@ -52,7 +52,7 @@ class Pokeagent:
         return CLASS_TO_KEY[int(cls.item())]
 
 class PokeagentStateOnly:
-    def __init__(self, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64):
+    def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64):
         self.context_len = context_len
         self.actions_per_second = actions_per_second
         self.model_fps = model_fps
@@ -63,7 +63,7 @@ class PokeagentStateOnly:
         self.temperature = temperature
 
         self.model: nn.Module = init_lm_agent(arch="state_only", lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=True)
-        state_dict = load_file(".cache/pokeagent/checkpoints/agent.safetensors")
+        state_dict = load_file(model_path)
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
         self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=True)
