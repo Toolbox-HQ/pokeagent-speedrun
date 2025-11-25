@@ -1,3 +1,7 @@
+from models.dataclass import InferenceArguments
+import transformers
+from argparse import ArgumentParser
+
 def run_random_agent(conn, steps, uuid):
     from tqdm import tqdm
     from models.inference.random_agent import RandomAgent
@@ -62,7 +66,7 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
         
     conn.close()    
 
-def main():
+def main(args: InferenceArguments):
     with open(".cache/pokeagent/save_state/agent_direct_save.state", 'rb') as f:
         state_bytes = f.read()
     AGENT_STEPS = 50000
@@ -75,4 +79,12 @@ def main():
     run_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS)
 
 if __name__ == "__main__":
-    main()
+
+    from argparse import ArgumentParser
+    parser: ArgumentParser = ArgumentParser()
+    parser.add_argument("--config", type=str, required=True)
+    args = parser.parse_args()
+
+    parser = transformers.HfArgumentParser(InferenceArguments)
+    (inference_args,) = parser.parse_yaml_file(yaml_file=args.config)
+    main(inference_args)
