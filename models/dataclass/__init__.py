@@ -5,6 +5,7 @@ T = TypeVar("T")
 # module imports
 from .emulator import *
 from .model_dataclass import DataArguments, TrainingArguments, ModelArguments, EvalArguments
+from .inference_dataclass import InferenceArguments
 
 def parse_dataclass(path: str, cls: T):
     parser = HfArgumentParser(cls)
@@ -17,4 +18,5 @@ __all__ = ["parse_dataclass",
            "TrainingArguments",
            "ModelArguments"
            "EvalArguments"
+           "InferenceArguments"
            ]
