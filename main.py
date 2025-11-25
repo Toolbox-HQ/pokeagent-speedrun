@@ -41,14 +41,18 @@ def run_exploration_agent(start_state, rom_path, output_path, agent_steps, rando
             conn.run_frames(23)
         conn.close()
 
-def run_agent(start_state, rom_path, output_path, agent_steps):
+def run_agent(start_state, rom_path, output_path, agent_steps, sampling_strategy, temperature, model_checkpoint, architecture):
     from models.inference.agent_inference import Pokeagent, PokeagentStateOnly
     from tqdm import tqdm
     import torch
     from emulator.emulator_connection import EmulatorConnection
     import numpy as np
 
-    agent = PokeagentStateOnly(model_path=".cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors", device="cuda", temperature=1, actions_per_second=4)
+    if architecture is "state_only":
+        agent = PokeagentStateOnly(model_path=model_checkpoint, device="cuda", temperature=temperature, actions_per_second=4, sampling_strategy=sampling_strategy)
+    else:
+        raise Exception("only state_only is supported")
+    
     conn = EmulatorConnection(rom_path, output_path + "/output")
     conn.load_state(start_state)
     # for i in tqdm(range(agent_steps), desc="Exploration Agent"):
@@ -67,16 +71,20 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
     conn.close()    
 
 def main(args: InferenceArguments):
-    with open(".cache/pokeagent/save_state/agent_direct_save.state", 'rb') as f:
+    with open(args.save_state, 'rb') as f:
         state_bytes = f.read()
-    AGENT_STEPS = 50000
+    AGENT_STEPS = args.agent_steps
+    SAMPLING_STRATEGY = args.sampling_strategy
+    TEMPERATURE = args.temperature
+    MODEL_CHECKPOINT = args.model_checkpoint
+    ARCHITECTURE = args.architecture
     RANDOM_STEPS = 1000
     INTERVAL = 20
     ROM_PATH = ".cache/pokeagent/rom/rom.gba"
-    OUTPUT_PATH = ".cache/pokeagent/runs"
+    OUTPUT_PATH = args.inference_save_path
 
     #run_exploration_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS, RANDOM_STEPS, INTERVAL)
-    run_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS)
+    run_agent(state_bytes, ROM_PATH, OUTPUT_PATH, AGENT_STEPS, SAMPLING_STRATEGY, TEMPERATURE, MODEL_CHECKPOINT, ARCHITECTURE)
 
 if __name__ == "__main__":
 

@@ -4,5 +4,4 @@ agent_steps: 5000
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 0.01
-actions_per_seconds: 60
 inference_save_path: .cache/pokeagent/runs

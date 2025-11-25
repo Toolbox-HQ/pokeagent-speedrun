@@ -16,6 +16,4 @@ class InferenceArguments:
     
     temperature: Optional[float] = field(default=1)
 
-    actions_per_seconds: Optional[int] = field(default=1)
-
     inference_save_path: Optional[str] = field(default=None) 

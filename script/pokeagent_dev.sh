@@ -10,6 +10,7 @@ set -e
 
 IMAGE_NAME="pokeagent"
 TAG="latest"
+CONFIG="./config/inference/agent_inference.yaml"
 
 INDIVIDUAL_BINDS=" \
     --bind ./config:/app/config \
@@ -38,4 +39,4 @@ apptainer exec \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     .cache/pokeagent/containers/dev.sif \
-    bash -c "cd /app && . .venv/bin/activate && python main.py"
+    bash -c "cd /app && . .venv/bin/activate && python main.py --config ${CONFIG}"
