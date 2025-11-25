@@ -51,7 +51,7 @@ def run_agent(start_state, rom_path, output_path, agent_steps, sampling_strategy
     if architecture is "state_only":
         agent = PokeagentStateOnly(model_path=model_checkpoint, device="cuda", temperature=temperature, actions_per_second=4, sampling_strategy=sampling_strategy)
     else:
-        raise Exception("only state_only is supported")
+        raise Exception(f"{architecture} is not supported")
     
     conn = EmulatorConnection(rom_path, output_path + "/output")
     conn.load_state(start_state)
@@ -61,6 +61,8 @@ def run_agent(start_state, rom_path, output_path, agent_steps, sampling_strategy
     #     key = agent.infer_action(tensor)
     #     conn.set_key(key)
     #     conn.run_frames(23)
+
+
     for i in tqdm(range(agent_steps), desc="Exploration Agent"):
         tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
         key = agent.infer_action(tensor)
