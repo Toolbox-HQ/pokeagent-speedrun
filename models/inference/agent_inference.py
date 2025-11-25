@@ -52,12 +52,13 @@ class Pokeagent:
         return CLASS_TO_KEY[int(cls.item())]
 
 class PokeagentStateOnly:
-    def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64):
+    def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, mode="default"):
+        self.mode = mode
         self.context_len = context_len
         self.actions_per_second = actions_per_second
         self.model_fps = model_fps
         self.buffersize = self.context_len // self.model_fps * self.actions_per_second
-        self.stride = 60 // self.model_fps
+        self.stride = actions_per_second // self.model_fps
         
         self.device = torch.device(device)
         self.temperature = temperature
@@ -91,8 +92,12 @@ class PokeagentStateOnly:
 
         output = self.model(pixel_values=pixel_values)
         logits = output["logits"][0, math.floor(self.idx / self.stride)]                         # (num_classes,)
-        probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
-        cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
+
+        if self.mode is "default":
+            cls = torch.argmax(logits, dim=-1)
+        else:
+            probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
+            cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
         #print(probs)
 
         if self.idx < self.buffersize - 1:

@@ -44,7 +44,7 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
     from emulator.emulator_connection import EmulatorConnection
     import numpy as np
 
-    agent = PokeagentStateOnly(model_path=".cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors", device="cuda", temperature=1)
+    agent = PokeagentStateOnly(model_path=".cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors", device="cuda", temperature=1, actions_per_second=4)
     conn = EmulatorConnection(rom_path, output_path + "/output")
     conn.load_state(start_state)
     # for i in tqdm(range(agent_steps), desc="Exploration Agent"):
@@ -56,8 +56,10 @@ def run_agent(start_state, rom_path, output_path, agent_steps):
     for i in tqdm(range(agent_steps), desc="Exploration Agent"):
         tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
         key = agent.infer_action(tensor)
+        conn.run_frames(7)
         conn.set_key(key)
-        conn.run_frames(1)
+        conn.run_frames(8)
+        
     conn.close()    
 
 def main():
