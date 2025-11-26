@@ -17,7 +17,7 @@ from models.util.data import reduce_dict
 from pprint import pprint
 
 @dataclass
-class Config:
+class IDMConfig:
     # Model
     torch_compile: bool = field(default=False)
     output_classes: int = field(default=None)
@@ -120,8 +120,8 @@ def main():
     args = arg_parser.parse_args()
     save_path = repro_init(args.config)
 
-    parser = HfArgumentParser(Config)
-    cfg: Config = parser.parse_yaml_file(args.config)[0]
+    parser = HfArgumentParser(IDMConfig)
+    cfg: IDMConfig = parser.parse_yaml_file(args.config)[0]
 
     rank, world_size = setup_distributed()
     device = torch.device(f"cuda:{rank}")
