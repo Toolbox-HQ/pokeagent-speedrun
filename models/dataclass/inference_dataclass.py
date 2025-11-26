@@ -21,3 +21,4 @@ class InferenceArguments:
     inference_save_path: Optional[str] = field(default=None) 
 
     agent_fps: Optional[int] = field(default=None)
+
