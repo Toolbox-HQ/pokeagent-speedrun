@@ -22,7 +22,7 @@ BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
 # apptainer build ./.cache/pokeagent/containers/dev.sif ./dconfig/apptainer_dev.def
 
 # Run Apptainer
-apptainer exec \
+apptainer run \
     --contain \
     --nv \
     $INDIVIDUAL_BINDS \
@@ -30,5 +30,4 @@ apptainer exec \
     --bind ./.cache:/app/.cache \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
-    .cache/pokeagent/containers/dev.sif \
-    bash
+    .cache/pokeagent/containers/dev.sif

@@ -50,4 +50,6 @@ From: ubuntu:24.04
     
 %runscript
     cd /app
-    exec "$@"
+    . /app/env
+    . .venv/bin/activate
+    exec /bin/bash
