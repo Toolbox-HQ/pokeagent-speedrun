@@ -24,7 +24,7 @@ def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
     m.eval()
     return m
 
-def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps: int =IDM_FPS, labels=False):
+def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps: int = IDM_FPS, labels=False):
     stride = max(1, int(round(video_fps / idm_fps)))
     idxs = list(range(int(start), int(end), stride))
 
@@ -32,15 +32,14 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
         with open(os.path.splitext(video_path)[0]+'.json', "rb") as f:
             actions = torch.tensor([ KEY_TO_CLASS[action["keys"]] for i, action in enumerate(orjson.loads(f.read())) if i in idxs ], dtype=torch.int64)
 
-    dec = VideoDecoder(video_path)
-    x = dec.get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
-    
-    return x, actions if labels else x 
+    frames: torch.Tensor = VideoDecoder(video_path).get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
+    return (frames, actions) if labels else frames
 
 class IDMWindowDataset(Dataset):
     def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW, processor = None):
         
         self.processor = processor
+        self.intervals_json = intervals_json
 
         with open(intervals_json, "r", encoding="utf-8") as f:
             items = json.load(f)
@@ -76,10 +75,7 @@ class IDMWindowDataset(Dataset):
 
     def __getitem__(self, idx):
         s = self.samples[idx]
-        idm_frames = decode_idm_rate_frames(
-            s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS
-        )
-
+        idm_frames = decode_idm_rate_frames(s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS, labels=False)
         inputs = None
         if self.processor:
             agent_frames = downsample(idm_frames, 2)

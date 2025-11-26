@@ -122,8 +122,9 @@ class OnlinePokeagent:
         self.training_args: TrainingArguments = training_args
         self.data_args: DataArguments = data_args
         self.inference_args: InferenceArguments = inference_args
+        assert inference_args.model_checkpoint is None, "Use model_args.load_path"
 
-        self.context_len = self.inference_args
+        self.context_len = self.inference_args.context_length
         self.actions_per_second = self.inference_args.actions_per_seconds
         self.model_fps = self.inference_args.agent_fps
 
@@ -132,9 +133,8 @@ class OnlinePokeagent:
         
         
         self.temperature = self.inference_args.temperature
-        self.model, self.idm, self.processor, self.device = init_model(model_args)
-        state_dict = load_file(model_args.load_path)
-        self.model.load_state_dict(state_dict)
+        self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
+        self.model.load_state_dict(load_file(model_args.load_path))
         self.model.to(self.device).eval()
         self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8)  
         self.idx = 0
@@ -196,8 +196,9 @@ if __name__ == "__main__":
         inference_args,
     ) = parser.parse_yaml_file(yaml_file=args.config)
 
-    pokeagent = OnlinePokeagent(model_args,
-                                data_args,
-                                training_args,
-                                inference_args)
+    pokeagent = OnlinePokeagent(model_args=model_args,
+                                training_args=training_args,
+                                data_args=data_args,
+                                inference_args=inference_args)
     
+    pokeagent.train_agent(".cache/pokeagent/agent_data/early_game.json")

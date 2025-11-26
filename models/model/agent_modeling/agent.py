@@ -59,7 +59,8 @@ class LMAgent(Module, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
     _tp_plan = {"lm_head": "colwise_rep"}
     _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
-
+    main_input_name = "pixel_values"
+    
     def __init__(self, config):
         super().__init__()
 
@@ -228,6 +229,7 @@ class LMStateAgent(Module, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
     _tp_plan = {"lm_head": "colwise_rep"}
     _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
+    main_input_name = "pixel_values"
 
     def __init__(self, config):
         super().__init__()

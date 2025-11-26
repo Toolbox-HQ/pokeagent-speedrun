@@ -14,6 +14,8 @@ INDIVIDUAL_BINDS=" \
     --bind ./.s3cfg:/app/.s3cfg \
     --bind ./main.py:/app/main.py \
     --bind ./.git:/app/.git \
+    --bind ./wandb:/app/wandb \
+    --bind $HOME/.cache/wandb:$HOME/.cache/wandb \
 "
 
 # Combine all binds
@@ -24,6 +26,7 @@ BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
 
 # Run Apptainer
 apptainer run \
+    --writable-tmpfs \
     --contain \
     --nv \
     $INDIVIDUAL_BINDS \

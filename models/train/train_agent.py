@@ -29,7 +29,7 @@ def rank0_print(*args):
     if local_rank == 0:
         print(*args)
 
-def init_model(model_args):
+def init_model(model_args: ModelArguments, training_args: TrainingArguments):
 
     device = int(os.environ.get("LOCAL_RANK", 0))
     device = torch.device(f"cuda:{device}")
@@ -67,7 +67,7 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     local_rank = training_args.local_rank
     training_args.output_dir = save_path
 
-    model, idm, processor, device = init_model(model_args)
+    model, idm, processor, device = init_model(model_args, training_args)
     
     return model, processor, data_args, training_args
 
@@ -77,7 +77,7 @@ def create_dataset(path: str, processor: Callable) -> Tuple[Dataset, Dataset]:
     train_ds, eval_ds = train_val_split(dataset, split=0.05)
     return train_ds, eval_ds
 
-def train(model: nn.Module, training_args, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
+def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
 
     for param in model.parameters(): param.requires_grad = True
     trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
