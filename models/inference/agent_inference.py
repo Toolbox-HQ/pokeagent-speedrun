@@ -4,6 +4,7 @@ from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoess
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 import math
+from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
 
 class Pokeagent:
     def __init__(self, device: str, temperature = 0.01):
@@ -100,54 +101,74 @@ class PokeagentStateOnly:
 
         return CLASS_TO_KEY[int(cls.item())]
 
-from models.train.train_agent import setup_training, train, create_dataset
+from models.train.train_agent import setup_training, train, create_dataset, init_model
 
 class OnlinePokeagent:
-    def __init__(self, device: str, temperature: float = 0.01) -> None:
-        self.device = torch.device(device)
-        self.temperature = temperature
+    def __init__(self,
+                model_args: ModelArguments,
+                training_args: TrainingArguments,
+                data_args: DataArguments,
+                inference_args: InferenceArguments,
+                ):
+    
+        self.model_args: ModelArguments = model_args
+        self.training_args: TrainingArguments = training_args
+        self.data_args: DataArguments = data_args
+        self.inference_args: InferenceArguments = inference_args
 
-        self.model, self.processor, self.data_args, self.training_args = setup_training()
-        state_dict = load_file(".cache/pokeagent/checkpoints/agent.safetensors")
+        self.context_len = self.inference_args
+        self.actions_per_second = self.inference_args.actions_per_seconds
+        self.model_fps = self.inference_args.agent_fps
+
+        self.buffersize = self.context_len // self.model_fps * self.actions_per_second
+        self.stride = 60 // self.model_fps
+        
+        
+        self.temperature = self.inference_args.temperature
+        self.model, self.idm, self.processor, self.device = init_model(model_args)
+        state_dict = load_file(model_args.load_path)
         self.model.load_state_dict(state_dict)
         self.model.to(self.device).eval()
-
-        self.agent_frames = torch.zeros(64, 3, 160, 240, dtype=torch.uint8)            
-        self.input_ids = torch.zeros(1, 64, dtype=torch.long)       
+        self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8)  
         self.idx = 0
 
-    def train_online(self, path: str) -> None:
-        self.data_args.data_path = path
-        train_ds, eval_ds = create_dataset(self.data_args.data_path, self.processor)
+    def train_agent(self, intervals: str):
+        train_ds, eval_ds = create_dataset(intervals, self.processor)
         train(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
+
+    def train_idm(self, dir: str):
+        print(dir)
+        
+
 
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
 
-        if self.idx == 63:
+        if self.idx == self.buffersize - 1:
             self.agent_frames = torch.cat((self.agent_frames[1:], frame.unsqueeze(0)), dim=0)
         else:
             self.agent_frames[self.idx] = frame
 
-        inputs = self.processor(images=self.agent_frames, return_tensors="pt")
-        pixel_values = inputs["pixel_values"].to(self.device).unsqueeze(0)  # (1, S, C, H, W)
-        input_ids_dev = self.input_ids.to(self.device)
+        images = self.agent_frames[self.idx % self.stride::self.stride]
+        S = images.shape[0]
+        if S < self.context_len:
+            pad = torch.zeros((self.context_len - S, *images.shape[1:]), dtype=images.dtype, device=images.device,)
+            images = torch.cat((images, pad), dim=0)
 
-        output = self.model(input_ids=input_ids_dev, pixel_values=pixel_values)
-        logits = output["logits"][0, self.idx]                         # (num_classes,)
-        probs = torch.softmax(logits / self.temperature, dim=-1)            # temperature sampling
+        inputs = self.processor(images=images, return_tensors="pt")
+        pixel_values = inputs["pixel_values"].to(self.device).unsqueeze(0)  # (1, S, C, H, W)
+
+        output = self.model(pixel_values=pixel_values)
+        logits = output["logits"][0, math.floor(self.idx / self.stride)]                         # (num_classes,)
+        probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
         cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
         #print(probs)
 
-        if self.idx == 0: # Go right
-            cls = torch.tensor(7, dtype=torch.long, device=probs.device)
-
-        if self.idx == 63:
-            self.input_ids = torch.cat((self.input_ids[:, 1:], cls.view(1, 1).to('cpu')), dim=1)
-        else:
-            self.input_ids[0, self.idx] = cls.to('cpu')
-
-        if self.idx < 63:
+        if self.idx < self.buffersize - 1:
             self.idx += 1
 
         return CLASS_TO_KEY[int(cls.item())]
+    
+if __name__ == "__main__":
+
+    pokeagent = OnlinePokeagent()

@@ -162,7 +162,7 @@ def get_idm_labeller(device):
     idm = load_model()
     idm.to(device)
     idm.eval()
-    return partial(batched_infer_idm_labels, idm=idm)
+    return partial(batched_infer_idm_labels, idm=idm), idm
 
 def batched_infer_idm_labels(x, idm=None):
     with torch.no_grad():

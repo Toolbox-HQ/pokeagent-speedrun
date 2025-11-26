@@ -29,10 +29,24 @@ def rank0_print(*args):
     if local_rank == 0:
         print(*args)
 
+def init_model(model_args):
+
+    device = int(os.environ.get("LOCAL_RANK", 0))
+    device = torch.device(f"cuda:{device}")
+    model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
+    processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
+    model.idm_labelling_fn, idm = get_idm_labeller(device)
+
+    if training_args.gradient_checkpointing:
+        model.text_model.gradient_checkpointing_enable()
+        model.vision_tower.gradient_checkpointing_enable()
+        training_args.gradient_checkpointing = False
+    
+    return model, idm, processor, device
+
 def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArguments]:
     global local_rank
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    device = torch.device(f"cuda:{local_rank}")
     
     from argparse import ArgumentParser
 
@@ -53,19 +67,12 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     local_rank = training_args.local_rank
     training_args.output_dir = save_path
 
-    model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
-    processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
-    model.idm_labelling_fn = get_idm_labeller(device)
-
-    if training_args.gradient_checkpointing:
-        model.text_model.gradient_checkpointing_enable()
-        model.vision_tower.gradient_checkpointing_enable()
-        training_args.gradient_checkpointing = False
+    model, idm, processor, device = init_model(model_args)
     
     return model, processor, data_args, training_args
 
-def create_dataset(dataset: Dataset, processor: Callable) -> Tuple[Dataset, Dataset]:
-    dataset = IDMWindowDataset(data_args.data_path)
+def create_dataset(path: str, processor: Callable) -> Tuple[Dataset, Dataset]:
+    dataset = IDMWindowDataset(path)
     dataset.processor = processor
     train_ds, eval_ds = train_val_split(dataset, split=0.05)
     return train_ds, eval_ds
@@ -76,7 +83,31 @@ def train(model: nn.Module, training_args, train_ds: Dataset = None, eval_ds: Da
     trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.train()
 
+import torch.distributed as dist
+
+def init_distributed(backend="nccl", timeout=None):
+    if dist.is_initialized():
+        return
+
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+
+    # Needed for correct device placement
+    torch.cuda.set_device(local_rank)
+
+    dist.init_process_group(
+        backend=backend,
+        init_method="env://",
+        rank=rank,
+        world_size=world_size,
+        timeout=timeout,
+    )
+
 if __name__ == "__main__":
+
+    init_distributed()
+    
     model, processor, data_args, training_args = setup_training()
-    train_ds, eval_ds = create_dataset(data_args, processor)
+    train_ds, eval_ds = create_dataset(data_args.data_path, processor)
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)

@@ -6,3 +6,4 @@ sampling_strategy: temperature
 temperature: 0.01
 actions_per_seconds: 60
 inference_save_path: .cache/pokeagent/runs
+agent_fps: 2

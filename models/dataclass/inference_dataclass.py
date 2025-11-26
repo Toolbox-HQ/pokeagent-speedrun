@@ -19,3 +19,5 @@ class InferenceArguments:
     actions_per_seconds: Optional[int] = field(default=1)
 
     inference_save_path: Optional[str] = field(default=None) 
+
+    agent_fps: Optional[int] = field(default=None)
