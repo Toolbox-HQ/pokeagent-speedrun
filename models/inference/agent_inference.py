@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import transformers
+from models.util.repro import repro_init
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
@@ -94,7 +96,7 @@ class PokeagentStateOnly:
         output = self.model(pixel_values=pixel_values)
         logits = output["logits"][0, math.floor(self.idx / self.stride)]                         # (num_classes,)
 
-        if self.mode is "default":
+        if self.mode == "default":
             cls = torch.argmax(logits, dim=-1)
         else:
             probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
@@ -176,4 +178,26 @@ class OnlinePokeagent:
     
 if __name__ == "__main__":
 
-    pokeagent = OnlinePokeagent()
+    
+    from argparse import ArgumentParser
+
+    parser: ArgumentParser = ArgumentParser()
+    parser.add_argument("--config", type=str, required=True)
+    args = parser.parse_args()
+    save_path = repro_init(args.config)
+
+    parser = transformers.HfArgumentParser(
+        (ModelArguments, DataArguments, TrainingArguments, InferenceArguments)
+    )
+    (
+        model_args,
+        data_args,
+        training_args,
+        inference_args,
+    ) = parser.parse_yaml_file(yaml_file=args.config)
+
+    pokeagent = OnlinePokeagent(model_args,
+                                data_args,
+                                training_args,
+                                inference_args)
+    
