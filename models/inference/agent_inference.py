@@ -109,6 +109,7 @@ class PokeagentStateOnly:
         return CLASS_TO_KEY[int(cls.item())]
 
 from models.train.train_agent import setup_training, train, create_dataset, init_model
+from models.train.train_idm import train_idm
 
 class OnlinePokeagent:
     def __init__(self,
@@ -130,7 +131,7 @@ class OnlinePokeagent:
 
         self.buffersize = self.context_len // self.model_fps * self.actions_per_second
         self.stride = 60 // self.model_fps
-        
+        self.idm_config = None
         
         self.temperature = self.inference_args.temperature
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
@@ -141,12 +142,14 @@ class OnlinePokeagent:
 
     def train_agent(self, intervals: str):
         train_ds, eval_ds = create_dataset(intervals, self.processor)
+        self.model.train()
         train(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
+        self.model.eval()
 
-    def train_idm(self, dir: str):
-        print(dir)
-        
-
+    def train_idm(self, data_dir: str):
+        self.idm.train()
+        train_idm(self.idm, self.idm_config, data_dir)
+        self.idm.eval()
 
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
