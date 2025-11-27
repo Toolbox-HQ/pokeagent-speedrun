@@ -10,7 +10,7 @@ from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
 import random 
 import os
-from util.data import save_json
+from models.util.data import save_json
 
 
 MODEL_PATH = "/scratch/bsch/hf_cache/hub/models--facebook--dinov2-base/snapshots/f9e44c814b77203eaa57a6bdbbd535f21ede1415"
@@ -87,7 +87,6 @@ def main():
             if all(Path(p).exists() for p in [meta_filename, pt_filename]):
                 print(f"{filename} skipped")
                 continue
-
             results = Parallel(n_jobs=64, backend="threading")(
                 delayed(prcoess_batch)(model, processor, path, batch) for batch in batches
             )
@@ -113,6 +112,7 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     if sys.argv[1] == "meta":
         split()
     else:

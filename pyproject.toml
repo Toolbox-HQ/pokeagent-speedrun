@@ -49,7 +49,7 @@ dependencies = [
     "sentencepiece>=0.1.99",
     "six>=1.14.0",
     "torch>=2.0.0",
-    "torchcodec>=0.7.0",
+    "torchcodec==0.8",
     "torchvision>=0.23.0",
     "transformers>=4.36.0",
     "uvicorn[standard]>=0.24.0",

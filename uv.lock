@@ -135,7 +135,7 @@ requires-dist = [
     { name = "six", specifier = ">=1.14.0" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.0.0" },
     { name = "torch", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cu129" },
-    { name = "torchcodec", specifier = ">=0.7.0" },
+    { name = "torchcodec", specifier = "==0.8" },
     { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=0.23.0" },
     { name = "torchvision", marker = "sys_platform == 'linux' or sys_platform == 'win32'", specifier = ">=0.23.0", index = "https://download.pytorch.org/whl/cu129" },
     { name = "transformers", specifier = ">=4.36.0" },
@@ -2138,12 +2138,12 @@ wheels = [
 
 [[package]]
 name = "torchcodec"
-version = "0.7.0"
+version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6a/f1/bb2b5ab929ef3f092cb6508673510ffc2aafd8324493c94a2d41f1c8a683/torchcodec-0.7.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:967a14b31e04721901ddbf965f9e9f733f328c5e98a51e22f414e25ac32e20ba", size = 3388626, upload-time = "2025-09-08T14:17:50.433Z" },
-    { url = "https://files.pythonhosted.org/packages/06/14/8ff28247988365fc47e8471e28cdfd8d037232fcf73abb67ee815ac80f1d/torchcodec-0.7.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:afb1c48b52bd4ee8f485f5a427bb4e82380590255a26b8e9e3fe099e0779287f", size = 1419444, upload-time = "2025-09-08T14:17:41.479Z" },
-    { url = "https://files.pythonhosted.org/packages/1f/80/04f23dff2c7ac406d2d6b24a52be7654a946d2fdfe158b19341a524dae20/torchcodec-0.7.0-cp311-cp311-win_amd64.whl", hash = "sha256:a68765cd29159da3cf36eb5716481c617ad9d168fe06418bcde2a9360cc7eb5e", size = 1563430, upload-time = "2025-09-08T14:17:58.571Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/27/33cec4b4cf23832244989553b729c761d1a0f09294ff6beb30424527e07a/torchcodec-0.8.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:36e261367eee07db787a191dd0cd73a08df426c49730466b497cb12390e5d514", size = 3731067, upload-time = "2025-10-16T14:42:51.237Z" },
+    { url = "https://files.pythonhosted.org/packages/b5/0b/19a8ae47b5b89b815e104941e9becef197328fab51caec8591eee69f9bd4/torchcodec-0.8.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:fed2e085cd12d6d87c05d3a24085ddacb8b786d3005b7dff35c29683c8bda21d", size = 1885653, upload-time = "2025-10-16T14:43:36.381Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/a7/304deb5c8004eb80a68929cb919246912e2fb52349444f6182aa3e498478/torchcodec-0.8.0-cp311-cp311-win_amd64.whl", hash = "sha256:aeea99b2518d3ac1fbafcb84eb22d202faeac8b61581d14d3fdd14357ac4f560", size = 2065643, upload-time = "2025-10-16T14:43:20.724Z" },
 ]
 
 [[package]]
