@@ -3,9 +3,9 @@
 #SBATCH --ntasks-per-node=192
 #SBATCH --time=24:00:00
 #SBATCH --job-name=dino_agent_emb
-#SBATCH --output=/scratch/bsch/slurmjob_agent_emb_dinov2_%j.txt
-#SBATCH --mail-type=FAIL
+#SBATCH --output=/scratch/$USER/slurm_out/%j_dinov2_inference_job_output.txt
+#SBATCH --mail-type=ALL
 
 source p
 export PYTHONPATH=$(pwd)
-python ./inference/dino_embed.py embed
+python ../models/inference/dino_embed.py embed
