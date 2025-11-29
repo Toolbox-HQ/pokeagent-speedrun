@@ -4,6 +4,7 @@ from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoess
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 import math
+from pprint import pprint
 
 class Pokeagent:
     def __init__(self, device: str, temperature = 0.01):
@@ -50,10 +51,94 @@ class Pokeagent:
             self.idx += 1
 
         return CLASS_TO_KEY[int(cls.item())]
+    
+class PokeAgentActionConditioned:
+    def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, sampling_strategy="default"):
+
+        pprint({
+            "model_path": model_path,
+            "device": device,
+            "temperature": temperature,
+            "actions_per_second": actions_per_second,
+            "model_fps": model_fps,
+            "context_len": context_len,
+            "sampling_strategy": sampling_strategy,
+        })
+         
+        self.sampling_strategy = sampling_strategy
+        self.context_len = context_len
+        self.actions_per_second = actions_per_second
+        self.model_fps = model_fps
+        self.buffersize = self.context_len // self.model_fps * self.actions_per_second
+        self.stride = actions_per_second // self.model_fps
+        
+        self.device = torch.device(device)
+        self.temperature = temperature
+
+        self.model: nn.Module = init_lm_agent(lm="Qwen/Qwen3-1.7B", vision="google/siglip-base-patch16-224", use_cache=True)
+        state_dict = load_file(model_path)
+        self.model.load_state_dict(state_dict)
+        self.model.to(self.device).eval()
+        self.processor = init_vision_prcoessor("google/siglip-base-patch16-224", use_cache=True)
+
+
+        self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8) 
+        self.input_ids = torch.zeros(1, self.buffersize, dtype=torch.long) 
+        self.idx = 0
+
+        print(f"buffersize: {self.buffersize}")
+
+    @torch.no_grad()
+    def infer_action(self, frame: torch.Tensor): # (C, H, W)
+
+        if self.idx == self.buffersize - 1:
+            self.agent_frames = torch.cat((self.agent_frames[1:], frame.unsqueeze(0)), dim=0)
+        else:
+            self.agent_frames[self.idx] = frame
+
+        images = self.agent_frames[self.idx % self.stride::self.stride]
+
+        inputs = self.processor(images=images, return_tensors="pt")
+        pixel_values = inputs["pixel_values"].to(self.device).unsqueeze(0)  # (1, S, C, H, W)
+
+        input_ids_dev = self.input_ids.to(self.device)[:, self.idx % self.stride::self.stride]
+
+        output = self.model(input_ids=input_ids_dev, pixel_values=pixel_values)
+        logits = output["logits"][0, math.floor(self.idx / self.stride)]                     # (num_classes,)
+
+        if self.sampling_strategy == "default":
+            cls = torch.argmax(logits, dim=-1)
+        elif self.sampling_strategy == "temperature":
+            probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
+            cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
+
+        if self.idx == 0: # Go right
+            cls = torch.tensor(7, dtype=torch.long, device=probs.device)
+
+        if self.idx == self.buffersize - 1:
+            self.input_ids = torch.cat((self.input_ids[:, 1:], cls.view(1, 1).to('cpu')), dim=1)
+        else:
+            self.input_ids[0, self.idx] = cls.to('cpu')
+
+        if self.idx < self.buffersize - 1:
+            self.idx += 1
+
+        return CLASS_TO_KEY[int(cls.item())]
 
 class PokeagentStateOnly:
-    def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, mode="default"):
-        self.mode = mode
+    def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, sampling_strategy="default"):
+
+        pprint({
+            "model_path": model_path,
+            "device": device,
+            "temperature": temperature,
+            "actions_per_second": actions_per_second,
+            "model_fps": model_fps,
+            "context_len": context_len,
+            "sampling_strategy": sampling_strategy,
+        })
+         
+        self.sampling_strategy = sampling_strategy
         self.context_len = context_len
         self.actions_per_second = actions_per_second
         self.model_fps = model_fps
@@ -73,6 +158,8 @@ class PokeagentStateOnly:
         self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8)  
         self.idx = 0
 
+        print(f"buffersize: {self.buffersize}")
+
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
 
@@ -81,24 +168,30 @@ class PokeagentStateOnly:
         else:
             self.agent_frames[self.idx] = frame
 
+        # start = self.idx % self.stride
+        # indices = list(range(start, len(self.agent_frames), self.stride))
+        
+        # print(indices)
         images = self.agent_frames[self.idx % self.stride::self.stride]
-        S = images.shape[0]
-        if S < self.context_len:
-            pad = torch.zeros((self.context_len - S, *images.shape[1:]), dtype=images.dtype, device=images.device,)
-            images = torch.cat((images, pad), dim=0)
+        # print(f"length:{len(indices)}")
 
         inputs = self.processor(images=images, return_tensors="pt")
         pixel_values = inputs["pixel_values"].to(self.device).unsqueeze(0)  # (1, S, C, H, W)
 
         output = self.model(pixel_values=pixel_values)
-        logits = output["logits"][0, math.floor(self.idx / self.stride)]                         # (num_classes,)
+        logits = output["logits"][0, math.floor(self.idx / self.stride)]                     # (num_classes,)
+        # print(f"sampledidx: {indices[math.floor(self.idx / self.stride)]}")
+        # print(f"sampledlogit: {math.floor(self.idx / self.stride)}")
 
-        if self.mode is "default":
+        if self.sampling_strategy == "default":
             cls = torch.argmax(logits, dim=-1)
-        else:
+        elif self.sampling_strategy == "temperature":
             probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
             cls = torch.multinomial(probs, num_samples=1).squeeze(-1)      # sample an index
         #print(probs)
+
+        if self.idx == 0: # Go right
+            cls = torch.tensor(7, dtype=torch.long, device=probs.device)
 
         if self.idx < self.buffersize - 1:
             self.idx += 1

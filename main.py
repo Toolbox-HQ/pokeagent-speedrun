@@ -42,14 +42,16 @@ def run_exploration_agent(start_state, rom_path, output_path, agent_steps, rando
         conn.close()
 
 def run_agent(start_state, rom_path, output_path, agent_steps, sampling_strategy, temperature, model_checkpoint, architecture):
-    from models.inference.agent_inference import Pokeagent, PokeagentStateOnly
+    from models.inference.agent_inference import Pokeagent, PokeagentStateOnly, PokeAgentActionConditioned
     from tqdm import tqdm
     import torch
     from emulator.emulator_connection import EmulatorConnection
     import numpy as np
 
-    if architecture is "state_only":
+    if architecture == "state_only":
         agent = PokeagentStateOnly(model_path=model_checkpoint, device="cuda", temperature=temperature, actions_per_second=4, sampling_strategy=sampling_strategy)
+    elif architecture == "state_action_conditioned":
+        agent = PokeAgentActionConditioned(model_path=model_checkpoint, device="cuda", temperature=temperature, actions_per_second=4, sampling_strategy=sampling_strategy)
     else:
         raise Exception(f"{architecture} is not supported")
     
