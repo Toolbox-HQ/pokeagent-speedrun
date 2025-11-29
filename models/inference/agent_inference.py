@@ -185,11 +185,7 @@ class PokeagentStateOnly:
         # print(f"sampledidx: {indices[math.floor(self.idx / self.stride)]}")
         # print(f"sampledlogit: {math.floor(self.idx / self.stride)}")
 
-<<<<<<< HEAD
-        if self.sampling_strategy == "default":
-=======
         if self.mode == "default":
->>>>>>> 25804c91dc64149dbef5feda19b9778cb52612dc
             cls = torch.argmax(logits, dim=-1)
         elif self.sampling_strategy == "temperature":
             probs = torch.softmax(logits / self.temperature, dim=-1)       # temperature sampling
