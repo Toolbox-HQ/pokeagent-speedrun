@@ -8,4 +8,4 @@
 
 source p
 export PYTHONPATH=$(pwd)
-python ./models/inference/dino_embed.py embed
+python ./models/inference/dino_embed.py
