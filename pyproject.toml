@@ -49,10 +49,24 @@ dependencies = [
     "sentencepiece>=0.1.99",
     "six>=1.14.0",
     "torch>=2.0.0",
-    "torchcodec>=0.7.0",
+    "torchcodec==0.8",
     "torchvision>=0.23.0",
     "transformers>=4.36.0",
     "uvicorn[standard]>=0.24.0",
     "wandb>=0.22.0",
     "xxhash>=3.5.0",
 ]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu129", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu129", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+

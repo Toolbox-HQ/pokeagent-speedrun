@@ -3,7 +3,7 @@
 #SBATCH --time=7:00:00
 #SBATCH --gpus-per-node=1
 #SBATCH --job-name=agent_inference_job
-#SBATCH --output=/scratch/schneidx/slurm_out/%j_agent_inference_job_output.txt
+#SBATCH --output=/scratch/%u/slurm_out/%j_agent_inference_job_output.txt
 #SBATCH --mail-type=ALL
 
 set -e

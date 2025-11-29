@@ -18,6 +18,8 @@ From: ubuntu:24.04
             libsqlite3-0 \
             libelf1 \
             uuid-runtime \
+            build-essential \
+            vim \
             liblua5.4-0 && \
         apt-get clean && \
         rm -rf /var/lib/apt/lists/*
@@ -49,5 +51,9 @@ From: ubuntu:24.04
     uv sync
     
 %runscript
+    export TRITON_HOME="/app/.cache/pokeagent/tmp"
+    export TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp"
     cd /app
-    exec "$@"
+    . /app/env
+    . .venv/bin/activate
+    exec /bin/bash

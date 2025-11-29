@@ -18,6 +18,6 @@ gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "steps"
 eval_steps: 1
-dataloader_num_workers: 8
+dataloader_num_workers: 0
 data_path: ".cache/pokeagent/intervals.json"
 max_steps: 3

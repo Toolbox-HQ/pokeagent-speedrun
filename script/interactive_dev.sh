@@ -13,6 +13,9 @@ INDIVIDUAL_BINDS=" \
     --bind ./script:/app/script \
     --bind ./.s3cfg:/app/.s3cfg \
     --bind ./main.py:/app/main.py \
+    --bind ./.git:/app/.git \
+    --bind ./wandb:/app/wandb \
+    --bind $HOME/.cache/wandb:$HOME/.cache/wandb \
 "
 
 # Combine all binds
@@ -22,7 +25,8 @@ BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
 # apptainer build ./.cache/pokeagent/containers/dev.sif ./dconfig/apptainer_dev.def
 
 # Run Apptainer
-apptainer exec \
+apptainer run \
+    --writable-tmpfs \
     --contain \
     --nv \
     $INDIVIDUAL_BINDS \
@@ -30,5 +34,4 @@ apptainer exec \
     --bind ./.cache:/app/.cache \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
-    .cache/pokeagent/containers/dev.sif \
-    bash
+    .cache/pokeagent/containers/dev.sif

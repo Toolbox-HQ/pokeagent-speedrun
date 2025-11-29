@@ -10,20 +10,36 @@ from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
 import random 
 import os
-from util.data import save_json
+from models.util.data import save_json
+from models.util.misc import local_model_map
+from pathlib import Path
 
-
-MODEL_PATH = "/scratch/bsch/hf_cache/hub/models--facebook--dinov2-base/snapshots/f9e44c814b77203eaa57a6bdbbd535f21ede1415"
+MODEL_PATH = local_model_map("facebook/dinov2-base")
 OUTPUT_DIR = ".cache/pokeagent/dinov2"
+INPUT_DIR = ".cache/pokeagent/internet_data"
 
+def in_cache(path):
+    filename = os.path.splitext(os.path.basename(path))[0]
+    meta_filename = os.path.join(OUTPUT_DIR, f"{filename}.json")
+    pt_filename = os.path.join(OUTPUT_DIR, f"{filename}.pt")
+    os.makedirs(os.path.dirname(pt_filename), exist_ok=True)
+
+    # guard if script was resumed
+    if all(Path(p).exists() for p in [meta_filename, pt_filename]):
+        return True
+    else:
+        return False
+    
 class EmbeddingDataset(Dataset):
     
-    def __init__(self, path=".cache/pokeagent/video_list.json"):
-        with open(path, "r") as f:
-            self.video_list = json.loads(f.read())
-
+    def __init__(self, path=INPUT_DIR):
+        self.video_list = list(filter(lambda x: not in_cache(x), Path(path).iterdir()))
         self.interval_second = 2
         self.batch_size = 32
+
+        print(f"[DATASET] Embedding {len(self.video_list)}")
+        print(f"[DATASET] From {path}")
+        print(f"[DATASET] into {OUTPUT_DIR}")
 
     def __len__(self):
         return len(self.video_list)
@@ -49,14 +65,6 @@ class EmbeddingDataset(Dataset):
         if framebatch:
             framebatch_lol.append(framebatch)
         return framebatch_lol, decoder
-
-
-def split():
-    path = ".cache/pokeagent/internet_data"
-    files = [str(p) for p in Path(path).iterdir() if p.is_file()]
-    random.shuffle(files)
-    with open(".cache/pokeagent/video_list.json", "w") as f:
-        json.dump(files, f)
 
 
 def prcoess_batch(model, processor, path: str, batch: List[List]):
@@ -87,7 +95,6 @@ def main():
             if all(Path(p).exists() for p in [meta_filename, pt_filename]):
                 print(f"{filename} skipped")
                 continue
-
             results = Parallel(n_jobs=64, backend="threading")(
                 delayed(prcoess_batch)(model, processor, path, batch) for batch in batches
             )
@@ -112,8 +119,4 @@ def main():
             print(f"[ERROR] {str(e)}")
 
 if __name__ == "__main__":
-    import sys
-    if sys.argv[1] == "meta":
-        split()
-    else:
-        main()
+    main()

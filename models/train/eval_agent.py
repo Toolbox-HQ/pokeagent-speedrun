@@ -59,7 +59,7 @@ def evaluate() -> None:
 
         model = init_lm_agent(arch=arch, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
         processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
-        model.idm_labelling_fn = get_idm_labeller(device)
+        model.idm_labelling_fn, idm = get_idm_labeller(device)
 
         
         print(f"[LOADING WEIGHTS] {path}")

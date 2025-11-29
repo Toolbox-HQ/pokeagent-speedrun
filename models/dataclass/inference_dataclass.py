@@ -4,7 +4,8 @@ from typing import Optional
 @dataclass
 class InferenceArguments:
     
-    architecture: Optional[str] = field(default=None)
+    # be careful for overlapped keys in other classes
+    infernece_architecture: Optional[str] = field(default=None)
     
     model_checkpoint: Optional[str] = field(default=None)
 
@@ -16,4 +17,10 @@ class InferenceArguments:
     
     temperature: Optional[float] = field(default=1)
 
+    actions_per_seconds: Optional[int] = field(default=1)
+
     inference_save_path: Optional[str] = field(default=None) 
+
+    agent_fps: Optional[int] = field(default=None)
+
+    context_length: Optional[int] = field(default=None)

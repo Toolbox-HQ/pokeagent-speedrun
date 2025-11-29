@@ -1,0 +1,32 @@
+architecture: "state_only"
+lm_name_or_path: "Qwen/Qwen3-1.7B"
+vision_name_or_path: "google/siglip-base-patch16-224"
+load_path: .cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors
+output_dir: ".cache/pokeagent/checkpoints"
+num_train_epochs: 5
+per_device_train_batch_size: 4
+save_strategy: "steps"
+save_steps: 500
+save_total_limit: 10
+learning_rate: 5.0e-5
+weight_decay: 0.00001
+adam_beta2: 0.95
+warmup_ratio: 0.05
+lr_scheduler_type: "linear"
+logging_steps: 1
+gradient_checkpointing: true
+report_to: "wandb"
+eval_strategy: "steps"
+eval_steps: 237 # 1/2 epoch
+dataloader_num_workers: 8
+data_path: ".cache/pokeagent/agent_data/early_game.json"
+
+# inference
+agent_steps: 5000
+save_state: .cache/pokeagent/save_state/truck_start.state
+sampling_strategy: temperature
+temperature: 0.01
+actions_per_seconds: 60
+agent_fps: 2
+inference_save_path: .cache/pokeagent/runs
+context_length: 64
