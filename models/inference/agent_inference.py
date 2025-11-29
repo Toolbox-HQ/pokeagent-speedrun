@@ -6,11 +6,7 @@ from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoess
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 import math
-<<<<<<< HEAD
-from pprint import pprint
-=======
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
->>>>>>> 25804c91dc64149dbef5feda19b9778cb52612dc
 
 class Pokeagent:
     def __init__(self, device: str, temperature = 0.01):
