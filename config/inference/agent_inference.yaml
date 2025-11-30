@@ -1,3 +1,12 @@
+<<<<<<< HEAD
+architecture: state_action_conditioned
+model_checkpoint: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
+agent_steps: 10000
+save_state: .cache/pokeagent/save_state/truck_start.state
+sampling_strategy: temperature
+temperature: 1
+inference_save_path: .cache/pokeagent/runs
+=======
 infernece_architecture: state_only
 model_checkpoint: .cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors
 agent_steps: 5000
@@ -8,3 +17,4 @@ actions_per_seconds: 60
 agent_fps: 2
 inference_save_path: .cache/pokeagent/runs
 
+>>>>>>> 25804c91dc64149dbef5feda19b9778cb52612dc
