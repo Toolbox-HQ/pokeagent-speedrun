@@ -1,14 +1,12 @@
 import torch
 from torch.utils.data import Dataset
 from transformers import AutoModel
-import json
 from pathlib import Path
 from torchcodec.decoders import VideoDecoder
 from typing import List, Tuple
 from joblib import delayed, Parallel
 from tqdm import tqdm
 from transformers import AutoImageProcessor, AutoModel
-import random 
 import os
 from models.util.data import save_json
 from models.util.misc import local_model_map
@@ -37,7 +35,7 @@ class EmbeddingDataset(Dataset):
         self.interval_second = 2
         self.batch_size = 32
 
-        print(f"[DATASET] Embedding {len(self.video_list)}")
+        print(f"[DATASET] Embedding {len(self.video_list)} videos")
         print(f"[DATASET] From {path}")
         print(f"[DATASET] into {OUTPUT_DIR}")
 
@@ -83,9 +81,9 @@ def main():
     processor = AutoImageProcessor.from_pretrained(MODEL_PATH, use_fast=True)
     ds = EmbeddingDataset()
 
-    for path, batches, vr in tqdm(ds):
+    for i in tqdm(range(len(ds))): #path, batches, vr in tqdm(ds):
         try:
-            
+            path, batches, vr = ds[i]
             filename = os.path.splitext(os.path.basename(path))[0]
             meta_filename = os.path.join(OUTPUT_DIR, f"{filename}.json")
             pt_filename = os.path.join(OUTPUT_DIR, f"{filename}.pt")
@@ -108,12 +106,13 @@ def main():
 
             # save metadata
             metadata = [{
-                "video_path": path,
+                "video_path": str(path),
                 "video_fps": vr.metadata.average_fps,
                 "video_total_frames": len(vr),
                 "sampled_frame_index": idx,
             } for batch in batches for idx in batch]
             save_json(meta_filename, metadata)
+            print([f"[SUCCESS] Saved {str(path)}"])
         
         except Exception as e:
             print(f"[ERROR] {str(e)}")

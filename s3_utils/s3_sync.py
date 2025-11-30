@@ -26,6 +26,8 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=Non
     if cache_root != ".cache":
         print(f"[WARNING]: Non-standard download location")
 
+    keys_to_download = []
+
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
@@ -37,8 +39,13 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=Non
             if os.path.exists(local_path):
                 continue
 
-            print(f"[DOWNLOAD] s3://{bucket}/{key} => {local_path}")
-            s3.download_file(bucket, key, local_path)
+            keys_to_download.append((key, local_path))
+    
+    print(f"[S3] Found {len(keys_to_download)} videos to download")
+
+    for k,l in tqdm(keys_to_download):
+        print(f"[DOWNLOAD] s3://{bucket}/{k} => {l}")
+        s3.download_file(bucket, k, l)
 
 def check_s3_existing_videos(bucket_name: str, s3_prefix: str = "youtube_videos", video_ids: list = None):
     s3client = init_boto3_client()
