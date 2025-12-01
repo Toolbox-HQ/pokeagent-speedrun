@@ -7,6 +7,7 @@ from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 import math
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
+from models.train.train_idm import IDMArguments
 from pprint import pprint
 
 class Pokeagent:
@@ -210,12 +211,15 @@ class OnlinePokeagent:
                 training_args: TrainingArguments,
                 data_args: DataArguments,
                 inference_args: InferenceArguments,
+                idm_args: IDMArguments
                 ):
     
         self.model_args: ModelArguments = model_args
         self.training_args: TrainingArguments = training_args
         self.data_args: DataArguments = data_args
         self.inference_args: InferenceArguments = inference_args
+        self.idm_args: IDMArguments = idm_args
+
         assert inference_args.model_checkpoint is None, "Use model_args.load_path"
 
         self.context_len = self.inference_args.context_length
@@ -224,7 +228,7 @@ class OnlinePokeagent:
 
         self.buffersize = self.context_len // self.model_fps * self.actions_per_second
         self.stride = 60 // self.model_fps
-        self.idm_config = None
+
         
         self.temperature = self.inference_args.temperature
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
@@ -232,6 +236,7 @@ class OnlinePokeagent:
         self.model.to(self.device).eval()
         self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8)  
         self.idx = 0
+        print("[AGENT] Initialized agent")
 
     def train_agent(self, intervals: str):
         train_ds, eval_ds = create_dataset(intervals, self.processor)
@@ -241,7 +246,7 @@ class OnlinePokeagent:
 
     def train_idm(self, data_dir: str):
         self.idm.train()
-        train_idm(self.idm, self.idm_config, data_dir)
+        train_idm(self.idm, self.idm_args, data_dir)
         self.idm.eval()
 
     @torch.no_grad()
@@ -283,18 +288,21 @@ if __name__ == "__main__":
     save_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(
-        (ModelArguments, DataArguments, TrainingArguments, InferenceArguments)
+        (ModelArguments, DataArguments, TrainingArguments, InferenceArguments, IDMArguments)
     )
     (
         model_args,
         data_args,
         training_args,
         inference_args,
+        idm_args
     ) = parser.parse_yaml_file(yaml_file=args.config)
 
     pokeagent = OnlinePokeagent(model_args=model_args,
                                 training_args=training_args,
                                 data_args=data_args,
-                                inference_args=inference_args)
+                                inference_args=inference_args,
+                                idm_args=idm_args)
     
-    pokeagent.train_agent(".cache/pokeagent/agent_data/early_game.json")
+    #pokeagent.train_agent(".cache/pokeagent/agent_data/early_game.json")
+    pokeagent.train_idm("pokeagent/test_filter")

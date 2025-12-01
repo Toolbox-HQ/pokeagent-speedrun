@@ -30,3 +30,20 @@ actions_per_seconds: 60
 agent_fps: 2
 inference_save_path: .cache/pokeagent/runs
 context_length: 64
+
+# idm
+output_classes: 9
+idm_fps: 4
+idm_batch_size: 2
+idm_image_size: [128, 128]
+s3_bucket: b4schnei
+idm_epochs: 1
+idm_lr: 5.0e-5
+idm_weight_decay: 0
+idm_max_grad_norm: 1.0
+wandb_project: pokeagent
+idm_gradient_accumulation_steps: 1
+idm_eval_every: 100
+idm_scheduler: null
+idm_output_path: rnd_idm_model.pt
+idm_save_every: 100

@@ -17,32 +17,31 @@ from models.util.data import reduce_dict
 from pprint import pprint
 
 @dataclass
-class IDMConfig:
+class IDMArguments:
     # Model
-    torch_compile: bool = field(default=False)
     output_classes: int = field(default=None)
-    fps: int = field(default=4)
+    idm_fps: int = field(default=4)
 
     # Data
-    batch_size: int = field(default=256)
-    image_size: Tuple[int, int] = field(default_factory=lambda: (128, 128))
-    dataset_dir: str = field(default=None)
-    validation_dir: str = field(default=None)
+    idm_batch_size: int = field(default=256)
+    idm_image_size: Tuple[int, int] = field(default_factory=lambda: (128, 128))
+    idm_dataset_dir: str = field(default=None)
+    idm_validation_dir: str = field(default=None)
     s3_bucket: str = field(default=None)
 
 
     # Training
-    epochs: int = field(default=10)
-    lr: float = field(default=2e-4)
-    weight_decay: float = field(default=0.01)
-    max_grad_norm: float = field(default=1.0)
+    idm_epochs: int = field(default=10)
+    idm_lr: float = field(default=2e-4)
+    idm_weight_decay: float = field(default=0.01)
+    idm_max_grad_norm: float = field(default=1.0)
     wandb_project: str = field(default="pokeagent")
-    gradient_accumulation_steps: int = field(default=1)
-    eval_every: int = field(default=None)
-    scheduler: str = field(default=None)
+    idm_gradient_accumulation_steps: int = field(default=1)
+    idm_eval_every: int = field(default=None)
+    idm_scheduler: str = field(default=None)
     # Output
-    output_path: str = field(default="model.pt")
-    save_every: int = field(default=None)
+    idm_output_path: str = field(default="model.pt")
+    idm_save_every: int = field(default=None)
 
 def setup_distributed():
 
@@ -116,20 +115,23 @@ def save(model, save_path, cfg):
         torch.save(model.module.state_dict(), path)
         print(f"Model saved to {path}")
 
-def train_idm(model: torch.nn.Module, cfg: IDMConfig, dataset_path: str):
+def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
     
     rank = dist.get_rank()
     device = f"cuda:{rank}"
     world_size = dist.get_world_size()
+    
+    if rank == 0:
+        wandb.init(project="pokeagent", config=vars(cfg))
 
-    h,w = cfg.image_size
+    h,w = cfg.idm_image_size
     dataset = IDMDataset(data_path=dataset_path, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,
-        batch_size=cfg.batch_size,
+        batch_size=cfg.idm_batch_size,
         sampler=sampler,
-        num_workers=16*dist.get_world_size(),
+        num_workers=1*dist.get_world_size(), #num_workers=16*dist.get_world_size(),
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
@@ -148,22 +150,22 @@ def train_idm(model: torch.nn.Module, cfg: IDMConfig, dataset_path: str):
     # )
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
 
     avg_loss = 0
     avg_acc = 0
     global_step = 1
-    total_steps = cfg.epochs * len(loader)
+    total_steps = cfg.idm_epochs * len(loader)
     scheduler = None
 
-    if cfg.scheduler == "cosine":
+    if cfg.idm_scheduler == "cosine":
         from torch.optim.lr_scheduler import CosineAnnealingLR
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
     else:
         from torch.optim.lr_scheduler import ConstantLR
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
 
-    for epoch in range(cfg.epochs):
+    for epoch in range(cfg.idm_epochs):
         sampler.set_epoch(epoch)
         epoch_bar = tqdm(
             loader,
@@ -195,10 +197,10 @@ def train_idm(model: torch.nn.Module, cfg: IDMConfig, dataset_path: str):
 
             loss.backward()
 
-            if global_step % cfg.gradient_accumulation_steps == 0:
+            if global_step % cfg.idm_gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), 
-                    max_norm=cfg.max_grad_norm
+                    max_norm=cfg.idm_max_grad_norm
                 )
                 optimizer.step()
                 optimizer.zero_grad()
@@ -248,8 +250,8 @@ def main():
     args = arg_parser.parse_args()
     save_path = repro_init(args.config)
 
-    parser = HfArgumentParser(IDMConfig)
-    cfg: IDMConfig = parser.parse_yaml_file(args.config)[0]
+    parser = HfArgumentParser(IDMArguments)
+    cfg: IDMArguments = parser.parse_yaml_file(args.config)[0]
 
     rank, world_size = setup_distributed()
     device = torch.device(f"cuda:{rank}")
@@ -258,13 +260,13 @@ def main():
         wandb.init(project=cfg.wandb_project, config=vars(cfg))
 
 
-    model = IDModel(output_classes=cfg.output_classes, fps=cfg.fps)
+    model = IDModel(output_classes=cfg.output_classes, fps=cfg.idm_fps)
     #model.reset_parameters()
     model.to(device=device)
 
     # Training Dataset
-    h,w = cfg.image_size
-    dataset = IDMDataset(cfg.dataset_dir, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
+    h,w = cfg.idm_image_size
+    dataset = IDMDataset(cfg.idm_dataset_dir, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,
@@ -276,7 +278,7 @@ def main():
     )
 
     val_loader = None
-    val_dataset = IDMDataset(cfg.validation_dir, h=h, w=w, fps=model.fps, s3_bucket=cfg.s3_bucket, is_val=True)
+    val_dataset = IDMDataset(cfg.idm_validation_dir, h=h, w=w, fps=model.fps, s3_bucket=cfg.s3_bucket, is_val=True)
     val_sampler = DistributedSampler(val_dataset, shuffle=False)
     val_loader = DataLoader(
         val_dataset,
@@ -291,7 +293,7 @@ def main():
         model = torch.compile(model, fullgraph=True)
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
 
     avg_loss = 0
     avg_acc = 0
@@ -299,7 +301,7 @@ def main():
     total_steps = cfg.epochs * len(loader)
     scheduler = None
 
-    if cfg.scheduler == "cosine":
+    if cfg.idm_scheduler == "cosine":
         from torch.optim.lr_scheduler import CosineAnnealingLR
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
     else:
@@ -307,7 +309,7 @@ def main():
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
 
     # Training
-    for epoch in range(cfg.epochs):
+    for epoch in range(cfg.idm_epochs):
         sampler.set_epoch(epoch)
         epoch_bar = tqdm(
             loader,
@@ -339,10 +341,10 @@ def main():
 
             loss.backward()
 
-            if global_step % cfg.gradient_accumulation_steps == 0:
+            if global_step % cfg.idm_gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(), 
-                    max_norm=cfg.max_grad_norm
+                    max_norm=cfg.idm_max_grad_norm
                 )
                 optimizer.step()
                 optimizer.zero_grad()
@@ -377,10 +379,10 @@ def main():
                     f"iter={epoch_bar.n}/{epoch_bar.total}"
                 )
                 
-            if cfg.save_every and global_step % cfg.save_every == 0:
+            if cfg.idm_save_every and global_step % cfg.idm_save_every == 0:
                 save(model, os.path.join(save_path,str(global_step)), cfg)
 
-            if cfg.eval_every and global_step % cfg.eval_every == 0:
+            if cfg.idm_eval_every and global_step % cfg.idm_eval_every == 0:
                 validate(model, val_loader, device, rank)
 
         avg_loss = total_loss / num_batches
