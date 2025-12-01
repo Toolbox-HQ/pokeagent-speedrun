@@ -19,7 +19,6 @@ report_to: "wandb"
 eval_strategy: "steps"
 eval_steps: 237 # 1/2 epoch
 dataloader_num_workers: 8
-data_path: ".cache/pokeagent/agent_data/early_game.json"
 
 # inference
 agent_steps: 5000
