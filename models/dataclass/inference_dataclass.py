@@ -26,3 +26,14 @@ class InferenceArguments:
     context_length: Optional[int] = field(default=None)
 
     online: Optional[bool] = field(default=False)
+
+    rom_path: Optional[str] = field(default=None)
+
+    idm_data_sample_interval: Optional[int] = field(default=None)
+
+    idm_data_sample_length: Optional[int] = field(default=None)
+
+    agent_data_sample_length: Optional[int] = field(default=None)
+
+    def __iter__(self):
+        return iter(vars(self).values())

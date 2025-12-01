@@ -22,14 +22,19 @@ dataloader_num_workers: 8
 data_path: ".cache/pokeagent/agent_data/early_game.json"
 
 # inference
-agent_steps: 5000
+agent_steps: 500
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
-temperature: 0.01
-actions_per_seconds: 60
+temperature: 1
+actions_per_seconds: 4
 agent_fps: 2
 inference_save_path: .cache/pokeagent/runs
 context_length: 64
+rom_path: .cache/pokeagent/rom/rom.gba
+online: True
+idm_data_sample_interval: 20
+idm_data_sample_length: 100
+agent_data_sample_length: 200
 
 # idm
 output_classes: 9

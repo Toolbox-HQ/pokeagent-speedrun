@@ -4,17 +4,17 @@ import io
 
 class EmulatorConnection:
 
-    def __init__(self, rom_path, data_path):
+    def __init__(self, rom_path):
         ctx = mp.get_context("spawn")
         self.parent_conn, child_conn = ctx.Pipe(duplex=True)
-        self._child = ctx.Process(target=self._start_subprocess, args=(rom_path, data_path, child_conn))
+        self._child = ctx.Process(target=self._start_subprocess, args=(rom_path, child_conn))
         self._child.start()
         child_conn.close()
 
     @staticmethod
-    def _start_subprocess(rom_path, data_path, conn):
+    def _start_subprocess(rom_path, conn):
         from emulator.emulator_subprocess import _initialize_emulator
-        _initialize_emulator(rom_path, data_path, conn)
+        _initialize_emulator(rom_path, conn)
     
     def load_state(self, state_bytes: bytes):
         self.parent_conn.send(("load_state", state_bytes))
@@ -42,6 +42,15 @@ class EmulatorConnection:
     def close(self):
         self.parent_conn.send(("quit", None))
         self._child.join()
-        
-    
 
+    def create_video_writer(self, path: str):
+        self.parent_conn.send(("create_video_writer", path))
+    
+    def start_video_writer(self, path: str):
+        self.parent_conn.send(("start_video_writer", path))
+
+    def pause_video_writer(self, path: str):
+        self.parent_conn.send(("pause_video_writer", path))
+
+    def release_video_writer(self, path: str):
+        self.parent_conn.send(("release_video_writer", path))
