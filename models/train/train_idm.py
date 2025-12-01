@@ -15,33 +15,8 @@ from models.util.repro import repro_init
 from models.policy import CLASS_TO_KEY
 from models.util.data import reduce_dict
 from pprint import pprint
+from models.dataclass import IDMArguments
 
-@dataclass
-class IDMArguments:
-    # Model
-    output_classes: int = field(default=None)
-    idm_fps: int = field(default=4)
-
-    # Data
-    idm_batch_size: int = field(default=256)
-    idm_image_size: Tuple[int, int] = field(default_factory=lambda: (128, 128))
-    idm_dataset_dir: str = field(default=None)
-    idm_validation_dir: str = field(default=None)
-    s3_bucket: str = field(default=None)
-
-
-    # Training
-    idm_epochs: int = field(default=10)
-    idm_lr: float = field(default=2e-4)
-    idm_weight_decay: float = field(default=0.01)
-    idm_max_grad_norm: float = field(default=1.0)
-    wandb_project: str = field(default="pokeagent")
-    idm_gradient_accumulation_steps: int = field(default=1)
-    idm_eval_every: int = field(default=None)
-    idm_scheduler: str = field(default=None)
-    # Output
-    idm_output_path: str = field(default="model.pt")
-    idm_save_every: int = field(default=None)
 
 def setup_distributed():
 
@@ -120,7 +95,7 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
     rank = dist.get_rank()
     device = f"cuda:{rank}"
     world_size = dist.get_world_size()
-    
+
     if rank == 0:
         wandb.init(project="pokeagent", config=vars(cfg))
 

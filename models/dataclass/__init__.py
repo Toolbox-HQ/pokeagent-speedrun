@@ -4,7 +4,7 @@ T = TypeVar("T")
 
 # module imports
 from .emulator import *
-from .model_dataclass import DataArguments, TrainingArguments, ModelArguments, EvalArguments
+from .model_dataclass import DataArguments, TrainingArguments, ModelArguments, EvalArguments, IDMArguments
 from .inference_dataclass import InferenceArguments
 
 def parse_dataclass(path: str, cls: T):
@@ -16,7 +16,8 @@ __all__ = ["parse_dataclass",
            "PolicyConfig",
            "DataArguments",
            "TrainingArguments",
-           "ModelArguments"
-           "EvalArguments"
-           "InferenceArguments"
+           "ModelArguments",
+           "EvalArguments",
+           "InferenceArguments",
+           "IDMArguments",
            ]

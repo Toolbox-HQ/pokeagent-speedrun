@@ -6,8 +6,7 @@ from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoess
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 import math
-from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
-from models.train.train_idm import IDMArguments
+from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments, IDMArguments
 from pprint import pprint
 
 class Pokeagent:
