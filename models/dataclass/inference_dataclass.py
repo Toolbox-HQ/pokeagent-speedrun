@@ -5,7 +5,7 @@ from typing import Optional
 class InferenceArguments:
     
     # be careful for overlapped keys in other classes
-    infernece_architecture: Optional[str] = field(default=None)
+    inference_architecture: Optional[str] = field(default=None)
     
     model_checkpoint: Optional[str] = field(default=None)
 
@@ -24,3 +24,5 @@ class InferenceArguments:
     agent_fps: Optional[int] = field(default=None)
 
     context_length: Optional[int] = field(default=None)
+
+    online: Optional[bool] = field(default=False)

@@ -81,7 +81,7 @@ def main(args: InferenceArguments):
     SAMPLING_STRATEGY = args.sampling_strategy
     TEMPERATURE = args.temperature
     MODEL_CHECKPOINT = args.model_checkpoint
-    ARCHITECTURE = args.architecture
+    ARCHITECTURE = args.inference_architecture
     RANDOM_STEPS = 1000
     INTERVAL = 20
     ROM_PATH = ".cache/pokeagent/rom/rom.gba"
