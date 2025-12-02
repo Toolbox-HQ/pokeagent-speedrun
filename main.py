@@ -30,13 +30,29 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
+
+    start = True
     video_path = inference_args.inference_save_path + f'/output'
+    bootstap_count = 0
+    query_path_template = '.cache/pokeagent/query_video/query'
+    query_path = query_path_template + str(bootstap_count)
     conn = EmulatorConnection(inference_args.rom_path)
     conn.load_state(curr_state)
+    conn.create_video_writer(query_path)
+    conn.start_video_writer(query_path)
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)
     with ThreadPoolExecutor(max_workers=100) as executor:
         for i in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
+            if i % inference_args.bootstrap_interval == 0:
+                if not start:
+                    conn.release_video_writer(query_path)
+                    bootstap_count += 1
+                    query_path = query_path_template + str(bootstap_count)
+                    conn.create_video_writer(query_path)
+                    conn.start_video_writer(query_path)
+                else:
+                    start = False
             if i % inference_args.idm_data_sample_interval == 0:
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)

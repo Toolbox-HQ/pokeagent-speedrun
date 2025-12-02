@@ -49,7 +49,7 @@ def _get_current_frame():
     CONNECTION.send(("image", buffer.getvalue()))
 
 def _quit():
-    for key, value in VwJwFrameIdxWritePairs:
+    for key, value in VwJwFrameIdxWritePairs.items():
         value['vw'].release()
         value['jw'].close()
     EMULATOR.stop()
