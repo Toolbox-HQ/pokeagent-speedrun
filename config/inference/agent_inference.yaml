@@ -1,9 +1,12 @@
 inference_architecture: state_action_conditioned
 model_checkpoint: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
-agent_steps: 100
+agent_steps: 300
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
 inference_save_path: .cache/pokeagent/runs
 rom_path: .cache/pokeagent/rom/rom.gba
 online: False
+context_length: 64
+actions_per_second: 4
+agent_fps: 2

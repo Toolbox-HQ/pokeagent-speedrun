@@ -17,7 +17,7 @@ class InferenceArguments:
     
     temperature: Optional[float] = field(default=1)
 
-    actions_per_seconds: Optional[int] = field(default=1)
+    actions_per_second: Optional[int] = field(default=1)
 
     inference_save_path: Optional[str] = field(default=None) 
 
@@ -31,9 +31,9 @@ class InferenceArguments:
 
     idm_data_sample_interval: Optional[int] = field(default=None)
 
-    idm_data_sample_length: Optional[int] = field(default=None)
+    idm_data_sample_steps: Optional[int] = field(default=None)
 
-    agent_data_sample_length: Optional[int] = field(default=None)
+    bootstrap_interval: Optional[int] = field(default=None)
 
     def __iter__(self):
         return iter(vars(self).values())

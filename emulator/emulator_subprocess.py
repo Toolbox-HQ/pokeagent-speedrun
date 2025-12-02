@@ -10,9 +10,6 @@ EMULATOR = None
 CONNECTION = None
 KEY = "none"
 FRAME = None
-# VW = None # Video writer
-# JW = None # Json writer
-# FRAME_INDEX = -1
 VwJwFrameIdxWritePairs = {}
 
 def _initialize_emulator(rom_path, connection):
@@ -21,10 +18,6 @@ def _initialize_emulator(rom_path, connection):
     EMULATOR = MGBAEmulator(rom_path)
     EMULATOR.initialize()
     CONNECTION = connection
-    # os.makedirs(os.path.dirname(data_path + ".mp4"), exist_ok=True)
-    # VW = cv2.VideoWriter(data_path + ".mp4", cv2.VideoWriter_fourcc(*"mp4v"), 60, (EMULATOR.width, EMULATOR.height))
-    # assert VW.isOpened(), "VideoWriter did not initialize correctly."
-    # JW = JsonWriter(data_path + ".json")
     _loop()
 
 def _load_state(state_bytes: bytes):

@@ -1,7 +1,7 @@
-architecture: "state_only"
+architecture: "state_action_conditioned"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
-load_path: .cache/pokeagent/checkpoints/early_game_state_only_agent/5b499486d21887611f62005c1c08280b91df05c5/checkpoint-2365/model.safetensors
+load_path: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
 output_dir: ".cache/pokeagent/checkpoints"
 num_train_epochs: 5
 per_device_train_batch_size: 4
@@ -22,19 +22,20 @@ dataloader_num_workers: 8
 data_path: ".cache/pokeagent/agent_data/early_game.json"
 
 # inference
-agent_steps: 500
+inference_architecture: state_action_conditioned
+agent_steps: 300
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
-actions_per_seconds: 4
-agent_fps: 2
 inference_save_path: .cache/pokeagent/runs
-context_length: 64
 rom_path: .cache/pokeagent/rom/rom.gba
 online: True
 idm_data_sample_interval: 20
-idm_data_sample_length: 100
-agent_data_sample_length: 200
+idm_data_sample_steps: 100
+bootstrap_interval: 100
+context_length: 64
+actions_per_second: 4
+agent_fps: 2
 
 # idm
 output_classes: 9
