@@ -19,7 +19,7 @@ class IDMDataset(Dataset):
 
     def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, is_val=False):
         
-        self.local_path = os.path.join(".cache", data_path)
+        self.local_path = data_path
         self.fps = fps
         self.h = h
         self.w = w

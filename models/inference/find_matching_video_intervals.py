@@ -113,7 +113,6 @@ def top_runs_greedy(a, idxs, L=30, entropy_threshold=0.7):
     res.sort(key=lambda x: x[1])
     return res
 
-
 # top-level
 def _process_chunk_p(args):
     sims, idxs, chunk, L = args
@@ -276,17 +275,16 @@ def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_in
             "video_fps": float(start_meta.get("video_fps", start_meta.get("fps", 0.0))),
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
-
+        print(f"hrs: {total_seconds / 3600}")
     return results
 
 def main():
     BUCKET_NAME = "b4schnei"
-    EMB_DIR = ".cache/pokeagent/dinov2"
     device = "cpu"
 
-    s3 = init_boto3_client()
+    #s3 = init_boto3_client()
     query_emb = dino_embeddings_every(".cache/pokeagent/runs/output.mp4", device=device)
-    meta, E = load_embeddings_and_metadata(EMB_DIR, device=device)
+    meta, E = load_merged_embeddings(".cache/pokeagent/embedding/db", device=device)
     sims, idxs = multi_cosine_search(E, query_emb)
     top_runs = find_top_runs_concurrent(sims, idxs, meta, L=270, threshold=400, max_workers=8)
 
@@ -303,8 +301,8 @@ def main():
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
 
-        if i > 200 and i < 210 or i > 390:
-            save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
+        # if i > 200 and i < 210 or i > 390:
+        #     save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
 
     print(f"hrs: {total_seconds / 3600}")
     with open("results.json", "w") as f:
