@@ -28,8 +28,13 @@ INDIVIDUAL_BINDS=" \
 # Combine all binds
 BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
 
-# Build cmd for dev is:
-# apptainer build ./.cache/pokeagent/containers/dev.sif ./dconfig/apptainer_dev.def
+# Determine number of GPUs
+if [[ -n "$CUDA_VISIBLE_DEVICES" ]]; then
+    NUM_GPUS=$(echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l)
+else
+    NUM_GPUS=$(nvidia-smi -L | wc -l)
+fi
+
 apptainer exec \
     --contain \
     --nv \
@@ -44,9 +49,9 @@ apptainer exec \
     .cache/pokeagent/containers/dev.sif \
     bash -c "cd /app && . .venv/bin/activate && \
         torchrun \
-          --nproc_per_node=$(nvidia-smi -L | wc -l) \
+          --nproc_per_node=$NUM_GPUS \
           --nnodes=1 \
           --node_rank=0 \
           --master_addr=localhost \
           main.py \
-          --config $1"
+          --config \"$1\""
