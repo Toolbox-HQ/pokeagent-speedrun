@@ -242,12 +242,23 @@ def entropy_of_range(idxs: np.ndarray, start: int, end: int) -> float:
     p = counts / counts.sum()
     return float(-(p * np.log(p + 1e-12)).sum())
 
-def get_intervals(query_path: str, emb_dir: str, interval_length: int, num_intervals: int):
+def load_merged_embeddings(out_prefix: str, device: str = "cpu"):
+    meta_path = f"{out_prefix}.json"
+    tensor_path = f"{out_prefix}.pt"
+
+    with open(meta_path, "r") as f:
+        all_meta = json.load(f)
+
+    embeddings = torch.load(tensor_path, map_location=device)
+
+    return all_meta, embeddings
+
+def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_intervals: int):
     num_embeds_per_sample = interval_length // 2
     device = "cpu"
 
     query_emb = dino_embeddings_every(query_path, device=device)
-    meta, E = load_embeddings_and_metadata(emb_dir, device=device)
+    meta, E = load_merged_embeddings(emb_prefix, device=device)
     sims, idxs = multi_cosine_search(E, query_emb)
     top_runs = find_top_runs_concurrent(sims, idxs, meta, L=num_embeds_per_sample, threshold=num_intervals, max_workers=8)
 
