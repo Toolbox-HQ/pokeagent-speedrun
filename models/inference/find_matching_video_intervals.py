@@ -19,6 +19,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import List
 from tqdm import tqdm
+from models.util.misc import local_model_map
 
 def prcoess_batch(model, processor, path: str, device=None):
     decoder = VideoDecoder(path)
@@ -38,6 +39,7 @@ def prcoess_batch(model, processor, path: str, device=None):
     return image_embeds
 
 def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base", device=None):
+    model_id = local_model_map(model_id)
     processor = AutoImageProcessor.from_pretrained(model_id)
     model = AutoModel.from_pretrained(model_id).to(device).eval()
     embeds = prcoess_batch(model, processor, video_path, device)
