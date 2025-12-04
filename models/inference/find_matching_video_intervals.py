@@ -132,7 +132,7 @@ def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=240, max_workers
     scored = []
     with ProcessPoolExecutor(max_workers=n) as ex:
         futs = [ex.submit(_process_chunk_p, (sims, idxs, c, L)) for c in chunks]
-        for f in tqdm(as_completed(futs), total=len(futs)):
+        for f in as_completed(futs):
             scored.extend(f.result())
 
     scored.sort(key=lambda t: t[0], reverse=True)
@@ -241,6 +241,30 @@ def entropy_of_range(idxs: np.ndarray, start: int, end: int) -> float:
     vals, counts = np.unique(idxs[start:end+1], return_counts=True)
     p = counts / counts.sum()
     return float(-(p * np.log(p + 1e-12)).sum())
+
+def get_intervals(query_path: str, emb_dir: str, interval_length: int, num_intervals: int):
+    num_embeds_per_sample = interval_length // 2
+    device = "cpu"
+
+    query_emb = dino_embeddings_every(query_path, device=device)
+    meta, E = load_embeddings_and_metadata(emb_dir, device=device)
+    sims, idxs = multi_cosine_search(E, query_emb)
+    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=num_embeds_per_sample, threshold=num_intervals, max_workers=8)
+
+    total_seconds = 0
+    results = []
+    for i, (start, end, _) in enumerate(top_runs):
+        start_meta = meta[start]
+        end_meta = meta[end]
+        results.append({
+            "start": int(start_meta.get("sampled_frame_index", start)),
+            "end": int(end_meta.get("sampled_frame_index", end)),
+            "video_path": start_meta.get("video_path", ""),
+            "video_fps": float(start_meta.get("video_fps", start_meta.get("fps", 0.0))),
+        })
+        total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
+
+    return results
 
 def main():
     BUCKET_NAME = "b4schnei"
