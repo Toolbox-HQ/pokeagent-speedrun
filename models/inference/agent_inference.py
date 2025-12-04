@@ -230,17 +230,6 @@ class OnlinePokeagentStateOnly:
 
         return CLASS_TO_KEY[int(cls.item())]
 
-
-
-
-
-
-
-
-
-
-
-
 class OnlinePokeagentStateActionConditioned:
     def __init__(self,
                 model_args: ModelArguments,

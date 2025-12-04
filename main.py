@@ -19,6 +19,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     import torch
     import uuid
     from concurrent.futures import ThreadPoolExecutor
+    from models.inference.find_matching_video_intervals import get_intervals
+    import json
     
     with open(inference_args.save_state, 'rb') as f:
         curr_state = f.read()
@@ -47,6 +49,12 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
             if i % inference_args.bootstrap_interval == 0:
                 if not start:
                     conn.release_video_writer(query_path)
+                    agent.train_idm(".cache/pokeagent/idm_data")
+                    video_intervals = get_intervals(query_path, ".cache/pokeagent/dinov2", 540, 400)
+                    interval_path = f".cache/pokeagent/agent_data/intervals{bootstap_count}.json"
+                    with open(interval_path, "w") as f:
+                        json.dump(video_intervals, f)
+                    agent.train_agent(interval_path)
                     bootstap_count += 1
                     query_path = query_path_template + str(bootstap_count)
                     conn.create_video_writer(query_path)
