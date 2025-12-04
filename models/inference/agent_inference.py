@@ -197,7 +197,7 @@ class OnlinePokeagentStateOnly:
 
     def train_idm(self, data_dir: str):
         self.idm.train()
-        train_idm(self.idm, self.idm_args, data_dir)
+        train_idm(self.idm, self.idm_args, data_dir, True)
         self.idm.eval()
 
     @torch.no_grad()

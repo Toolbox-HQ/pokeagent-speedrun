@@ -32,31 +32,37 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
-
     start = True
     video_path = inference_args.inference_save_path + f'/output'
-    bootstap_count = 0
+    bootstrap_count = 0
+
     query_path_template = '.cache/pokeagent/query_video/query'
-    query_path = query_path_template + str(bootstap_count)
+    idm_data_path_template = '.cache/pokeagent/idm_data/bootstrap'
+    dino_embedding_path = '.cache/pokeagent/dinov2'
+    interval_path_template = '.cache/pokeagent/agent_data/intervals'
+    query_path = query_path_template + str(bootstrap_count)
+
     conn = EmulatorConnection(inference_args.rom_path)
     conn.load_state(curr_state)
     conn.create_video_writer(query_path)
     conn.start_video_writer(query_path)
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)
+
     with ThreadPoolExecutor(max_workers=100) as executor:
         for i in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
             if i % inference_args.bootstrap_interval == 0:
                 if not start:
                     conn.release_video_writer(query_path)
-                    agent.train_idm(".cache/pokeagent/idm_data")
-                    video_intervals = get_intervals(query_path, ".cache/pokeagent/dinov2", 540, 400)
-                    interval_path = f".cache/pokeagent/agent_data/intervals{bootstap_count}.json"
+                    #agent.train_idm(idm_data_path_template + str(bootstrap_count))
+                    video_intervals = get_intervals(query_path, dino_embedding_path, 540, 400)
+                    interval_path = interval_path_template + f"{bootstrap_count}.json"
                     with open(interval_path, "w") as f:
                         json.dump(video_intervals, f)
-                    agent.train_agent(interval_path)
-                    bootstap_count += 1
-                    query_path = query_path_template + str(bootstap_count)
+                    #agent.train_agent(interval_path)
+
+                    bootstrap_count += 1
+                    query_path = query_path_template + str(bootstrap_count)
                     conn.create_video_writer(query_path)
                     conn.start_video_writer(query_path)
                 else:
@@ -65,12 +71,15 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)
                 new_conn.load_state(conn.get_state())
-                executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, f".cache/pokeagent/idm_data/{id}")
+                executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/{id}")
+
             tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
             key = agent.infer_action(tensor)
             conn.run_frames(7)
             conn.set_key(key)
             conn.run_frames(8)
+
+    conn.release_video_writer(query_path)
     conn.release_video_writer(video_path)
     conn.close()
 

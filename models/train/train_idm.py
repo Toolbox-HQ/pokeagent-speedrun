@@ -88,7 +88,7 @@ def save(model, save_path, cfg):
         torch.save(model.module.state_dict(), path)
         print(f"Model saved to {path}")
 
-def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
+def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, action_filter: bool = False):
     
     rank = dist.get_rank()
     device = f"cuda:{rank}"
@@ -99,6 +99,9 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
 
     h,w = cfg.idm_image_size
     dataset = IDMDataset(data_path=dataset_path, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
+    if action_filter:
+        dataset.action_filter(dataset.raw_data)
+
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,
