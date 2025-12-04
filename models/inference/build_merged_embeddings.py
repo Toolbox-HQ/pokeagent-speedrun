@@ -1,7 +1,7 @@
 import os
 import json
 import torch
-from models.inference.find_matching_video_intervals import load_embeddings_and_metadata
+from .find_matching_video_intervals import load_embeddings_and_metadata
 
 # assumes load_embeddings_and_metadata is already defined
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("folder", type=str)
+    parser.add_argument("--folder", type=str)
     parser.add_argument("--out-prefix", type=str, default="merged_embeddings")
     parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
