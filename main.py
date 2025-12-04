@@ -118,11 +118,13 @@ if __name__ == "__main__":
     import transformers
     from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
     from models.train.train_idm import IDMArguments
+    from models.util.repro import repro_init
+    from models.util.dist import init_distributed
 
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
     args = parser.parse_args()
-    #save_path = repro_init(args.config)
+    save_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments, InferenceArguments, IDMArguments)
@@ -134,6 +136,8 @@ if __name__ == "__main__":
         inference_args,
         idm_args
     ) = parser.parse_yaml_file(yaml_file=args.config)
+
+    init_distributed()
 
     main(model_args,
         data_args,

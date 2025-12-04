@@ -10,6 +10,7 @@ from models.util.trainer import Trainer
 from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.util.repro import repro_init
+from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
 import random
@@ -83,26 +84,6 @@ def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset 
     trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.train()
 
-import torch.distributed as dist
-
-def init_distributed(backend="nccl", timeout=None):
-    if dist.is_initialized():
-        return
-
-    rank = int(os.environ["RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-
-    # Needed for correct device placement
-    torch.cuda.set_device(local_rank)
-
-    dist.init_process_group(
-        backend=backend,
-        init_method="env://",
-        rank=rank,
-        world_size=world_size,
-        timeout=timeout,
-    )
 
 if __name__ == "__main__":
 

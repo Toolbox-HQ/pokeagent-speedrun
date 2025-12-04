@@ -20,6 +20,9 @@ INDIVIDUAL_BINDS=" \
     --bind ./script:/app/script \
     --bind ./.s3cfg:/app/.s3cfg \
     --bind ./main.py:/app/main.py \
+    --bind ./.git:/app/.git \
+    --bind ./wandb:/app/wandb \
+    --bind $HOME/.config/wandb:$HOME/.config/wandb
 "
 
 # Combine all binds
@@ -27,8 +30,6 @@ BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
 
 # Build cmd for dev is:
 # apptainer build ./.cache/pokeagent/containers/dev.sif ./dconfig/apptainer_dev.def
-
-# Run Apptainer
 apptainer exec \
     --contain \
     --nv \
@@ -37,5 +38,15 @@ apptainer exec \
     --bind ./.cache:/app/.cache \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
+    --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
+    --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
+    --env WANDB_MODE="disabled" \
     .cache/pokeagent/containers/dev.sif \
-    bash -c "cd /app && . .venv/bin/activate && python main.py --config $1"
+    bash -c "cd /app && . .venv/bin/activate && \
+        torchrun \
+          --nproc_per_node=$(nvidia-smi -L | wc -l) \
+          --nnodes=1 \
+          --node_rank=0 \
+          --master_addr=localhost \
+          main.py \
+          --config $1"
