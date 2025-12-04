@@ -51,5 +51,6 @@ apptainer exec \
           --nnodes=1 \
           --node_rank=0 \
           --master_addr=localhost \
+          --master_port=35332 \
           main.py \
           --config \"$1\""

@@ -86,8 +86,12 @@ def list_files_with_extentions(dir: str, ext: str):
 
 def map_json_to_mp4(filename):
     dirname, basename = os.path.split(filename)
-    new_basename = re.sub(r'^keys_([a-f0-9]+)\.json$', r'output_\1.mp4', basename)
-    return path.join(dirname, new_basename)
+    mp4_path = path.join(dirname, re.sub(r'\.json$', '.mp4', basename))
+
+    if os.path.exists(mp4_path): 
+       return mp4_path
+    else: # Deprecated naming convention for idm videos
+        return path.join(dirname, re.sub(r'^keys_([a-f0-9]+)\.json$', r'output_\1.mp4', basename))
 
 def has_s3():
     assert find_s3_cfg()
@@ -196,8 +200,13 @@ def download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None
     assert files_downloaded > 0, "No files were found in s3"
 
 def load_json(path):
-    with open(path, "rb") as f:
-        data = orjson.loads(f.read())
+    try:
+        with open(path, "rb") as f:
+            data = orjson.loads(f.read())
+    except Exception as e:
+        print(f"[JSON ERROR] failed to load {path}")
+        raise e
+
     return data
 
 def save_json(path: str, data) -> None:

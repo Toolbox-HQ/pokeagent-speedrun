@@ -30,7 +30,7 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
 
     if labels:
         with open(os.path.splitext(video_path)[0]+'.json', "rb") as f:
-            actions = torch.tensor([ KEY_TO_CLASS[action["keys"]] for i, action in enumerate(orjson.loads(f.read())) if i in idxs ], dtype=torch.int64)
+            actions = torch.tensor([KEY_TO_CLASS[action["keys"]] for i, action in enumerate(orjson.loads(f.read())) if i in idxs ], dtype=torch.int64)
 
     frames: torch.Tensor = VideoDecoder(video_path).get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
     return (frames, actions) if labels else frames

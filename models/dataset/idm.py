@@ -17,7 +17,7 @@ def filter_map(l: list):
 
 class IDMDataset(Dataset):
 
-    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, is_val=False):
+    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, is_val=False, apply_filter: bool= False):
         
         self.local_path = data_path
         self.fps = fps
@@ -33,14 +33,28 @@ class IDMDataset(Dataset):
         self.data_files = list_files_with_extentions(self.local_path, ".json")
         self.is_val = is_val
         # this is slow as data gets large
+        self.raw_data = []
+
         self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
+
+        # filter low action segments
+        if apply_filter:
+            self.action_filter(ds.raw_data)
+            self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
+            print(f"[IDM DATASET] Filtered and reloaded idm data")
 
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
     @staticmethod
     def get_frames(video_path, frame_idx, h, w,  is_val=False):
 
-        frames = VideoDecoder(video_path).get_frames_at(frame_idx).data
+        try:
+            frames = VideoDecoder(video_path).get_frames_at(frame_idx).data
+        except Exception as e:
+            print(f"[VIDEO ERROR] Failed to load {video_path}", flush=True)
+            print(f"Idx:\n{frame_idx}", flush=True)
+            raise e
+
         if not is_val:
             frames = apply_video_transform(frames)
         frames = resize(frames, (h, w))
@@ -83,7 +97,7 @@ class IDMDataset(Dataset):
             save_json(json_path, filtered_data)
 
         cpu_jobs = cpu_count()
-        print(f"[DATASET] spawning {cpu_jobs} to filter intervals")
+        print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
         Parallel(n_jobs=cpu_jobs)(
             delayed(process_item)(actions, video, self.data_files[ind])
             for ind, (actions, video) in enumerate(raw_data)

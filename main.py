@@ -18,7 +18,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     import numpy as np
     import torch
     import uuid
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, wait
     from models.inference.find_matching_video_intervals import get_intervals
     import json
     import torch.distributed as dist
@@ -50,10 +50,14 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)
 
+    futures = []
     with ThreadPoolExecutor(max_workers=100) as executor:
         for i in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
             if i % inference_args.bootstrap_interval == 0:
                 if not start:
+                    wait(futures)
+                    futures.clear()
+
                     conn.release_video_writer(query_path)
                     agent.train_idm(idm_data_path_template + str(bootstrap_count))
                     video_intervals = get_intervals(f"{query_path}.mp4", dino_embedding_path, 540, 400)
@@ -72,7 +76,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)
                 new_conn.load_state(conn.get_state())
-                executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/{id}")
+                futures.append(executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/{id}"))
 
             tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
             key = agent.infer_action(tensor)
