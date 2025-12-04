@@ -55,7 +55,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 if not start:
                     conn.release_video_writer(query_path)
                     #agent.train_idm(idm_data_path_template + str(bootstrap_count))
-                    video_intervals = get_intervals(query_path, dino_embedding_path, 540, 400)
+                    video_intervals = get_intervals(f"{query_path}.mp4", dino_embedding_path, 540, 400)
                     interval_path = interval_path_template + f"{bootstrap_count}.json"
                     with open(interval_path, "w") as f:
                         json.dump(video_intervals, f)
