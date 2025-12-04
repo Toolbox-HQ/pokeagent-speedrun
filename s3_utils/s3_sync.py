@@ -41,10 +41,10 @@ def download_prefix(bucket: str, prefix: str, cache_root: str = ".cache", s3=Non
 
             keys_to_download.append((key, local_path))
     
-    print(f"[S3] Found {len(keys_to_download)} videos to download")
+    print(f"[S3] Found {len(keys_to_download)} files to download")
 
     for k,l in tqdm(keys_to_download):
-        print(f"[DOWNLOAD] s3://{bucket}/{k} => {l}")
+        #print(f"[DOWNLOAD] s3://{bucket}/{k} => {l}")
         s3.download_file(bucket, k, l)
 
 def check_s3_existing_videos(bucket_name: str, s3_prefix: str = "youtube_videos", video_ids: list = None):

@@ -43,7 +43,7 @@ def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base
     embeds = prcoess_batch(model, processor, video_path, device)
     return embeds
 
-def multi_cosine_search_gpu(db_embeddings, query_result):
+def multi_cosine_search(db_embeddings, query_result):
     query_embeddings = query_result
     E = db_embeddings
     Q = query_embeddings
@@ -63,7 +63,6 @@ def load_embeddings_and_metadata(folder_path: str, device):
         emb = torch.load(ef, map_location="cpu")
         if not isinstance(emb, torch.Tensor):
             emb = torch.as_tensor(emb)
-        
         try:
             with open(mf, "r") as f:
                 meta = json.load(f)
@@ -73,14 +72,9 @@ def load_embeddings_and_metadata(folder_path: str, device):
             #raise ValueError(f'Error: {mf} did not load correctly')
             bad_count += 1
         
-    print(f'BAD: {bad_count}')
+    print(f'BAD: {bad_count} -- investigate')
     
-    out_tensor = torch.cat(tensors, dim=0) if tensors else torch.empty((0, 512), dtype=torch.float32)
-    if out_tensor.numel() > 0:
-        out_tensor = F.normalize(out_tensor, p=2, dim=1, eps=1e-12).to(device)
-
-
-        
+    out_tensor = F.normalize(torch.cat(tensors, dim=0), p=2, dim=1, eps=1e-12).to(device)
     return all_meta, out_tensor
 
 def _segments_by_video(meta):
@@ -138,7 +132,7 @@ def find_top_runs_concurrent(sims, idxs, meta, L=150, threshold=240, max_workers
     scored = []
     with ProcessPoolExecutor(max_workers=n) as ex:
         futs = [ex.submit(_process_chunk_p, (sims, idxs, c, L)) for c in chunks]
-        for f in as_completed(futs):
+        for f in tqdm(as_completed(futs), total=len(futs)):
             scored.extend(f.result())
 
     scored.sort(key=lambda t: t[0], reverse=True)
@@ -251,17 +245,13 @@ def entropy_of_range(idxs: np.ndarray, start: int, end: int) -> float:
 def main():
     BUCKET_NAME = "b4schnei"
     EMB_DIR = ".cache/pokeagent/dinov2"
-    #torch.cuda.set_device(7)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cpu"
 
     s3 = init_boto3_client()
     query_emb = dino_embeddings_every(".cache/pokeagent/runs/output.mp4", device=device)
     meta, E = load_embeddings_and_metadata(EMB_DIR, device=device)
-    return
-    if E.numel() == 0:
-        raise ValueError(f"No embeddings found in {EMB_DIR}")
-    sims, idxs = multi_cosine_search_gpu(E, query_emb)
-    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=90, threshold=400, max_workers=8)
+    sims, idxs = multi_cosine_search(E, query_emb)
+    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=270, threshold=400, max_workers=8)
 
     total_seconds = 0
     results = []
