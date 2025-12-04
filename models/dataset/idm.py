@@ -32,14 +32,13 @@ class IDMDataset(Dataset):
 
         self.data_files = list_files_with_extentions(self.local_path, ".json")
         self.is_val = is_val
+        
         # this is slow as data gets large
-        self.raw_data = []
-
         self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
 
         # filter low action segments
         if apply_filter:
-            self.action_filter(ds.raw_data)
+            self.action_filter(self.raw_data)
             self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
             print(f"[IDM DATASET] Filtered and reloaded idm data")
 
