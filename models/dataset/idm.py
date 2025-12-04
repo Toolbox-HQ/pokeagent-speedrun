@@ -24,6 +24,8 @@ class IDMDataset(Dataset):
         self.h = h
         self.w = w
 
+        print(self.local_path)
+
         if not os.path.isdir(self.local_path):
             print(f"proxying to s3://{s3_bucket} for {data_path}")
             download_s3_folder(s3_bucket, data_path, self.local_path)
