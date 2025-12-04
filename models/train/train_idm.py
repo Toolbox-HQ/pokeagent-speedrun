@@ -100,7 +100,7 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, acti
     h,w = cfg.idm_image_size
     dataset = IDMDataset(data_path=dataset_path, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket)
     if action_filter:
-        dataset.action_filter(dataset.raw_data)
+        dataset.action_filter(dataset.raw_data) # Added this, could it be causing the error? idm vids are 100 * 4 * 60 frames long
 
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
