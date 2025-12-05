@@ -255,14 +255,17 @@ def load_merged_embeddings(out_prefix: str, device: str = "cpu"):
     return all_meta, embeddings
 
 def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_intervals: int):
+    print(f"[RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
     device = "cpu"
 
     query_emb = dino_embeddings_every(query_path, device=device)
+    print(f"[RETRIEVAL] Created dino embeddings")
     meta, E = load_merged_embeddings(emb_prefix, device=device)
+    print(f"[RETRIEVAL] Loaded embeddings from disk")
     sims, idxs = multi_cosine_search(E, query_emb)
     top_runs = find_top_runs_concurrent(sims, idxs, meta, L=num_embeds_per_sample, threshold=num_intervals, max_workers=8)
-
+    print(f"[RETRIEVAL] Completed similarity search")
     total_seconds = 0
     results = []
     for i, (start, end, _) in enumerate(top_runs):
@@ -275,7 +278,8 @@ def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_in
             "video_fps": float(start_meta.get("video_fps", start_meta.get("fps", 0.0))),
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
-        print(f"hrs: {total_seconds / 3600}")
+    
+    print(f"[RETRIEVAL] hrs: {total_seconds / 3600}")
     return results
 
 def main():

@@ -98,7 +98,14 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, acti
         wandb.init(project="pokeagent", config=vars(cfg))
 
     h,w = cfg.idm_image_size
-    dataset = IDMDataset(data_path=dataset_path, h=h, w=w, fps = model.fps, s3_bucket=cfg.s3_bucket, apply_filter=True)
+    dataset = IDMDataset(data_path=dataset_path,
+                         h=h,
+                         w=w,
+                         fps = model.fps,
+                         s3_bucket=cfg.s3_bucket,
+                         apply_filter=True,
+                         buffer_size=20, # buffer_size must be less than minimum action length
+                        )
 
     sampler = DistributedSampler(dataset)
     loader = DataLoader(

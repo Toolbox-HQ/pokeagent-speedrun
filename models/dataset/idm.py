@@ -17,14 +17,21 @@ def filter_map(l: list):
 
 class IDMDataset(Dataset):
 
-    def __init__(self, data_path: str, h=128, w=128, fps: int = 4, s3_bucket: str = None, is_val=False, apply_filter: bool= False):
+    def __init__(self,
+                 data_path: str,
+                 h=128,
+                 w=128,
+                 fps: int = 4,
+                 s3_bucket: str = None,
+                 is_val: bool = False,
+                 apply_filter: bool= False,
+                 buffer_size: int = 60):
         
         self.local_path = data_path
         self.fps = fps
         self.h = h
         self.w = w
-
-        print(self.local_path)
+        self.buffer_size = buffer_size
 
         if not os.path.isdir(self.local_path):
             print(f"proxying to s3://{s3_bucket} for {data_path}")
@@ -32,7 +39,7 @@ class IDMDataset(Dataset):
 
         self.data_files = list_files_with_extentions(self.local_path, ".json")
         self.is_val = is_val
-        
+
         # this is slow as data gets large
         self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
 
@@ -69,31 +76,33 @@ class IDMDataset(Dataset):
 
         return frames, torch.tensor(actions, dtype=torch.long)
 
-    def unchanged_interval(vr, start, end):
-        buffer = 60
-        diff = vr[end-buffer:end] - vr[start].unsqueeze(0)
+    def unchanged_interval(vr, start, end, buffer_size):
+        diff = vr[end-buffer_size:end] - vr[start].unsqueeze(0)
         return torch.any((diff == 0).all(dim=tuple(range(1, diff.ndim))))
 
     def action_filter(self, raw_data: List[Tuple]) -> None:
 
         def process_item(actions, video, json_path):
-            mask = torch.full((len(actions),), False)
-            filtered, total = 0, 0
+            try:
+                mask = torch.full((len(actions),), False)
+                filtered, total = 0, 0
 
-            for (start, end), action in ValueInterval([i["keys"] for i in actions]):
-                total += 1
+                for (start, end), action in ValueInterval([i["keys"] for i in actions]):
+                    total += 1
+                    if not action == "none" and IDMDataset.unchanged_interval(VideoDecoder(video), start, end, self.buffer_size):
+                        mask[start:end+1] = True
+                        filtered += 1
+            
+                print(f"filtered {100*(filtered / total):.2f}% in {video} : {filtered} / {total} segments")
+                assert map_json_to_mp4(json_path) == video, "json path should match mp4 path."
 
-                if not action == "none" and IDMDataset.unchanged_interval(VideoDecoder(video), start, end):
-                    mask[start:end+1] = True
-                    filtered += 1
-        
-            print(f"filtered {100*(filtered / total):.2f}% in {video} : {filtered} / {total} segments")
-            assert map_json_to_mp4(json_path) == video, "json path should match mp4 path."
-
-            filtered_data = [
-                item | {"filter": mask[idx].item()} for idx, item in enumerate(actions)
-            ]
-            save_json(json_path, filtered_data)
+                filtered_data = [
+                    item | {"filter": mask[idx].item()} for idx, item in enumerate(actions)
+                ]
+                save_json(json_path, filtered_data)
+            except Exception as e:
+                print(f"[IDM Dataset] filter pipeline fail on {video}")
+                raise e
 
         cpu_jobs = cpu_count()
         print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
@@ -155,8 +164,5 @@ class IDMDataset(Dataset):
 
 if __name__ == "__main__":
     import sys
-    assert len(sys.argv) == 3, "Please give the dataset and whether to filter (yes/no)"
-    ds = IDMDataset(sys.argv[1], s3_bucket="b4schnei")
-
-    if sys.argv[2] == "yes":
-        ds.action_filter(ds.raw_data)
+    assert len(sys.argv) == 2, "Please give the dataset and whether to filter (yes/no)"
+    ds = IDMDataset(sys.argv[1], s3_bucket="b4schnei", apply_filter=True, buffer_size = 20)

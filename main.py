@@ -22,7 +22,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_video_intervals import get_intervals
     import json
     import torch.distributed as dist
-    
+    import os
+
     with open(inference_args.save_state, 'rb') as f:
         curr_state = f.read()
     
@@ -59,13 +60,21 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                     futures.clear()
 
                     conn.release_video_writer(query_path)
+
                     agent.train_idm(idm_data_path_template + str(bootstrap_count))
+                    print(f"[LOOP] IDM training completed")
+
                     video_intervals = get_intervals(f"{query_path}.mp4", dino_embedding_path, 540, 400)
+                    print(f"[LOOP] Finished Retrieval")
+                    
                     interval_path = interval_path_template + f"{bootstrap_count}.json"
+                    os.makedirs(os.path.dirname(interval_path), exist_ok=True)
                     with open(interval_path, "w") as f:
                         json.dump(video_intervals, f)
-                    agent.train_agent(interval_path)
+                    print(f"[LOOP] Saved intervals - begining agent training")
 
+                    agent.train_agent(interval_path)
+                    print(f"[LOOP] Agent training completed")
                     bootstrap_count += 1
                     query_path = query_path_template + str(bootstrap_count)
                     conn.create_video_writer(query_path)
