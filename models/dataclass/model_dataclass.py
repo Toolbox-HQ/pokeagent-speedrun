@@ -48,7 +48,7 @@ class IDMArguments:
     idm_dataset_dir: str = field(default=None)
     idm_validation_dir: str = field(default=None)
     s3_bucket: str = field(default=None)
-
+    idm_dataloaders_per_device: int = field(default=1)
 
     # Training
     idm_epochs: int = field(default=10)

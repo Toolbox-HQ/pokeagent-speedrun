@@ -112,7 +112,7 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, acti
         dataset,
         batch_size=cfg.idm_batch_size,
         sampler=sampler,
-        num_workers=1*dist.get_world_size(), #num_workers=16*dist.get_world_size(),
+        num_workers=cfg.idm_dataloaders_per_device*dist.get_world_size(),
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
