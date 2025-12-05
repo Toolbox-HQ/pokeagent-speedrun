@@ -2,29 +2,30 @@ import os
 import json
 import torch
 from .find_matching_video_intervals import load_embeddings_and_metadata
+import math
 
-# assumes load_embeddings_and_metadata is already defined
+def build_merged_embeddings(input_folder: str, out_folder: str, split: int):
+    all_meta, out_tensor = load_embeddings_and_metadata(input_folder)
+    if len(all_meta) != out_tensor.size(0):
+        raise AssertionError("metadata and tensor must be the same size")
+    total_length = len(all_meta)
 
-def build_merged_embeddings(folder_path: str, out_prefix: str, device: str = "cpu"):
-    all_meta, out_tensor = load_embeddings_and_metadata(folder_path, device)
-
-    out_tensor_path = f"{out_prefix}.pt"
-    out_meta_path = f"{out_prefix}.json"
-
-    torch.save(out_tensor, out_tensor_path)
-    with open(out_meta_path, "w") as f:
-        json.dump(all_meta, f)
-
-    return out_meta_path, out_tensor_path
-
+    chunk_size = math.ceil(total_length / split)
+    i = 0
+    while i < split:
+        start = i*chunk_size
+        end = min((i + 1)*chunk_size, total_length)
+        torch.save(out_tensor[start : end].clone(), f"{out_folder}/{i}.pt")
+        with open(f"{out_folder}/{i}.json", "w") as f:
+            json.dump(all_meta[start : end], f)   
+        i += 1
 
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--folder", type=str)
-    parser.add_argument("--out-prefix", type=str, default="merged_embeddings")
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--input_folder", type=str)
+    parser.add_argument("--output_folder", type=str)
+    parser.add_argument("--splits", type=int)
     args = parser.parse_args()
-
-    build_merged_embeddings(args.folder, args.out_prefix, args.device)
+    build_merged_embeddings(args.input_folder, args.output_folder, args.splits)

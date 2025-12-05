@@ -21,7 +21,7 @@ from typing import List
 from tqdm import tqdm
 from models.util.misc import local_model_map
 
-def prcoess_batch(model, processor, path: str, device=None):
+def prcoess_batch(model, processor, path: str):
     decoder = VideoDecoder(path)
     duration = float(decoder.metadata.duration_seconds)
     t, timestamps = 0.0, []
@@ -32,27 +32,25 @@ def prcoess_batch(model, processor, path: str, device=None):
 
     inputs = processor(images=frames, return_tensors="pt")
     with torch.no_grad():
-        inputs = {k: v.to(device) for k, v in inputs.items()}
         outputs = model(**inputs)
         image_embeds = outputs.last_hidden_state[:, 0]  # CLS token
         image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
     return image_embeds
 
-def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base", device=None):
+def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base"):
     model_id = local_model_map(model_id)
     processor = AutoImageProcessor.from_pretrained(model_id)
-    model = AutoModel.from_pretrained(model_id).to(device).eval()
-    embeds = prcoess_batch(model, processor, video_path, device)
+    model = AutoModel.from_pretrained(model_id).eval()
+    embeds = prcoess_batch(model, processor, video_path)
     return embeds
 
-def multi_cosine_search(db_embeddings, query_result):
-    query_embeddings = query_result
+def dot_product(db_embeddings, query_embeddings):
     E = db_embeddings
     Q = query_embeddings
     sims = Q @ E.T
-    return sims.max(dim=0).values.float().cpu().numpy(), sims.argmax(dim=0).cpu().numpy()
+    return sims.max(dim=0).values.float().numpy(), sims.argmax(dim=0).numpy()
 
-def load_embeddings_and_metadata(folder_path: str, device):
+def load_embeddings_and_metadata(folder_path: str):
     embed_files = sorted(glob.glob(os.path.join(folder_path, "*.pt")))
     all_meta, tensors = [], []
 
@@ -76,7 +74,7 @@ def load_embeddings_and_metadata(folder_path: str, device):
         
     print(f'BAD: {bad_count} -- investigate')
     
-    out_tensor = F.normalize(torch.cat(tensors, dim=0), p=2, dim=1, eps=1e-12).to(device)
+    out_tensor = F.normalize(torch.cat(tensors, dim=0), p=2, dim=1, eps=1e-12)
     return all_meta, out_tensor
 
 def _segments_by_video(meta):
@@ -183,24 +181,18 @@ def _rolling_entropy_valid(idxs: np.ndarray, L: int, thr: float) -> np.ndarray:
 
     return valid
 
-def save_clip_between(start_meta, end_meta, BUCKET_NAME, rank, s3):
-    match_file_path = "/".join(start_meta["video_path"].split("/")[1:])
-    download_prefix(bucket=BUCKET_NAME, prefix=match_file_path, s3=s3)
-    local_path = start_meta["video_path"]
-
-    dec = VideoDecoder(local_path)
+def save_clip_between(s_idx: int, e_idx, path, rank):
+    dec = VideoDecoder(path)
     fps = getattr(dec, "fps", None) or getattr(dec, "frame_rate", None)
 
     try:
-        s_idx = int(start_meta["sampled_frame_index"])
-        e_idx = int(end_meta["sampled_frame_index"])
-        if e_idx <= s_idx:
-            e_idx = s_idx + 1
+    
+       
 
         # Open with OpenCV for frame-accurate slicing
-        cap = cv2.VideoCapture(local_path)
+        cap = cv2.VideoCapture(path)
         if not cap.isOpened():
-            raise RuntimeError(f"Failed to open video: {local_path}")
+            raise RuntimeError(f"Failed to open video: {path}")
 
         # Prefer decoder FPS; fall back to container FPS
         fps_cv = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -243,29 +235,45 @@ def entropy_of_range(idxs: np.ndarray, start: int, end: int) -> float:
     p = counts / counts.sum()
     return float(-(p * np.log(p + 1e-12)).sum())
 
-def load_merged_embeddings(out_prefix: str, device: str = "cpu"):
-    meta_path = f"{out_prefix}.json"
-    tensor_path = f"{out_prefix}.pt"
-
+def load_embedding_metadata_pair(prefix):
+    meta_path = f"{prefix}.json"
+    tensor_path = f"{prefix}.pt"
     with open(meta_path, "r") as f:
         all_meta = json.load(f)
-
-    embeddings = torch.load(tensor_path, map_location=device)
-
+    embeddings = torch.load(tensor_path)
     return all_meta, embeddings
+
+def cosine_search(query_embed, folder_path: str):
+    num_files = sum(1 for entry in os.scandir(folder_path) if entry.is_file()) // 2
+    i = 0
+    metadata = []
+    similiarity_idxs = np.array([])
+    similarity_scores = np.array([])
+    while i < num_files:
+        metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f'{folder_path}/{i}')
+        print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
+        similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
+        del db_embed_chunk
+        metadata.extend(metadata_chunk)
+        similarity_scores = np.append(similarity_scores, similarity_scores_chunk)
+        similiarity_idxs = np.append(similiarity_idxs, similarity_idxs_chunk)
+        i += 1
+    return similarity_scores, similiarity_idxs, metadata
+
 
 def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_intervals: int):
     print(f"[RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
-    device = "cpu"
 
-    query_emb = dino_embeddings_every(query_path, device=device)
+    query_emb = dino_embeddings_every(query_path)
     print(f"[RETRIEVAL] Created dino embeddings")
-    meta, E = load_merged_embeddings(emb_prefix, device=device)
-    print(f"[RETRIEVAL] Loaded embeddings from disk")
-    sims, idxs = multi_cosine_search(E, query_emb)
+
+    sims, idxs, meta = cosine_search(query_emb, emb_prefix)
+    print(f"[RETRIEVAL] Completed embeddings load")
+
     top_runs = find_top_runs_concurrent(sims, idxs, meta, L=num_embeds_per_sample, threshold=num_intervals, max_workers=8)
     print(f"[RETRIEVAL] Completed similarity search")
+
     total_seconds = 0
     results = []
     for i, (start, end, _) in enumerate(top_runs):
@@ -279,38 +287,14 @@ def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_in
         })
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
     
-    print(f"[RETRIEVAL] hrs: {total_seconds / 3600}")
+    print(f"[RETRIEVAL] Hrs: {total_seconds / 3600}")
     return results
 
 def main():
-    BUCKET_NAME = "b4schnei"
-    device = "cpu"
-
-    #s3 = init_boto3_client()
-    query_emb = dino_embeddings_every(".cache/pokeagent/runs/output.mp4", device=device)
-    meta, E = load_merged_embeddings(".cache/pokeagent/embedding/db", device=device)
-    sims, idxs = multi_cosine_search(E, query_emb)
-    top_runs = find_top_runs_concurrent(sims, idxs, meta, L=270, threshold=400, max_workers=8)
-
-    total_seconds = 0
-    results = []
-    for i, (start, end, _) in enumerate(top_runs):
-        start_meta = meta[start]
-        end_meta = meta[end]
-        results.append({
-            "start": int(start_meta.get("sampled_frame_index", start)),
-            "end": int(end_meta.get("sampled_frame_index", end)),
-            "video_path": start_meta.get("video_path", ""),
-            "video_fps": float(start_meta.get("video_fps", start_meta.get("fps", 0.0))),
-        })
-        total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
-
-        # if i > 200 and i < 210 or i > 390:
-        #     save_clip_between(start_meta, end_meta, BUCKET_NAME, i, s3)
-
-    print(f"hrs: {total_seconds / 3600}")
-    with open("results.json", "w") as f:
-        json.dump(results, f)
+    intervals = get_intervals(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
+    for i, interval in enumerate(intervals):
+        if i > 390:
+            save_clip_between(interval["start"], interval["end"], interval['video_path'], i)
 
 if __name__ == "__main__":
     main()
