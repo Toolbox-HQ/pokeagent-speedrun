@@ -21,12 +21,12 @@ from typing import List
 from tqdm import tqdm
 from models.util.misc import local_model_map
 
-def prcoess_batch(model, processor, path: str):
+def process_batch(model, processor, path: str):
     decoder = VideoDecoder(path)
     duration = float(decoder.metadata.duration_seconds)
-    t, timestamps = 0.0, []
-    while t <= duration + 1e-6:
-        timestamps.append(round(t, 3))
+    t, timestamps = 0, []
+    while t < duration:
+        timestamps.append(t)
         t += 2
     frames = decoder.get_frames_played_at(seconds=timestamps).data
 
@@ -41,7 +41,7 @@ def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base
     model_id = local_model_map(model_id)
     processor = AutoImageProcessor.from_pretrained(model_id)
     model = AutoModel.from_pretrained(model_id).eval()
-    embeds = prcoess_batch(model, processor, video_path)
+    embeds = process_batch(model, processor, video_path)
     return embeds
 
 def dot_product(db_embeddings, query_embeddings):

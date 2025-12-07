@@ -40,7 +40,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     query_path_template = '.cache/pokeagent/online/query_video/query'
     idm_data_path_template = '.cache/pokeagent/online/idm_data/bootstrap'
-    dino_embedding_path = '.cache/pokeagent/embedding/db'
+    dino_embedding_path = '.cache/pokeagent/db_embeddings'
     interval_path_template = '.cache/pokeagent/online/agent_data/intervals'
     query_path = query_path_template + str(bootstrap_count)
 

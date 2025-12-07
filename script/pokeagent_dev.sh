@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --time=12:00:00
-#SBATCH --gpus-per-nodes=1
+#SBATCH --gpus-per-node=1
 #SBATCH --job-name=pokeagent_online
 #SBATCH --output=/scratch/%u/slurm_out/%j_pokeagent_online_output.txt
 #SBATCH --mail-type=ALL
