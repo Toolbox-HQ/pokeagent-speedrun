@@ -1,23 +1,16 @@
-from s3_utils.s3_sync import init_boto3_client, download_prefix, upload_to_s3
-import sys
 import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 import torch
 import numpy as np
-from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 import json
 import glob
 from torchcodec.decoders import VideoDecoder
-import subprocess
-import time
 import cv2
 import math
 import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pathlib import Path
-from typing import List
 from tqdm import tqdm
 from models.util.misc import local_model_map
 
@@ -288,7 +281,7 @@ def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_in
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
     
     print(f"[RETRIEVAL] Hrs: {total_seconds / 3600}")
-    return results
+    return results, query_emb
 
 def main():
     intervals = get_intervals(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)

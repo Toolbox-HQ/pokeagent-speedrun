@@ -50,3 +50,5 @@ idm_scheduler: null
 idm_output_path: rnd_idm_model.pt
 idm_save_every: 99999999
 idm_dataloaders_per_device: 4
+match_length: 540
+retrieved_videos: 400

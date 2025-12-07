@@ -35,5 +35,9 @@ class InferenceArguments:
 
     bootstrap_interval: Optional[int] = field(default=None)
 
+    match_length: Optional[int] = field(default=None)
+
+    retrieved_videos: Optional[int] = field(default=None)
+
     def __iter__(self):
         return iter(vars(self).values())

@@ -25,6 +25,14 @@ class EmulatorConnection:
         assert msg_type == "state"
         return payload
     
+    def save_state(self, path: str) -> None:
+        import os
+
+        bytes = self.get_state()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(bytes)
+
     def set_key(self, key: str):
         self.parent_conn.send(("set_key", key))
     

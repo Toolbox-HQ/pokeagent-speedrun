@@ -10,8 +10,22 @@ def run_random_agent(conn, steps, video_path):
         conn.run_frames(num_frames)
     conn.release_video_writer(video_path)
     conn.close()
-    
-def run_online_agent(model_args, data_args, training_args, inference_args, idm_args): 
+
+def checkpoint(output_dir: str, step: int, agent, emulator):
+    import os
+    import torch
+    from safetensors.torch import save_file
+
+    save_path = os.path.join(output_dir, str(step))
+    print(f"[LOOP] checkpoint at step {step} to {save_path}")
+    agent_model = agent.model
+    agent_idm = agent.idm
+
+    torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
+    save_file(agent_model.state_dict(), "agent.safetensors")
+    emulator.save_state(os.path.join(save_path, f"game.state"))
+
+def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, save_path: str = None): 
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
     from emulator.emulator_connection import EmulatorConnection
     from tqdm import tqdm
@@ -34,7 +48,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
-    start = True
     video_path = '.cache/pokeagent/online/runs/output'
     bootstrap_count = 0
 
@@ -53,9 +66,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     futures = []
     with ThreadPoolExecutor(max_workers=100) as executor:
-        for i in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
-            if i % inference_args.bootstrap_interval == 0:
-                if not start:
+        for step in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
+            if step != 0 and step % inference_args.bootstrap_interval == 0:
                     wait(futures)
                     futures.clear()
 
@@ -64,7 +76,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                     agent.train_idm(idm_data_path_template + str(bootstrap_count))
                     print(f"[LOOP] IDM training completed")
 
-                    video_intervals = get_intervals(f"{query_path}.mp4", dino_embedding_path, 540, 400)
+                    video_intervals = get_intervals(f"{query_path}.mp4",
+                                                    dino_embedding_path,
+                                                    inference_args.match_length,
+                                                    inference_args.retrieved_videos)
                     print(f"[LOOP] Finished Retrieval")
                     
                     interval_path = interval_path_template + f"{bootstrap_count}.json"
@@ -77,11 +92,14 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                     print(f"[LOOP] Agent training completed")
                     bootstrap_count += 1
                     query_path = query_path_template + str(bootstrap_count)
+                    if save_path is not None:
+                        checkpoint(save_path, step, agent, conn)
+
                     conn.create_video_writer(query_path)
                     conn.start_video_writer(query_path)
-                else:
-                    start = False
-            if i % inference_args.idm_data_sample_interval == 0:
+
+
+            if step % inference_args.idm_data_sample_interval == 0:
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)
                 new_conn.load_state(conn.get_state())
@@ -130,10 +148,10 @@ def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state,
     conn.release_video_writer(video_path)
     conn.close()
 
-def main(model_args, data_args, training_args, inference_args, idm_args):
+def main(model_args, data_args, training_args, inference_args, idm_args, save_path: str = None):
    
     if inference_args.online:
-        run_online_agent(model_args, data_args, training_args, inference_args, idm_args)
+        run_online_agent(model_args, data_args, training_args, inference_args, idm_args, save_path)
     else:
         run_agent(*inference_args)
 
@@ -167,4 +185,5 @@ if __name__ == "__main__":
         data_args,
         training_args,
         inference_args,
-        idm_args)
+        idm_args,
+        save_path)
