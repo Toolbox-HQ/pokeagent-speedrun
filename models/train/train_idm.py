@@ -14,7 +14,7 @@ from models.policy import CLASS_TO_KEY
 from models.util.data import reduce_dict
 from pprint import pprint
 from models.dataclass import IDMArguments
-
+from models.util.data import train_val_split
 
 def setup_distributed():
 
@@ -88,7 +88,143 @@ def save(model, save_path, cfg):
         torch.save(model.module.state_dict(), path)
         print(f"Model saved to {path}")
 
-def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, action_filter: bool = False):
+
+def train_idm_without_overfitting(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
+    
+    rank = dist.get_rank()
+    device = f"cuda:{rank}"
+    world_size = dist.get_world_size()
+
+    if rank == 0:
+        wandb.init(project="pokeagent", config=vars(cfg))
+
+    h,w = cfg.idm_image_size
+    dataset = IDMDataset(data_path=dataset_path,
+                         h=h,
+                         w=w,
+                         fps = model.fps,
+                         s3_bucket=cfg.s3_bucket,
+                         apply_filter=True,
+                         buffer_size=20, # buffer_size must be less than minimum action length
+                        )
+    
+    train_ds, eval_ds = train_val_split(train_ds, split=0.1)
+
+    sampler = DistributedSampler(train_ds)
+    loader = DataLoader(
+        train_ds,
+        batch_size=cfg.idm_batch_size,
+        sampler=sampler,
+        num_workers=cfg.idm_dataloaders_per_device*dist.get_world_size(),
+        pin_memory=True,
+        collate_fn=IDMDataset.collate
+    )
+
+    val_sampler = DistributedSampler(eval_ds, shuffle=False)
+    val_loader = DataLoader(
+        eval_ds,
+        batch_size=cfg.batch_size,
+        sampler=val_sampler,
+        num_workers=4,
+        pin_memory=True,
+        collate_fn=IDMDataset.collate
+    )
+
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
+
+    avg_loss = 0
+    avg_acc = 0
+    global_step = 1
+    total_steps = cfg.idm_epochs * len(loader)
+    scheduler = None
+
+    if cfg.idm_scheduler == "cosine":
+        from torch.optim.lr_scheduler import CosineAnnealingLR
+        scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
+    else:
+        from torch.optim.lr_scheduler import ConstantLR
+        scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
+
+    for epoch in range(cfg.idm_epochs):
+        sampler.set_epoch(epoch)
+        epoch_bar = tqdm(
+            loader,
+            desc=f"[Rank {rank}] Epoch {epoch + 1}",
+            total=len(loader),
+            disable=(rank != 0),
+        )
+        start_time = time.time()
+
+        # Track metrics for epoch averages
+        total_loss = 0.0
+        total_acc = 0.0
+        num_batches = 0
+
+        for inp, labels in epoch_bar:
+            # TODO refactor out useless but required inputs
+            dummy = {
+                "first": torch.zeros((inp.shape[0], 1)).to(device),
+                "state_in": model.module.initial_state(inp.shape[0])
+            }
+
+            # TODO refactor so that this isn't wrapped in a dict
+            inp = {"img": inp.to(device=device)}
+            labels = labels.to(dtype=torch.long, device=device)
+            
+            out = model(inp, labels=labels, **dummy)
+            loss = out.loss
+            logits = out.logits
+
+            loss.backward()
+
+            if global_step % cfg.idm_gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), 
+                    max_norm=cfg.idm_max_grad_norm
+                )
+                optimizer.step()
+                optimizer.zero_grad()
+                scheduler.step()
+
+            metrics = compute_accuracy(logits, labels)
+            elapsed = time.time() - start_time
+            start_time = time.time()
+            throughput = world_size / elapsed
+
+            total_loss += loss.item()
+            total_acc += metrics["accuracy"]
+            num_batches += 1
+            global_step += 1
+
+            if rank == 0:
+                wandb.log(
+                {
+                "epoch": epoch,
+                "lr": scheduler.get_last_lr(),
+                "loss_step": loss.item(),
+                "throughput": throughput,
+                "epoch_loss": avg_loss,
+                "epoch_accuracy": avg_acc,
+                } | metrics
+                )
+                epoch_bar.set_postfix_str(
+                f"loss={loss:.4f} | "
+                f"batch/s={throughput:.1f} | "
+                f"avg loss={avg_loss:.4f} | " 
+                f"avg acc={avg_acc:.2f} | "
+                f"iter={epoch_bar.n}/{epoch_bar.total}"
+                )
+                
+
+            if cfg.eval_every and global_step % cfg.eval_every == 0:
+                validate(model, val_loader, device, rank)
+
+        avg_loss = total_loss / num_batches
+        avg_acc = total_acc / num_batches
+
+
+def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
     
     rank = dist.get_rank()
     device = f"cuda:{rank}"

@@ -13,18 +13,9 @@ from models.util.repro import repro_init
 from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
-import random
+from models.util.data import train_val_split
 
 local_rank = None
-
-def train_val_split(dataset: Dataset, split: float = 0.05)-> Tuple[Dataset, Dataset]:
-    num_samples = len(dataset)
-    indices = list(range(num_samples))
-    eval_idx = random.sample(indices, round(num_samples*split))
-    train_idx = [i for i in indices if i not in eval_idx]
-
-    # train, eval
-    return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
 
 def rank0_print(*args):
     if local_rank == 0:
