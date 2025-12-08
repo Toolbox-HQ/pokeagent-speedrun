@@ -7,10 +7,6 @@
 #SBATCH --mail-type=ALL
 
 set -e
-
-IMAGE_NAME="pokeagent"
-TAG="latest"
-
 INDIVIDUAL_BINDS=" \
     --bind ./config:/app/config \
     --bind ./dconfig:/app/dconfig \
@@ -33,6 +29,10 @@ else
     NUM_GPUS=$(nvidia-smi -L | wc -l)
 fi
 
+if [[ -n "${WANDB_API_KEY}" ]]; then
+    EXTRA_ENV="--env WANDB_API_KEY=${WANDB_API_KEY}"
+fi
+
 apptainer exec \
     --contain \
     --nv \
@@ -43,7 +43,9 @@ apptainer exec \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
-    --env WANDB_MODE="disabled" \
+    --env WANDB_MODE="offline" \
+    --env WANDB_CACHE_DIR="/app/.cache/pokeagent/wandb" \
+    ${EXTRA_ENV:-} \
     .cache/pokeagent/containers/dev.sif \
     bash -c "cd /app && . .venv/bin/activate && \
         torchrun \
