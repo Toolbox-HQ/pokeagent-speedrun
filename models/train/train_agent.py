@@ -84,6 +84,16 @@ def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset 
     trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.train()
 
+def train_with_rollback(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
+
+    if eval_ds is None:
+        train_ds, eval_ds = train_val_split(train_ds, split=0.05)
+
+    for param in model.parameters(): param.requires_grad = True
+    trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
+    trainer.rollback_on_overfit(".cache/pokeagent/tmp_checkpoints")
+    trainer.train()
+    trainer.run_rollback(model)
 
 if __name__ == "__main__":
 

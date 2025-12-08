@@ -6,6 +6,10 @@ output_dir: ".cache/pokeagent/online"
 num_train_epochs: 1
 per_device_train_batch_size: 4
 save_strategy: "no"
+<<<<<<< HEAD
+=======
+save_total_limit: 10
+>>>>>>> 051dda9b2f3491c0fb73bf2ad1061bafdc3170af
 learning_rate: 5.0e-5
 weight_decay: 0.00001
 adam_beta2: 0.95
@@ -14,7 +18,12 @@ lr_scheduler_type: "linear"
 logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
+<<<<<<< HEAD
 eval_strategy: "no"
+=======
+eval_strategy: "steps"
+eval_steps: 20
+>>>>>>> 051dda9b2f3491c0fb73bf2ad1061bafdc3170af
 dataloader_num_workers: 8
 
 # inference
@@ -51,4 +60,8 @@ idm_output_path: rnd_idm_model.pt
 idm_save_every: 99999999
 idm_dataloaders_per_device: 4
 match_length: 540
+<<<<<<< HEAD
 retrieved_videos: 10
+=======
+retrieved_videos: 20
+>>>>>>> 051dda9b2f3491c0fb73bf2ad1061bafdc3170af

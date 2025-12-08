@@ -8,7 +8,7 @@ from safetensors.torch import load_file
 import math
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments, IDMArguments
 from pprint import pprint
-from models.train.train_agent import setup_training, train, create_dataset, init_model
+from models.train.train_agent import setup_training, train, create_dataset, init_model, train_with_rollback
 from models.train.train_idm import train_idm
     
 class PokeAgentActionConditioned:
@@ -192,7 +192,7 @@ class OnlinePokeagentStateOnly:
     def train_agent(self, intervals: str):
         train_ds, eval_ds = create_dataset(intervals, self.processor)
         self.model.train()
-        train(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
+        train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
 
     def train_idm(self, data_dir: str):
@@ -266,7 +266,7 @@ class OnlinePokeagentStateActionConditioned:
     def train_agent(self, intervals: str):
         train_ds, eval_ds = create_dataset(intervals, self.processor)
         self.model.train()
-        train(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
+        train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
 
     def train_idm(self, data_dir: str):
