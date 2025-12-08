@@ -35,7 +35,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     import torch
     import uuid
     from concurrent.futures import ThreadPoolExecutor, wait
-    from models.inference.find_matching_video_intervals import get_intervals
+    from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
     import os
@@ -80,7 +80,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 agent.train_idm(idm_data_path_template + str(bootstrap_count))
                 print(f"[LOOP] IDM training completed")
 
-                video_intervals = get_intervals(f"{query_path}.mp4",
+                video_intervals = get_videos(f"{query_path}.mp4",
                                                 dino_embedding_path,
                                                 inference_args.match_length,
                                                 inference_args.retrieved_videos)
