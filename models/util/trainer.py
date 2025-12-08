@@ -558,6 +558,7 @@ class Trainer:
         self.is_in_train = False
         self.model = model
         self.create_accelerator_and_postprocess()
+        self.rollback = None
 
         # memory metrics - must set up as early as possible
         self._memory_tracker = TrainerMemoryTracker(self.args.skip_memory_metrics)
@@ -871,30 +872,6 @@ class Trainer:
         self.use_apex = False
         self.use_cpu_amp = False
 
-        # Mixed precision setup for SageMaker Model Parallel
-        if is_sagemaker_mp_enabled():
-            # BF16 + model parallelism in SageMaker: currently not supported, raise an error
-            if args.bf16:
-                raise ValueError(
-                    "SageMaker Model Parallelism does not support BF16 yet. Please use FP16 instead "
-                )
-
-            if IS_SAGEMAKER_MP_POST_1_10:
-                # When there's mismatch between SMP config and trainer argument, use SMP config as truth
-                if args.fp16 != smp.state.cfg.fp16:
-                    logger.warning(
-                        f"FP16 provided in SM_HP_MP_PARAMETERS is {smp.state.cfg.fp16}, "
-                        f"but FP16 provided in trainer argument is {args.fp16}, "
-                        f"setting to {smp.state.cfg.fp16}"
-                    )
-                    args.fp16 = smp.state.cfg.fp16
-            else:
-                # smp < 1.10 does not support fp16 in trainer.
-                if hasattr(smp.state.cfg, "fp16"):
-                    logger.warning(
-                        f"FP16 provided in SM_HP_MP_PARAMETERS is {smp.state.cfg.fp16}, "
-                        "but SageMaker Model Parallelism < 1.10 does not support FP16 in trainer."
-                    )
         if (args.fp16 or args.bf16) and args.half_precision_backend == "auto":
             if args.device == torch.device("cpu"):
                 if args.fp16:
@@ -1032,6 +1009,14 @@ class Trainer:
 
         self.neftune_hook_handle.remove()
         del embeddings.neftune_noise_alpha, unwrapped_model
+
+    def rollback_on_overfit(self, cache_dir):
+
+        self.rollback = {
+            "cache": cache_dir,
+            "checkpoints": [],
+            "overfit": False,
+        }
 
     def add_callback(self, callback):
         """
@@ -4885,7 +4870,56 @@ class Trainer:
             self.args, self.state, self.control, output.metrics
         )
 
+        if self.rollback is not None:
+            eval_loss = output.metrics[f"{metric_key_prefix}_loss"]
+            self.log_for_rollback(eval_loss, stop_training = True)
+
         return output.metrics
+
+    def run_rollback(self, model):
+        
+        from safetensors import load_file
+
+        if self.rollback["overfit"]:
+            print(f"[TRAINER] rolling back to checkpoint")
+            path = self.rollback["checkpoints"][0]["path"]
+            model.load_state_dict(load_file(path))
+        else:
+            print(f"[TRAINER] No overfitting detected, skipping rollback")
+
+    def clean_up_rollback(self):
+
+        if dist.is_initialized():
+            dist.barrier()
+        
+        for _, path in self.rollback["checkpoints"]:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+        print(f"[TRAINER] Cleaned up rollback checkpoints")    
+
+
+    def log_for_rollback(self, eval_loss, stop_training=False):
+
+        if stop_training and len(self.rollback["checkpoints"]) != 0 and self.rollback["checkpoints"][0]["loss"] < eval_loss:
+            self.rollback["overfit"] = True
+            self.control.should_training_stop = True
+            return
+
+        from safetensors import save_file
+        import uuid
+        
+        rnd_uuid = str(uuid.uuid4())
+        save_path = os.path.join(self.rollback["cache"], rnd_uuid, f"rollback_model.safetensors")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        save_file(self.model.state_dict(), save_path)
+        self.rollback["checkpoints"].insert(0, {
+            "loss": eval_loss,
+            "path": save_path
+        })
+                
+
 
     def predict(
         self,

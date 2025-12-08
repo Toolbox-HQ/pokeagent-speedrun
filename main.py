@@ -68,10 +68,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     futures = []
 
-    # TODO TESTING REMOVE THIS
-    if save_path is not None:
-        checkpoint(save_path, 0, agent, conn)
-
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
             if step != 0 and step % inference_args.bootstrap_interval == 0:
@@ -171,6 +167,8 @@ if __name__ == "__main__":
     from models.util.repro import repro_init
     from models.util.dist import init_distributed
 
+    init_distributed()
+
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
     args = parser.parse_args()
@@ -186,8 +184,6 @@ if __name__ == "__main__":
         inference_args,
         idm_args
     ) = parser.parse_yaml_file(yaml_file=args.config)
-
-    init_distributed()
 
     main(model_args,
         data_args,
