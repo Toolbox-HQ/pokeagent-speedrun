@@ -14,16 +14,18 @@ def run_random_agent(conn, steps, video_path):
 def checkpoint(output_dir: str, step: int, agent, emulator):
     import os
     import torch
+    import torch.distributed as dist
     from safetensors.torch import save_file
 
     save_path = os.path.join(output_dir, str(step))
     print(f"[LOOP] checkpoint at step {step} to {save_path}")
     agent_model = agent.model
     agent_idm = agent.idm
-
-    torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
-    save_file(agent_model.state_dict(), "agent.safetensors")
-    emulator.save_state(os.path.join(save_path, f"game.state"))
+    
+    if dist.get_rank() == 0:
+        torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
+        save_file(agent_model.state_dict(), "agent.safetensors")
+        emulator.save_state(os.path.join(save_path, f"game.state"))
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, save_path: str = None): 
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
@@ -65,6 +67,11 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.start_video_writer(video_path)
 
     futures = []
+
+    # TODO TESTING REMOVE THIS
+    if save_path is not None:
+        checkpoint(save_path, 0, agent, conn)
+
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
             if step != 0 and step % inference_args.bootstrap_interval == 0:
