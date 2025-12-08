@@ -4903,7 +4903,7 @@ class Trainer:
     def log_for_rollback(self, eval_loss, stop_training=False):
 
         if stop_training and len(self.rollback["checkpoints"]) != 0 and self.rollback["checkpoints"][0]["loss"] < eval_loss:
-            print(f"[TRAINER] Overfitting detected this checkpoint - previous loss: {str(self.rollback["checkpoints"][0]["loss"])} | current loss: {eval_loss}")
+            print(f'[TRAINER] Overfitting detected this checkpoint - previous loss: {str(self.rollback["checkpoints"][0]["loss"])} | current loss: {eval_loss}')
             self.rollback["overfit"] = True
             self.control.should_training_stop = True
             return
