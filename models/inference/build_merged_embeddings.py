@@ -12,6 +12,8 @@ def build_merged_embeddings(input_folder: str, out_folder: str, split: int):
 
     chunk_size = math.ceil(total_length / split)
     i = 0
+    os.makedirs(out_folder, exist_ok=True)
+
     while i < split:
         start = i*chunk_size
         end = min((i + 1)*chunk_size, total_length)
