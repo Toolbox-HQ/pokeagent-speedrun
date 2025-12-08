@@ -4878,11 +4878,11 @@ class Trainer:
 
     def run_rollback(self, model):
         
-        from safetensors import load_file
+        from safetensors.torch import load_file
 
         if self.rollback["overfit"]:
-            print(f"[TRAINER] rolling back to checkpoint")
             path = self.rollback["checkpoints"][0]["path"]
+            print(f"[TRAINER] rolling back to {path}")
             model.load_state_dict(load_file(path))
         else:
             print(f"[TRAINER] No overfitting detected, skipping rollback")
@@ -4903,11 +4903,12 @@ class Trainer:
     def log_for_rollback(self, eval_loss, stop_training=False):
 
         if stop_training and len(self.rollback["checkpoints"]) != 0 and self.rollback["checkpoints"][0]["loss"] < eval_loss:
+            print(f"[TRAINER] Overfitting detected - stopping training")
             self.rollback["overfit"] = True
             self.control.should_training_stop = True
             return
 
-        from safetensors import save_file
+        from safetensors.torch import save_file
         import uuid
         
         rnd_uuid = str(uuid.uuid4())

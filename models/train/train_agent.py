@@ -94,7 +94,6 @@ def train_with_rollback(model: nn.Module, training_args: TrainingArguments, trai
     trainer.rollback_on_overfit(".cache/pokeagent/tmp_checkpoints")
     trainer.train()
     trainer.run_rollback(model)
-    trainer.clean_up_rollback()
 
 if __name__ == "__main__":
 
