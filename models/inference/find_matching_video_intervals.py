@@ -281,7 +281,7 @@ def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_in
         total_seconds += ((end_meta.get("sampled_frame_index", end) - start_meta.get("sampled_frame_index", start)) / start_meta.get("video_fps", start_meta.get("fps", 0.0)))
     
     print(f"[RETRIEVAL] Hrs: {total_seconds / 3600}")
-    return results, query_emb
+    return results
 
 def main():
     intervals = get_intervals(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
