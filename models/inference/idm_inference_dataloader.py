@@ -36,25 +36,25 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     return (frames, actions) if labels else frames
 
 class IDMWindowDataset(Dataset):
-    def __init__(self, intervals_json, idm_fps=IDM_FPS, window=WINDOW, processor = None):
+    def __init__(self, videos_json, idm_fps=IDM_FPS, window=WINDOW, processor = None):
         
         self.processor = processor
-        self.intervals_json = intervals_json
+        self.videos_json = videos_json
 
-        with open(intervals_json, "r", encoding="utf-8") as f:
+        with open(videos_json, "r", encoding="utf-8") as f:
             items = json.load(f)
+
         self.samples = []
         for it in items:
-            start = int(it["start"])
-            end = int(it["end"])
-            fps = float(it["video_fps"])
+            decoder = VideoDecoder(it["video_path"])
+            fps = decoder.metadata.average_fps
             stride = max(1, int(round(fps / idm_fps)))
-            n_raw = max(0, end - start)
+            n_raw = decoder.metadata.num_frames
             n_idm = n_raw // stride
             n_full = (n_idm // window) * window
             n_windows = n_full // window
             for w in range(n_windows):
-                win_start = start + w * window * stride
+                win_start = w * window * stride
                 win_end = win_start + window * stride
                 self.samples.append({
                     "video_path": it["video_path"],
@@ -179,8 +179,8 @@ def batched_infer_idm_labels(x, idm=None):
 
 
 
-def get_dataloader(intervals_json, batch_size=1, num_workers=0, shuffle=False):
-    ds = IDMWindowDataset(intervals_json, IDM_FPS, WINDOW)
+def get_dataloader(videos_json, batch_size=1, num_workers=0, shuffle=False):
+    ds = IDMWindowDataset(videos_json, IDM_FPS, WINDOW)
     return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
 
 def downsample(x, stride, offset=0):

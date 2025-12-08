@@ -2,12 +2,10 @@ architecture: "state_action_conditioned"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 load_path: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
-output_dir: ".cache/pokeagent"
-num_train_epochs: 5
+output_dir: ".cache/pokeagent/online"
+num_train_epochs: 1
 per_device_train_batch_size: 4
-save_strategy: "steps"
-save_steps: 500
-save_total_limit: 10
+save_strategy: "no"
 learning_rate: 5.0e-5
 weight_decay: 0.00001
 adam_beta2: 0.95
@@ -16,13 +14,12 @@ lr_scheduler_type: "linear"
 logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
-eval_strategy: "steps"
-eval_steps: 237 # 1/2 epoch
+eval_strategy: "no"
 dataloader_num_workers: 8
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 1200
+agent_steps: 600
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
@@ -31,7 +28,7 @@ rom_path: .cache/pokeagent/rom/rom.gba
 online: True
 idm_data_sample_interval: 20
 idm_data_sample_steps: 100
-bootstrap_interval: 300
+bootstrap_interval: 400
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
@@ -48,10 +45,10 @@ idm_weight_decay: 0
 idm_max_grad_norm: 1.0
 wandb_project: pokeagent
 idm_gradient_accumulation_steps: 1
-idm_eval_every: 100
+idm_eval_every: 99999999
 idm_scheduler: null
 idm_output_path: rnd_idm_model.pt
-idm_save_every: 100
+idm_save_every: 99999999
 idm_dataloaders_per_device: 4
 match_length: 540
-retrieved_videos: 400
+retrieved_videos: 10
