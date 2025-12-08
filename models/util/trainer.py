@@ -4903,7 +4903,7 @@ class Trainer:
     def log_for_rollback(self, eval_loss, stop_training=False):
 
         if stop_training and len(self.rollback["checkpoints"]) != 0 and self.rollback["checkpoints"][0]["loss"] < eval_loss:
-            print(f"[TRAINER] Overfitting detected - stopping training")
+            print(f"[TRAINER] Overfitting detected this checkpoint - previous loss: {str(self.rollback["checkpoints"][0]["loss"])} | current loss: {eval_loss}")
             self.rollback["overfit"] = True
             self.control.should_training_stop = True
             return
@@ -4915,6 +4915,7 @@ class Trainer:
         save_path = os.path.join(self.rollback["cache"], rnd_uuid, f"rollback_model.safetensors")
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         save_file(self.model.state_dict(), save_path)
+        print(f"[TRAINER] Saved rollback candidate | loss: {str(eval_loss)} | path {save_path}") 
         self.rollback["checkpoints"].insert(0, {
             "loss": eval_loss,
             "path": save_path
