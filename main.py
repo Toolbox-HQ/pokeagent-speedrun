@@ -16,15 +16,15 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     import torch
     import torch.distributed as dist
     from safetensors.torch import save_file
-
-    save_path = os.path.join(output_dir, str(step))
-    print(f"[LOOP] checkpoint at step {step} to {save_path}")
+    save_path = os.path.join(output_dir, f"checkpoint-{step}")
     agent_model = agent.model
     agent_idm = agent.idm
     
     if dist.get_rank() == 0:
+        print(f"[LOOP] save checkpoint at step {step} to {save_path}")
+        os.makedirs(save_path, exist_ok=True)
         torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
-        save_file(agent_model.state_dict(), "agent.safetensors")
+        save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
         emulator.save_state(os.path.join(save_path, f"game.state"))
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, save_path: str = None): 
@@ -163,6 +163,7 @@ def main(model_args, data_args, training_args, inference_args, idm_args, save_pa
         run_agent(*inference_args)
 
 if __name__ == "__main__":
+    import os
     from argparse import ArgumentParser
     import transformers
     from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
@@ -173,7 +174,7 @@ if __name__ == "__main__":
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
     args = parser.parse_args()
-    save_path = repro_init(args.config)
+    checkpoint_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments, InferenceArguments, IDMArguments)
@@ -193,4 +194,4 @@ if __name__ == "__main__":
         training_args,
         inference_args,
         idm_args,
-        save_path)
+        os.path.join(training_args.output_dir, checkpoint_path))
