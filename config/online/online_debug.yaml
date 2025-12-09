@@ -33,6 +33,7 @@ bootstrap_interval: 400
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
+max_vid_len: 900
 
 # idm
 output_classes: 9
@@ -52,4 +53,4 @@ idm_output_path: rnd_idm_model.pt
 idm_save_every: 99999999
 idm_dataloaders_per_device: 4
 match_length: 540
-retrieved_videos: 20
+retrieved_videos: 10

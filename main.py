@@ -83,7 +83,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 video_intervals = get_videos(f"{query_path}.mp4",
                                                 dino_embedding_path,
                                                 inference_args.match_length,
-                                                inference_args.retrieved_videos)
+                                                inference_args.retrieved_videos,
+                                                inference_args.max_vid_len
+                                                )
                 print(f"[LOOP] Finished Retrieval")
                 
                 interval_path = interval_path_template + f"{bootstrap_count}.json"
