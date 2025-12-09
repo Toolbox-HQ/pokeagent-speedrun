@@ -1,4 +1,6 @@
 import os
+from typing import List
+
 hf_dir = os.environ["HF_HOME"] if "HF_HOME" in os.environ else os.path.expanduser("~/.cache/huggingface")
 
 def local_model_map(model_name: str):
@@ -14,6 +16,15 @@ def download_models():
     AutoModel.from_pretrained("Qwen/Qwen3-1.7B")
     AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
     AutoProcessor.from_pretrained("Qwen/Qwen3-1.7B")
+
+def finalize_wandb(tags: List[str] = []):
+    import torch.distributed as dist
+    if dist.get_rank() == 0 and "WANDB_MODE" in os.environ and os.environ["WANDB_MODE"] == "offline":
+        import wandb
+        run = wandb.run
+        run.tags = tags
+        run.finish()
+    dist.barrier()
 
 if __name__ == "__main__":
     download_models()

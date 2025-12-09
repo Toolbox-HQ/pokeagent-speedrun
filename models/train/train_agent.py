@@ -76,7 +76,7 @@ def create_dataset(data_dir: str, processor: Callable) -> Tuple[Dataset, Dataset
 
     dataset = IDMWindowDataset(videos_json)
     dataset.processor = processor
-    train_ds, eval_ds = train_val_split(dataset, split=0.05)
+    train_ds, eval_ds = train_val_split(dataset, split=split)
     return train_ds, eval_ds
 
 def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:

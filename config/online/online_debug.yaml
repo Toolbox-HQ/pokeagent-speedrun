@@ -15,12 +15,12 @@ logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "steps"
-eval_steps: 20
+eval_steps: 40
 dataloader_num_workers: 8
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 600
+agent_steps: 1000
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
@@ -34,6 +34,9 @@ context_length: 64
 actions_per_second: 4
 agent_fps: 2
 max_vid_len: 900
+match_length: 540
+retrieved_videos: 10
+train_eval_split: 0.2
 
 # idm
 output_classes: 9
@@ -52,5 +55,4 @@ idm_scheduler: null
 idm_output_path: rnd_idm_model.pt
 idm_save_every: 99999999
 idm_dataloaders_per_device: 4
-match_length: 540
-retrieved_videos: 10
+

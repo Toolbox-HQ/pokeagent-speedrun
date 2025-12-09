@@ -4897,8 +4897,7 @@ class Trainer:
                 os.remove(path)
             except FileNotFoundError:
                 pass
-        print(f"[TRAINER] Cleaned up rollback checkpoints")    
-
+        print(f"[TRAINER] Cleaned up rollback checkpoints")
 
     def log_for_rollback(self, eval_loss, stop_training=False):
 
@@ -4913,9 +4912,12 @@ class Trainer:
         
         rnd_uuid = str(uuid.uuid4())
         save_path = os.path.join(self.rollback["cache"], rnd_uuid, f"rollback_model.safetensors")
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        save_file(self.model.state_dict(), save_path)
-        print(f"[TRAINER] Saved rollback candidate | loss: {str(eval_loss)} | path {save_path}") 
+        
+        if dist.get_rank() == 0:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            save_file(self.model.state_dict(), save_path)
+            print(f"[TRAINER] Saved rollback candidate | loss: {str(eval_loss)} | path {save_path}")
+
         self.rollback["checkpoints"].insert(0, {
             "loss": eval_loss,
             "path": save_path
