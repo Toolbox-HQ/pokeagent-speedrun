@@ -263,8 +263,8 @@ class OnlinePokeagentStateActionConditioned:
         self.idx = 0
         print("[AGENT] Initialized agent")
     
-    def train_agent(self, intervals: str):
-        train_ds, eval_ds = create_dataset(intervals, self.processor)
+    def train_agent(self, data_dir: str):
+        train_ds, eval_ds = create_dataset(data_dir, self.processor)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
