@@ -39,5 +39,7 @@ class InferenceArguments:
 
     retrieved_videos: Optional[int] = field(default=None)
 
+    max_vid_len: float = field(default=None)
+
     def __iter__(self):
         return iter(vars(self).values())

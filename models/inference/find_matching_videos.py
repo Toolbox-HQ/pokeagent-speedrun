@@ -112,7 +112,7 @@ def _process_chunk_p(args):
             out.append((score, global_start, global_end))
     return out
 
-def find_top_videos(sims, idxs, meta, num_embeds_per_sample, num_intervals, max_workers, entropy_threshold):
+def get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers, entropy_threshold):
     segments = list(_segments_by_video(meta))
     n = min(max_workers or (os.cpu_count() or 1), len(segments))
     chunk_size = math.ceil(len(segments) / n)
@@ -125,7 +125,6 @@ def find_top_videos(sims, idxs, meta, num_embeds_per_sample, num_intervals, max_
             scored.extend(f.result())
 
     scored.sort(key=lambda t: t[0], reverse=True)
-    scored = scored[:num_intervals]
     return [(a, b, score) for score, a, b in scored]
 
 def _rolling_entropy_valid(idxs: np.ndarray, L: int, thr: float) -> np.ndarray:
@@ -200,7 +199,7 @@ def cosine_search(query_embed, emb_dir: str):
         i += 1
     return similarity_scores, similiarity_idxs, metadata
 
-def get_videos(query_path: str, emb_dir: str, interval_length: int, num_intervals: int):
+def get_videos(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
     print(f"[RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
 
@@ -210,25 +209,36 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
     sims, idxs, meta = cosine_search(query_emb, emb_dir)
     print(f"[RETRIEVAL] Completed embeddings load")
 
-    top_videos = find_top_videos(sims, idxs, meta, num_embeds_per_sample, num_intervals, max_workers=8, entropy_threshold=2.5)
+    top_videos = get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers=8, entropy_threshold=2.5)
     print(f"[RETRIEVAL] Completed similarity search")
 
     total_seconds = 0
     videos = []
-    for i, (start, _, score) in enumerate(top_videos):
+    i = 0
+    j = 0
+    while i < len(top_videos) and j < num_intervals:
+        (start, _, score) = top_videos[i]
+
         start_meta = meta[start]
         video_path = start_meta["video_path"]
         fps = float(start_meta["video_fps"])
 
-        videos.append({
-            "video_path": video_path,
-            "score": score
-        })
-
         curr = start
         while curr < len(meta) and meta[curr]["video_path"] == video_path:
             curr += 1
-        total_seconds += float(meta[curr - 1]["sampled_frame_index"]) / fps
+        video_length = float(meta[curr - 1]["sampled_frame_index"]) / fps
+        i += 1
+        if max_vid_len and video_length > max_vid_len:
+            continue
+        
+        j += 1
+        videos.append({
+                "video_path": video_path,
+                "score": score
+            })
+        
+        total_seconds += video_length
+        
 
     print(f"[RETRIEVAL] Hrs: {total_seconds / 3600}")
 
