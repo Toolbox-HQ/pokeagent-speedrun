@@ -1,5 +1,4 @@
 import os
-import json
 import torch
 import einops
 import numpy as np
@@ -39,15 +38,12 @@ class IDMWindowDataset(Dataset):
     def __init__(self, videos_json, idm_fps=IDM_FPS, window=WINDOW, processor = None):
         
         self.processor = processor
-        self.videos_json = videos_json
-
-        with open(videos_json, "r", encoding="utf-8") as f:
-            items = json.load(f)
-
         self.samples = []
-        for it in items:
+        total_seconds = 0
+        for it in videos_json:
             decoder = VideoDecoder(it["video_path"])
             fps = decoder.metadata.average_fps
+            total_seconds += decoder.metadata.duration_seconds
             stride = max(1, int(round(fps / idm_fps)))
             n_raw = decoder.metadata.num_frames
             n_idm = n_raw // stride
@@ -62,6 +58,8 @@ class IDMWindowDataset(Dataset):
                     "end": win_end,
                     "video_fps": fps,
                 })
+        
+        print(f"[AGENT] Data hrs: {total_seconds / 3600}")
 
     @staticmethod
     def collate_fn(batch: List[dict]):
@@ -179,8 +177,8 @@ def batched_infer_idm_labels(x, idm=None):
 
 
 
-def get_dataloader(videos_json, batch_size=1, num_workers=0, shuffle=False):
-    ds = IDMWindowDataset(videos_json, IDM_FPS, WINDOW)
+def get_dataloader(path, batch_size=1, num_workers=0, shuffle=False):
+    ds = IDMWindowDataset(path, IDM_FPS, WINDOW)
     return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
 
 def downsample(x, stride, offset=0):

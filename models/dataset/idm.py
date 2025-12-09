@@ -10,7 +10,7 @@ from typing import Tuple,List
 import einops
 from models.util.data import ValueInterval, apply_video_transform
 from joblib import Parallel, delayed, cpu_count
-
+import torch.distributed as dist
 
 def filter_map(l: list):
     return list(filter(lambda x: not "filter" in x.keys() or not x["filter"], l))
@@ -106,10 +106,14 @@ class IDMDataset(Dataset):
 
         cpu_jobs = cpu_count()
         print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
-        Parallel(n_jobs=cpu_jobs)(
-            delayed(process_item)(actions, video, self.data_files[ind])
-            for ind, (actions, video) in enumerate(raw_data)
-        )
+        
+        if not dist.is_initialized() or dist.get_rank() == 0:
+            Parallel(n_jobs=cpu_jobs)(
+                delayed(process_item)(actions, video, self.data_files[ind])
+                for ind, (actions, video) in enumerate(raw_data)
+            )
+        dist.barrier()
+
     def __len__(self):
         return len(self.samples)
 

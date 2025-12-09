@@ -81,8 +81,12 @@ class ValueInterval():
         return (start_idx, self.curr_idx-1), item
 
 def list_files_with_extentions(dir: str, ext: str):
-    files = list(filter(lambda x: x.endswith(ext), os.listdir(dir)))
-    return [os.path.join(dir, file) for file in files]
+    matches = []
+    for root, _, files in os.walk(dir):
+        for name in files:
+            if name.endswith(ext):
+                matches.append(os.path.join(root, name))
+    return matches
 
 def map_json_to_mp4(filename):
     dirname, basename = os.path.split(filename)

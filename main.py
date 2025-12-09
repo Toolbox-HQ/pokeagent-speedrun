@@ -21,7 +21,7 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     agent_idm = agent.idm
     
     if dist.get_rank() == 0:
-        print(f"[LOOP] save checkpoint at step {step} to {save_path}")
+        print(f"[GPU {dist.get_rank()} LOOP] save checkpoint at step {step} to {save_path}")
         os.makedirs(save_path, exist_ok=True)
         torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
@@ -41,6 +41,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.util.misc import finalize_wandb
     import os
 
+    rank = dist.get_rank()
+
     with open(inference_args.save_state, 'rb') as f:
         curr_state = f.read()
     
@@ -51,14 +53,16 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
-    video_path = output_dir + '/runs/output'
+    video_path = f'{output_dir}/runs/output_gpu{rank}'
     bootstrap_count = 0
 
-    query_path_template = output_dir + '/query_video/query'
-    idm_data_path_template = output_dir + '/idm_data/bootstrap'
+    agent_data_path = f'{output_dir}/agent_data'
+    idm_data_path = f'{output_dir}/idm_data'
+    query_path_template = f'{output_dir}/query_video/query_gpu{rank}_bootstrap'
+    idm_data_path_template = f'{idm_data_path}/idm_gpu{rank}_bootstrap'
     dino_embedding_path = '.cache/pokeagent/db_embeddings'
-    interval_path_template = output_dir + '/agent_data/intervals'
-    checkpoint_path = output_dir + '/checkpoints/online_debug'
+    agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
+    checkpoint_path =  f'{output_dir}/checkpoints/online_debug'
     query_path = query_path_template + str(bootstrap_count)
 
     conn = EmulatorConnection(inference_args.rom_path)
@@ -71,16 +75,19 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     futures = []
 
     with ThreadPoolExecutor(max_workers=100) as executor:
-        for step in tqdm(range(inference_args.agent_steps), desc="Exploration Agent"):
+        for step in tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration"):
             if step != 0 and step % inference_args.bootstrap_interval == 0:
                 wait(futures)
                 futures.clear()
-
+                
                 conn.release_video_writer(query_path)
 
-                agent.train_idm(idm_data_path_template + str(bootstrap_count))
+                dist.barrier()
+                print(f"[GPU {rank} LOOP] Begin IDM training")
+
+                agent.train_idm(idm_data_path) # train idm on cumulative idm data
                 finalize_wandb(tags = [])
-                print(f"[LOOP] IDM training completed")
+                print(f"[GPU {rank} LOOP] IDM training completed")
 
                 video_intervals = get_videos(f"{query_path}.mp4",
                                                 dino_embedding_path,
@@ -88,17 +95,22 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                                                 inference_args.retrieved_videos,
                                                 inference_args.max_vid_len
                                                 )
-                print(f"[LOOP] Finished Retrieval")
+                print(f"[GPU {rank} LOOP] Finished Retrieval")
                 
-                interval_path = interval_path_template + f"{bootstrap_count}.json"
-                os.makedirs(os.path.dirname(interval_path), exist_ok=True)
-                with open(interval_path, "w") as f:
+                video_path = agent_path_template + f"{bootstrap_count}.json"
+                os.makedirs(os.path.dirname(video_path), exist_ok=True)
+                with open(video_path, "w") as f:
                     json.dump(video_intervals, f)
-                print(f"[LOOP] Saved intervals - begining agent training")
+                print(f"[GPU {rank} LOOP] Saved intervals")
 
-                agent.train_agent(interval_path)
+
+                dist.barrier()
+                print(f"[GPU {rank} LOOP] Begin agent training")
+
+                agent.train_agent(agent_data_path) # train agent on cumulative agent data
                 finalize_wandb(tags = [])
-                print(f"[LOOP] Agent training completed")
+                print(f"[GPU {rank} LOOP] Agent training completed")
+
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)
                
@@ -123,7 +135,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.release_video_writer(query_path)
     conn.release_video_writer(video_path)
     conn.close()
-    dist.destroy_process_group()
 
 def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state, sampling_strategy,  temperature, actions_per_second, inference_save_path, agent_fps, context_length, online, rom_path, idm_data_sample_interval, idm_data_sample_steps, bootstrap_interval):
     from models.inference.agent_inference import PokeagentStateOnly, PokeAgentActionConditioned
@@ -157,6 +168,17 @@ def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state,
     conn.release_video_writer(video_path)
     conn.close()
 
+def get_shared_uuid() -> str:
+    rank = dist.get_rank()
+
+    if rank == 0:
+        obj_list = [str(uuid.uuid4())]   # create on rank 0
+    else:
+        obj_list = [None]                # placeholder
+
+    dist.broadcast_object_list(obj_list, src=0)
+    return obj_list[0]
+
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir):
    
     if inference_args.online:
@@ -165,16 +187,25 @@ def main(model_args, data_args, training_args, inference_args, idm_args, output_
         run_agent(*inference_args)
 
 if __name__ == "__main__":
+    import torch.distributed as dist
     import os
     from argparse import ArgumentParser
     import transformers
     from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
     from models.train.train_idm import IDMArguments
     from models.util.repro import repro_init
-    from models.util.dist import init_distributed
+    from models.util.dist import init_distributed, clean_dist_and_exit
     import uuid
 
     init_distributed()
+
+    shared_uuid = get_shared_uuid()
+    dist.barrier()
+    uid = str(shared_uuid)
+    rank = dist.get_rank()
+
+    if rank == 0:
+        print(f"[RUN UUID]: {uid}")
 
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
@@ -192,10 +223,6 @@ if __name__ == "__main__":
         idm_args
     ) = parser.parse_yaml_file(yaml_file=args.config)
 
-
-    uid = str(uuid.uuid4())
-    print(f"[RUN UUID]: {uid}")
-
     main(model_args,
         data_args,
         training_args,
@@ -203,3 +230,5 @@ if __name__ == "__main__":
         idm_args,
         os.path.join(training_args.output_dir, uid)
         )
+    
+    clean_dist_and_exit()

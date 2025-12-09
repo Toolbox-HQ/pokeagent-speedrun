@@ -1,5 +1,5 @@
 # This code is based on the revised code from fastchat based on tatsu-lab/stanford_alpaca.
-
+import json
 from typing import Tuple, Callable
 import torch
 import torch.nn as nn
@@ -13,7 +13,7 @@ from models.util.repro import repro_init
 from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
-from models.util.data import train_val_split
+from models.util.data import train_val_split, list_files_with_extentions
 
 local_rank = None
 
@@ -63,8 +63,18 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     
     return model, processor, data_args, training_args
 
-def create_dataset(path: str, processor: Callable, split: float = 0.1) -> Tuple[Dataset, Dataset]:
-    dataset = IDMWindowDataset(path)
+def create_dataset(data_dir: str, processor: Callable) -> Tuple[Dataset, Dataset]:
+    videos_json = []
+    videos_json_files = list_files_with_extentions(data_dir, ".json")
+
+    for json_file in videos_json_files:
+        with open(json_file, "r", encoding="utf-8") as f:
+            items = json.load(f)
+            for item in items:
+                if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
+                    videos_json.append({"video_path": item["video_path"]})
+
+    dataset = IDMWindowDataset(videos_json)
     dataset.processor = processor
     train_ds, eval_ds = train_val_split(dataset, split=split)
     return train_ds, eval_ds

@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 from models.util.misc import local_model_map
+import torch.distributed as dist
 
 def get_embeddings(model, processor, path: str):
     decoder = VideoDecoder(path)
@@ -200,17 +201,17 @@ def cosine_search(query_embed, emb_dir: str):
     return similarity_scores, similiarity_idxs, metadata
 
 def get_videos(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
-    print(f"[RETRIEVAL] Begin retrieval process")
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
 
     query_emb = dino_embeddings_every(query_path)
-    print(f"[RETRIEVAL] Created dino embeddings")
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
 
     sims, idxs, meta = cosine_search(query_emb, emb_dir)
-    print(f"[RETRIEVAL] Completed embeddings load")
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed embeddings load")
 
     top_videos = get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers=8, entropy_threshold=2.5)
-    print(f"[RETRIEVAL] Completed similarity search")
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed similarity search")
 
     total_seconds = 0
     videos = []
@@ -239,8 +240,7 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
         
         total_seconds += video_length
         
-
-    print(f"[RETRIEVAL] Hrs: {total_seconds / 3600}")
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
 
     return videos
 
