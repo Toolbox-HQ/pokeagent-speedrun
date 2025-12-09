@@ -18,6 +18,7 @@ def init_distributed(backend="nccl", timeout=None):
         rank=rank,
         world_size=world_size,
         timeout=timeout,
+        device_id=local_rank
     )
 
 def clean_dist_and_exit(_,__):

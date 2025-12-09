@@ -63,7 +63,7 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     
     return model, processor, data_args, training_args
 
-def create_dataset(data_dir: str, processor: Callable) -> Tuple[Dataset, Dataset]:
+def create_dataset(data_dir: str, processor: Callable, split: float = 0.1) -> Tuple[Dataset, Dataset]:
     videos_json = []
     videos_json_files = list_files_with_extentions(data_dir, ".json")
 
