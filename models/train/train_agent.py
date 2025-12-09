@@ -63,10 +63,10 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     
     return model, processor, data_args, training_args
 
-def create_dataset(path: str, processor: Callable) -> Tuple[Dataset, Dataset]:
+def create_dataset(path: str, processor: Callable, split: float = 0.1) -> Tuple[Dataset, Dataset]:
     dataset = IDMWindowDataset(path)
     dataset.processor = processor
-    train_ds, eval_ds = train_val_split(dataset, split=0.05)
+    train_ds, eval_ds = train_val_split(dataset, split=split)
     return train_ds, eval_ds
 
 def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:

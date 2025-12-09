@@ -39,6 +39,8 @@ class InferenceArguments:
 
     retrieved_videos: Optional[int] = field(default=None)
 
+    train_eval_split: Optional[float] = field(default=None)
+
     max_vid_len: float = field(default=None)
 
     def __iter__(self):

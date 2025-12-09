@@ -35,7 +35,7 @@ def gather_and_stack(t: torch.Tensor):
 
 
 @torch.no_grad()
-def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, prefix: str = "") -> float:
+def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, prefix: str = "idm_") -> float:
 
     predictions = torch.argmax(logits, dim=-1)
     correct = (predictions == labels).float()
@@ -89,14 +89,14 @@ def save(model, save_path, cfg):
         print(f"Model saved to {path}")
 
 
-def train_idm_without_overfitting(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
+def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, split: float = 0.1):
     
     rank = dist.get_rank()
     device = f"cuda:{rank}"
     world_size = dist.get_world_size()
 
     if rank == 0:
-        wandb.init(project="pokeagent", config=vars(cfg))
+        run = wandb.init(project="pokeagent", config=vars(cfg))
 
     h,w = cfg.idm_image_size
     dataset = IDMDataset(data_path=dataset_path,
@@ -108,14 +108,13 @@ def train_idm_without_overfitting(model: torch.nn.Module, cfg: IDMArguments, dat
                          buffer_size=20, # buffer_size must be less than minimum action length
                         )
     
-    train_ds, eval_ds = train_val_split(train_ds, split=0.1)
-
+    train_ds, eval_ds = train_val_split(dataset, split=split)
     sampler = DistributedSampler(train_ds)
     loader = DataLoader(
         train_ds,
         batch_size=cfg.idm_batch_size,
         sampler=sampler,
-        num_workers=cfg.idm_dataloaders_per_device*dist.get_world_size(),
+        num_workers=cfg.idm_dataloaders_per_device,
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
@@ -123,9 +122,9 @@ def train_idm_without_overfitting(model: torch.nn.Module, cfg: IDMArguments, dat
     val_sampler = DistributedSampler(eval_ds, shuffle=False)
     val_loader = DataLoader(
         eval_ds,
-        batch_size=cfg.batch_size,
+        batch_size=cfg.idm_batch_size,
         sampler=val_sampler,
-        num_workers=4,
+        num_workers=cfg.idm_dataloaders_per_device,
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
@@ -193,19 +192,19 @@ def train_idm_without_overfitting(model: torch.nn.Module, cfg: IDMArguments, dat
             throughput = world_size / elapsed
 
             total_loss += loss.item()
-            total_acc += metrics["accuracy"]
+            total_acc += metrics["idm_accuracy"]
             num_batches += 1
             global_step += 1
 
             if rank == 0:
                 wandb.log(
                 {
-                "epoch": epoch,
-                "lr": scheduler.get_last_lr(),
-                "loss_step": loss.item(),
-                "throughput": throughput,
-                "epoch_loss": avg_loss,
-                "epoch_accuracy": avg_acc,
+                "idm_epoch": epoch,
+                "idm_lr": scheduler.get_last_lr(),
+                "idm_loss_step": loss.item(),
+                "idm_throughput": throughput,
+                "idm_epoch_loss": avg_loss,
+                "idm_epoch_accuracy": avg_acc,
                 } | metrics
                 )
                 epoch_bar.set_postfix_str(
@@ -217,7 +216,7 @@ def train_idm_without_overfitting(model: torch.nn.Module, cfg: IDMArguments, dat
                 )
                 
 
-            if cfg.eval_every and global_step % cfg.eval_every == 0:
+            if cfg.idm_eval_every and global_step % cfg.idm_eval_every == 0:
                 validate(model, val_loader, device, rank)
 
         avg_loss = total_loss / num_batches
@@ -248,7 +247,7 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
         dataset,
         batch_size=cfg.idm_batch_size,
         sampler=sampler,
-        num_workers=cfg.idm_dataloaders_per_device*dist.get_world_size(),
+        num_workers=cfg.idm_dataloaders_per_device,
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
@@ -329,7 +328,7 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
             throughput = world_size / elapsed
 
             total_loss += loss.item()
-            total_acc += metrics["accuracy"]
+            total_acc += metrics["idm_accuracy"]
             num_batches += 1
             global_step += 1
 
@@ -387,27 +386,23 @@ def main():
     sampler = DistributedSampler(dataset)
     loader = DataLoader(
         dataset,
-        batch_size=cfg.batch_size,
+        batch_size=cfg.idm_batch_size,
         sampler=sampler,
-        num_workers=16*dist.get_world_size(),
+        num_workers=cfg.idm_dataloaders_per_device,
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
 
-    val_loader = None
     val_dataset = IDMDataset(cfg.idm_validation_dir, h=h, w=w, fps=model.fps, s3_bucket=cfg.s3_bucket, is_val=True)
     val_sampler = DistributedSampler(val_dataset, shuffle=False)
     val_loader = DataLoader(
         val_dataset,
-        batch_size=cfg.batch_size,
+        batch_size=cfg.idm_batch_size,
         sampler=val_sampler,
-        num_workers=4,
+        num_workers=cfg.idm_dataloaders_per_device,
         pin_memory=True,
         collate_fn=IDMDataset.collate
     )
-
-    if cfg.torch_compile:
-        model = torch.compile(model, fullgraph=True)
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
@@ -473,7 +468,7 @@ def main():
             throughput = world_size / elapsed
 
             total_loss += loss.item()
-            total_acc += metrics["accuracy"]
+            total_acc += metrics["idm_accuracy"]
             num_batches += 1
             global_step += 1
 
