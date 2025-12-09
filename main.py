@@ -58,7 +58,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     agent_data_path = f'{output_dir}/agent_data'
     idm_data_path = f'{output_dir}/idm_data'
     query_path_template = f'{output_dir}/query_video/query_gpu{rank}_bootstrap'
-    idm_data_path_template = f'{idm_data_path}/bootstrap_gpu{rank}_bootstrap'
+    idm_data_path_template = f'{idm_data_path}/idm_gpu{rank}_bootstrap'
     dino_embedding_path = '.cache/pokeagent/db_embeddings'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
     checkpoint_path =  f'{output_dir}/checkpoints/online_debug'
@@ -164,6 +164,17 @@ def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state,
     conn.release_video_writer(video_path)
     conn.close()
 
+def get_shared_uuid() -> str:
+    rank = dist.get_rank()
+
+    if rank == 0:
+        obj_list = [str(uuid.uuid4())]   # create on rank 0
+    else:
+        obj_list = [None]                # placeholder
+
+    dist.broadcast_object_list(obj_list, src=0)
+    return obj_list[0]
+
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir):
    
     if inference_args.online:
@@ -172,6 +183,7 @@ def main(model_args, data_args, training_args, inference_args, idm_args, output_
         run_agent(*inference_args)
 
 if __name__ == "__main__":
+    import torch.distributed as dist
     import os
     from argparse import ArgumentParser
     import transformers
@@ -181,10 +193,15 @@ if __name__ == "__main__":
     from models.util.dist import init_distributed, clean_dist_and_exit
     import uuid
 
-    uid = str(uuid.uuid4())
-    print(f"[RUN UUID]: {uid}")
-
     init_distributed()
+
+    shared_uuid = get_shared_uuid()
+    dist.barrier()
+    uid = str(shared_uuid)
+    rank = dist.get_rank()
+
+    if rank == 0:
+        print(f"[RUN UUID]: {uid}")
 
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
