@@ -15,12 +15,12 @@ logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "steps"
-eval_steps: 20
+eval_steps: 40
 dataloader_num_workers: 8
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 600
+agent_steps: 1000
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
