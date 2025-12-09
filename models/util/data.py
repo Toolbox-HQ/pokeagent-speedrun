@@ -212,3 +212,14 @@ def load_json(path):
 def save_json(path: str, data) -> None:
     with open(path, "wb") as f:
         f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
+
+def train_val_split(dataset, split: float = 0.05):
+    from torch.utils.data import Subset
+    
+    num_samples = len(dataset)
+    indices = list(range(num_samples))
+    eval_idx = random.sample(indices, round(num_samples*split))
+    train_idx = [i for i in indices if i not in eval_idx]
+
+    # train, eval
+    return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
