@@ -38,6 +38,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
+    from models.util.misc import finalize_wandb
     import os
 
     with open(inference_args.save_state, 'rb') as f:
@@ -78,6 +79,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 conn.release_video_writer(query_path)
 
                 agent.train_idm(idm_data_path_template + str(bootstrap_count))
+                finalize_wandb(tags = [])
                 print(f"[LOOP] IDM training completed")
 
                 video_intervals = get_videos(f"{query_path}.mp4",
@@ -95,6 +97,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 print(f"[LOOP] Saved intervals - begining agent training")
 
                 agent.train_agent(interval_path)
+                finalize_wandb(tags = [])
                 print(f"[LOOP] Agent training completed")
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)

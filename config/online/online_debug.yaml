@@ -36,7 +36,7 @@ agent_fps: 2
 max_vid_len: 900
 match_length: 540
 retrieved_videos: 10
-train_eval_split: 0.2
+train_eval_split: 0.1
 
 # idm
 output_classes: 9
