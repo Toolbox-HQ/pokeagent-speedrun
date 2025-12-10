@@ -104,7 +104,7 @@ class IDMDataset(Dataset):
                 print(f"[IDM Dataset] filter pipeline fail on {video}")
                 raise e
 
-        cpu_jobs = cpu_count() // 4
+        cpu_jobs = cpu_count() // 8
         dist.barrier()
 
         if not dist.is_initialized() or dist.get_rank() == 0:
@@ -113,7 +113,7 @@ class IDMDataset(Dataset):
                 delayed(process_item)(actions, video, self.data_files[ind])
                 for ind, (actions, video) in enumerate(raw_data)
             )
-            
+
         dist.barrier()
 
     def __len__(self):
