@@ -109,7 +109,7 @@ class IDMDataset(Dataset):
 
         if not dist.is_initialized() or dist.get_rank() == 0:
             print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
-            Parallel(n_jobs=cpu_jobs, backend="threads")(
+            Parallel(n_jobs=cpu_jobs, backend="threading")(
                 delayed(process_item)(actions, video, self.data_files[ind])
                 for ind, (actions, video) in enumerate(raw_data)
             )
