@@ -1,8 +1,9 @@
-def init_distributed(backend="nccl", timeout=None):
+def init_distributed(backend="nccl"):
     import torch
     import torch.distributed as dist
     import os
-
+    from datetime import timedelta
+    
     if dist.is_initialized():
         return
 
@@ -17,7 +18,7 @@ def init_distributed(backend="nccl", timeout=None):
         init_method="env://",
         rank=rank,
         world_size=world_size,
-        timeout=timeout,
+        timeout=timedelta(minutes=30),
         device_id=local_rank
     )
 
