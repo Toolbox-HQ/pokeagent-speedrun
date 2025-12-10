@@ -13,6 +13,8 @@ warmup_ratio: 0.05
 lr_scheduler_type: "linear"
 logging_steps: 1
 gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
 report_to: "wandb"
 eval_strategy: "steps"
 eval_steps: 250

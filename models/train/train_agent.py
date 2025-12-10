@@ -30,8 +30,8 @@ def init_model(model_args: ModelArguments, training_args: TrainingArguments):
     model.idm_labelling_fn, idm = get_idm_labeller(device)
 
     if training_args.gradient_checkpointing:
-        model.text_model.gradient_checkpointing_enable()
-        model.vision_tower.gradient_checkpointing_enable()
+        model.text_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs=training_args.gradient_checkpointing_kwargs)
+        model.vision_tower.gradient_checkpointing_enable(gradient_checkpointing_kwargs=training_args.gradient_checkpointing_kwargs)
         training_args.gradient_checkpointing = False
     
     return model, idm, processor, device
