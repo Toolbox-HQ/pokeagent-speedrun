@@ -104,14 +104,16 @@ class IDMDataset(Dataset):
                 print(f"[IDM Dataset] filter pipeline fail on {video}")
                 raise e
 
-        cpu_jobs = cpu_count()
-        print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
-        
+        cpu_jobs = cpu_count() // 4
+        dist.barrier()
+
         if not dist.is_initialized() or dist.get_rank() == 0:
-            Parallel(n_jobs=cpu_jobs)(
+            print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
+            Parallel(n_jobs=cpu_jobs, backend="threads")(
                 delayed(process_item)(actions, video, self.data_files[ind])
                 for ind, (actions, video) in enumerate(raw_data)
             )
+            
         dist.barrier()
 
     def __len__(self):
