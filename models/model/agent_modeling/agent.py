@@ -32,9 +32,7 @@ from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
 from torch.nn import Module
 from models.policy import NUM_ACTION_CLASSES
-
-# TODO this should refactored to be a util
-from models.train.train_idm import compute_accuracy
+from models.util.dist import compute_accuracy
 
 
 class MLP(nn.Module):

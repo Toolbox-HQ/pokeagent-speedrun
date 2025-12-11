@@ -14,6 +14,7 @@ from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
 from models.util.data import train_val_split, list_files_with_extentions
+import torch.distributed as dist
 
 local_rank = None
 
@@ -94,6 +95,7 @@ def train_with_rollback(model: nn.Module, training_args: TrainingArguments, trai
     trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.rollback_on_overfit(".cache/pokeagent/tmp_checkpoints")
     trainer.train()
+    print(f"[RANK {dist.get_rank()} TRAINER] Agent training completes")
     trainer.run_rollback(model)
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ from models.util.data import reduce_dict
 from pprint import pprint
 from models.dataclass import IDMArguments
 from models.util.data import train_val_split
+from models.util.dist import compute_accuracy
 
 def setup_distributed():
 
@@ -25,32 +26,6 @@ def setup_distributed():
     torch.cuda.set_device(local_rank)
     world_size = dist.get_world_size()
     return local_rank, world_size
-
-def gather_and_stack(t: torch.Tensor):
-    t = t.contiguous()
-    world_size = dist.get_world_size()
-    gather_list = [torch.zeros_like(t) for _ in range(world_size)]
-    dist.all_gather(gather_list, t)
-    return torch.stack(gather_list)
-
-
-@torch.no_grad()
-def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, prefix: str = "idm_") -> float:
-
-    predictions = torch.argmax(logits, dim=-1)
-    correct = (predictions == labels).float()
-    acc = correct.mean()
-    dist.all_reduce(acc, op=dist.ReduceOp.AVG)
-    accuracy = { f"{prefix}accuracy": acc.mean().item()}
-
-    for label in list(CLASS_TO_KEY.keys()):
-        l = gather_and_stack(labels)
-        c = gather_and_stack(correct)
-        c = c[l == label]
-        if c.numel():
-            accuracy[f"{prefix}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item()
-
-    return accuracy
 
 @torch.no_grad()
 def validate(model, val_loader, device, rank):
@@ -71,7 +46,7 @@ def validate(model, val_loader, device, rank):
         loss = out.loss
         logits = out.logits
 
-        stats.append(compute_accuracy(logits, labels, is_val=True) | {"val_loss": loss.cpu().item()})
+        stats.append(compute_accuracy(logits, labels, prefix="eval") | {"val_loss": loss.cpu().item()})
 
     
     if rank == 0:

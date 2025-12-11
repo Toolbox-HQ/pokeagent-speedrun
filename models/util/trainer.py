@@ -4882,27 +4882,16 @@ class Trainer:
 
         if self.rollback["overfit"]:
             path = self.rollback["checkpoints"][0]["path"]
-            print(f"[TRAINER] rolling back to {path}")
+            print(f"[RANK {dist.get_rank()} TRAINER] rolling back to {path}")
             model.load_state_dict(load_file(path))
         else:
-            print(f"[TRAINER] No overfitting detected, skipping rollback")
-
-    def clean_up_rollback(self):
-
-        if dist.is_initialized():
-            dist.barrier()
-        
-        for _, path in self.rollback["checkpoints"]:
-            try:
-                os.remove(path)
-            except FileNotFoundError:
-                pass
-        print(f"[TRAINER] Cleaned up rollback checkpoints")
+            print(f"[RANK {dist.get_rank()} TRAINER] No overfitting detected, skipping rollback")
 
     def log_for_rollback(self, eval_loss, stop_training=False):
 
         if stop_training and len(self.rollback["checkpoints"]) != 0 and self.rollback["checkpoints"][0]["loss"] < eval_loss:
-            print(f'[TRAINER] Overfitting detected this checkpoint - previous loss: {str(self.rollback["checkpoints"][0]["loss"])} | current loss: {eval_loss}')
+            print(f'[RANK {dist.get_rank()} TRAINER] Overfitting detected this checkpoint - previous loss: {str(self.rollback["checkpoints"][0]["loss"])} | current loss: {eval_loss}')
+            print(f'[RANK {dist.get_rank()} TRAINER] Likely rollback candidate: {self.rollback["checkpoints"][0]["path"]}')
             self.rollback["overfit"] = True
             self.control.should_training_stop = True
             return
@@ -4916,7 +4905,8 @@ class Trainer:
         if dist.get_rank() == 0:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             save_file(self.model.state_dict(), save_path)
-            print(f"[TRAINER] Saved rollback candidate | loss: {str(eval_loss)} | path {save_path}")
+            print(f"[RANK {dist.get_rank()} TRAINER] Saved rollback candidate | loss: {str(eval_loss)} | path {save_path}")
+        dist.barrier()
 
         self.rollback["checkpoints"].insert(0, {
             "loss": eval_loss,
@@ -5034,6 +5024,7 @@ class Trainer:
 
             av = sum(total) / count
             if isinstance(av, torch.Tensor):
+                if dist.is_initialized(): dist.all_reduce(av, dist.ReduceOp.AVG)
                 av = av.item()
             metrics[key] = av
 

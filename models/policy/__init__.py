@@ -1,6 +1,6 @@
 from .random_policy import RandomPolicy, RandomMovementPolicy
 from .policy import Policy
-from emulator.keys import MGBA_KEY_LIST, CLASS_TO_KEY, KEY_TO_CLASS, NUM_ACTION_CLASSES
+from emulator.keCLASS_TO_KEYys import MGBA_KEY_LIST, , KEY_TO_CLASS, NUM_ACTION_CLASSES
 from models.dataclass import parse_dataclass, PolicyConfig
 
 def policy_map(x: str):
