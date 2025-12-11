@@ -161,7 +161,7 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
                 optimizer.zero_grad()
                 scheduler.step()
 
-            metrics = compute_accuracy(logits, labels)
+            metrics = compute_accuracy(logits, labels, prefix="idm_")
             elapsed = time.time() - start_time
             start_time = time.time()
             throughput = world_size / elapsed
@@ -297,7 +297,7 @@ def train_idm(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str):
                 optimizer.zero_grad()
                 scheduler.step()
 
-            metrics = compute_accuracy(logits, labels)
+            metrics = compute_accuracy(logits, labels, prefix="idm_")
             elapsed = time.time() - start_time
             start_time = time.time()
             throughput = world_size / elapsed
@@ -437,7 +437,7 @@ def main():
                 optimizer.zero_grad()
                 scheduler.step()
 
-            metrics = compute_accuracy(logits, labels)
+            metrics = compute_accuracy(logits, labels, prefix="idm_")
             elapsed = time.time() - start_time
             start_time = time.time()
             throughput = world_size / elapsed
