@@ -219,12 +219,18 @@ def save_json(path: str, data) -> None:
 
 def train_val_split(dataset, split: float = 0.05):
     from torch.utils.data import Subset
+    import torch.distributed as dist
     
     num_samples = len(dataset)
     indices = list(range(num_samples))
+    
     eval_idx = random.sample(indices, round(num_samples*split))
-    train_idx = [i for i in indices if i not in eval_idx]
 
+    if dist.is_initialized():
+        dist.broadcast_object_list(eval_idx, src=0)
+        eval_idx = eval_idx[0]
+    
+    train_idx = [i for i in indices if i not in eval_idx]
     train_ds, eval_ds = Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
     print(f"[SPLIT] Train size: {len(train_ds)}, Eval size: {len(eval_ds)} of {type(dataset)}")
 
