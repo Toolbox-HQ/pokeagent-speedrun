@@ -2,8 +2,8 @@ architecture: "state_action_conditioned"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 load_path: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
-output_dir: ".cache/pokeagent/online"
-num_train_epochs: 1
+output_dir: ".cache/pokeagent"
+num_train_epochs: 3
 per_device_train_batch_size: 4
 save_strategy: "no"
 learning_rate: 5.0e-5
@@ -17,7 +17,7 @@ gradient_checkpointing_kwargs:
   use_reentrant: false
 report_to: "wandb"
 eval_strategy: "steps"
-eval_steps: 40
+eval_steps: 0.25
 dataloader_num_workers: 8
 
 # inference
@@ -37,7 +37,7 @@ actions_per_second: 4
 agent_fps: 2
 max_vid_len: 900
 match_length: 540
-retrieved_videos: 10
+retrieved_videos: 20
 train_eval_split: 0.1
 
 # idm

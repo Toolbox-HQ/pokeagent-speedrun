@@ -225,5 +225,7 @@ def train_val_split(dataset, split: float = 0.05):
     eval_idx = random.sample(indices, round(num_samples*split))
     train_idx = [i for i in indices if i not in eval_idx]
 
-    # train, eval
-    return Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
+    train_ds, eval_ds = Subset(dataset=dataset, indices=train_idx), Subset(dataset=dataset, indices=eval_idx)
+    print(f"[SPLIT] Train size: {len(train_ds)}, Eval size: {len(eval_ds)} of {type(dataset)}")
+
+    return train_ds, eval_ds
