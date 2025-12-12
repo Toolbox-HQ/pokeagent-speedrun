@@ -1,0 +1,69 @@
+Bootstrap: docker
+From: ubuntu:24.04
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export PATH="/root/.local/bin:$PATH"
+
+%post
+    apt-get update && \
+        apt-get install -y \
+            git \
+            curl \
+            sudo \
+            xz-utils \
+            ffmpeg \
+            libpng16-16 \
+            libzip4 \
+            libsqlite3-0 \
+            libelf1 \
+            uuid-runtime \
+            build-essential \
+            vim \
+            liblua5.4-0 && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/*
+
+    # Install uv
+    curl -LsSf https://astral.sh/uv/install.sh | \
+    UV_INSTALL_DIR=/app sh
+
+    # Create work directory
+    mkdir -p /app
+    cd /app
+
+    # Download and install mGBA
+    curl -L -o mGBA-0.10.5-ubuntu64-noble.tar.xz \
+        https://github.com/mgba-emu/mgba/releases/download/0.10.5/mGBA-0.10.5-ubuntu64-noble.tar.xz
+
+    tar -xf mGBA-0.10.5-ubuntu64-noble.tar.xz
+    rm mGBA-0.10.5-ubuntu64-noble.tar.xz
+
+    dpkg -i mGBA-0.10.5-ubuntu64-noble/libmgba.deb
+
+%files
+    pyproject.toml /app/
+    .python-version /app/
+    config /app/
+    dconfig /app/
+    emulator /app/
+    models /app/
+    s3_utils /app/
+    script /app/
+    .s3cfg /app/
+    main.py /app/
+    .git /app/
+
+%post
+    cd /app
+    . /app/env
+    uv sync
+    
+%runscript
+    export TRITON_HOME="/app/.cache/pokeagent/tmp"
+    export TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp"
+    cd /app
+    . /app/env
+    . .venv/bin/activate
+    exec /bin/bash
+
