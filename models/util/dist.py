@@ -22,7 +22,19 @@ def init_distributed(backend="nccl"):
         device_id=local_rank
     )
 
-def clean_dist_and_exit(_,__):
+def get_shared_uuid() -> str:
+    import uuid
+    import torch.distributed as dist
+
+    if dist.get_rank() == 0:
+        obj_list = [str(uuid.uuid4())]   # create on rank 0
+    else:
+        obj_list = [None]                # placeholder
+
+    dist.broadcast_object_list(obj_list, src=0)
+    return obj_list[0]
+
+def clean_dist_and_exit():
     import torch.distributed as dist
     dist.destroy_process_group()
     exit(0)

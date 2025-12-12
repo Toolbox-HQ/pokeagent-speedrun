@@ -168,16 +168,6 @@ def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state,
     conn.release_video_writer(video_path)
     conn.close()
 
-def get_shared_uuid() -> str:
-    rank = dist.get_rank()
-
-    if rank == 0:
-        obj_list = [str(uuid.uuid4())]   # create on rank 0
-    else:
-        obj_list = [None]                # placeholder
-
-    dist.broadcast_object_list(obj_list, src=0)
-    return obj_list[0]
 
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir):
    
@@ -194,18 +184,15 @@ if __name__ == "__main__":
     from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments
     from models.train.train_idm import IDMArguments
     from models.util.repro import repro_init
-    from models.util.dist import init_distributed, clean_dist_and_exit
-    import uuid
+    from models.util.dist import init_distributed, clean_dist_and_exit, get_shared_uuid
 
     init_distributed()
 
-    shared_uuid = get_shared_uuid()
-    dist.barrier()
-    uid = str(shared_uuid)
-    rank = dist.get_rank()
+    uuid: str = get_shared_uuid()
+    rank: int = dist.get_rank()
 
     if rank == 0:
-        print(f"[RUN UUID]: {uid}")
+        print(f"[RUN UUID]: {uuid}")
 
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True)
@@ -228,7 +215,7 @@ if __name__ == "__main__":
         training_args,
         inference_args,
         idm_args,
-        os.path.join(training_args.output_dir, uid)
+        os.path.join(training_args.output_dir, uuid)
         )
     
     clean_dist_and_exit()

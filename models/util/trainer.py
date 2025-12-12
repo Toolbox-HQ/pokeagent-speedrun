@@ -4897,15 +4897,16 @@ class Trainer:
             return
 
         from safetensors.torch import save_file
-        import uuid
-        
-        rnd_uuid = str(uuid.uuid4())
-        save_path = os.path.join(self.rollback["cache"], rnd_uuid, f"rollback_model.safetensors")
+        from models.util.dist import get_shared_uuid
+
+        uuid = get_shared_uuid()
+        save_path = os.path.join(self.rollback["cache"], uuid, f"rollback_model.safetensors")
         
         if dist.get_rank() == 0:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             save_file(self.model.state_dict(), save_path)
             print(f"[RANK {dist.get_rank()} TRAINER] Saved rollback candidate | loss: {str(eval_loss)} | path {save_path}")
+        
         dist.barrier()
 
         self.rollback["checkpoints"].insert(0, {
