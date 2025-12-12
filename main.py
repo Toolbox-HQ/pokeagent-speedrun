@@ -27,7 +27,7 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
         emulator.save_state(os.path.join(save_path, f"game.state"))
 
-def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir): 
+def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid: str): 
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
     from emulator.emulator_connection import EmulatorConnection
     from tqdm import tqdm
@@ -86,7 +86,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 print(f"[GPU {rank} LOOP] Begin IDM training")
 
                 agent.train_idm(idm_data_path) # train idm on cumulative idm data
-                finalize_wandb(tags = [])
+                finalize_wandb(tags = [uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
                 video_intervals = get_videos(f"{query_path}.mp4",
@@ -108,7 +108,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 print(f"[GPU {rank} LOOP] Begin agent training")
 
                 agent.train_agent(agent_data_path) # train agent on cumulative agent data
-                finalize_wandb(tags = [])
+                finalize_wandb(tags = [uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
 
                 bootstrap_count += 1
@@ -169,10 +169,10 @@ def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state,
     conn.close()
 
 
-def main(model_args, data_args, training_args, inference_args, idm_args, output_dir):
+def main(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid):
    
     if inference_args.online:
-        run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir)
+        run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid)
     else:
         run_agent(*inference_args)
 
@@ -215,7 +215,8 @@ if __name__ == "__main__":
         training_args,
         inference_args,
         idm_args,
-        os.path.join(training_args.output_dir, uuid)
+        os.path.join(training_args.output_dir, uuid),
+        uuid
         )
     
     clean_dist_and_exit()
