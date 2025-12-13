@@ -176,6 +176,7 @@ def main(model_args, data_args, training_args, inference_args, idm_args, output_
     else:
         run_agent(*inference_args)
 
+
 if __name__ == "__main__":
     import torch.distributed as dist
     import os
