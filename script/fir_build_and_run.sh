@@ -5,6 +5,7 @@
 # Example: ./build_and_run.sh config/online/online_agent.yaml
 
 set -e
+module load apptainer/1.3.5
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <config_file>"
@@ -25,7 +26,7 @@ echo "Building container: ${CONTAINER_NAME}"
 echo "This may take several minutes..."
 
 # Build the container
-apptainer build --mksquashfs-args "-processors 4" "${CONTAINER_PATH}" ./dconfig/apptainer_run.def
+apptainer build "${CONTAINER_PATH}" ./dconfig/apptainer_run.def
 
 echo "Container built successfully: ${CONTAINER_PATH}"
 echo "Submitting job to SLURM..."

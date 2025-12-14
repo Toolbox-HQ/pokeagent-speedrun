@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --gpus=h100:4
 #SBATCH --ntasks=4
-#SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=12
 #SBATCH --time=24:00:00
 #SBATCH --job-name=pokeagent_online
@@ -9,6 +8,7 @@
 #SBATCH --mail-type=ALL
 
 set -e
+module load apptainer/1.3.5
 
 # Container name (defaults to run.sif if not set)
 CONTAINER_NAME="${CONTAINER_NAME:-run.sif}"

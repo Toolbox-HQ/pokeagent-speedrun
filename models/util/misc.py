@@ -14,8 +14,11 @@ def download_models():
     from transformers import AutoModel, AutoProcessor
     AutoModel.from_pretrained("google/siglip-base-patch16-224")
     AutoModel.from_pretrained("Qwen/Qwen3-1.7B")
+    AutoModel.from_pretrained("facebook/dinov2-base")
+
     AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
     AutoProcessor.from_pretrained("Qwen/Qwen3-1.7B")
+    AutoProcessor.from_pretrained("facebook/dinov2-base")
 
 def finalize_wandb(tags: List[str] = []):
     import torch.distributed as dist
