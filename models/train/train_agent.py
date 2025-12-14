@@ -13,7 +13,7 @@ from models.util.repro import repro_init
 from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
 import os
-from models.util.data import train_val_split, list_files_with_extentions, wrap_dataset_getitem
+from models.util.data import train_val_split, list_files_with_extentions, ResampleDataset
 import torch.distributed as dist
 
 local_rank = None
@@ -78,8 +78,10 @@ def create_dataset(data_dir: str, processor: Callable, split: float = 0.1) -> Tu
     dataset = IDMWindowDataset(videos_json)
     dataset.processor = processor
     train_ds, eval_ds = train_val_split(dataset, split=split)
-    train_ds = wrap_dataset_getitem(train_ds)
-    eval_ds = wrap_dataset_getitem(eval_ds)
+
+    # error wrapping
+    train_ds = ResampleDataset(train_ds)
+    eval_ds = ResampleDataset(eval_ds)
     
     return train_ds, eval_ds
 

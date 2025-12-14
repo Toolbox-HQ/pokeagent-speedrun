@@ -4,7 +4,7 @@ import re
 import os.path as path
 from typing import Dict, List
 import random
-import functools
+from torch.utils.data import Dataset
 
 def sample_transform_params():
     hue = random.uniform(-0.2, 0.2)
@@ -238,34 +238,27 @@ def train_val_split(dataset, split: float = 0.05):
 
     return train_ds, eval_ds
 
-def wrap_dataset_getitem(dataset, max_retries=1_000):
-    original_getitem = dataset.__getitem__
-    length = len(dataset)
+class ResampleDataset(Dataset):
 
-    @functools.wraps(original_getitem)
-    def safe_getitem(idx):
-        last_err = None
-        tried = {idx}
+    def __init__(self, dataset, retries=1_000) -> None:
+        self.dataset = dataset
+        self.retries = retries
 
-        for _ in range(max_retries):
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, index: int):
+        attempts = 0
+
+        while attempts < self.retries:
             try:
-                return original_getitem(idx)
+                return self.dataset[index]
             except Exception as e:
-                last_err = e
-                print(f"[ERROR] Dataset error at index {idx} | {repr(e)}")
+                print(f"[ERROR] attempted to get {index} - {str(e)}")
+            
+            attempts += 1
+            index = random.randint(0, len(self.dataset)-1)
+            print(f"[DATASET] retry with index {index}")
 
-                if length <= 1:
-                    break
-
-                # pick a new, different index
-                idx = random.randrange(length)
-                while idx in tried:
-                    idx = random.randrange(length)
-                tried.add(idx)
-
-        raise RuntimeError(
-            f"Failed to fetch a valid sample after {max_retries} retries"
-        ) from last_err
-
-    dataset.__getitem__ = safe_getitem
-    return dataset
+        raise Exception(f"[ERROR] After {attempts} retry attempts could not sample {str(type(self.dataset))}")
+  

@@ -1,15 +1,13 @@
 import torch
 import torch.nn as nn
-import transformers
-from models.util.repro import repro_init
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
 import math
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments, IDMArguments
 from pprint import pprint
-from models.train.train_agent import setup_training, train, create_dataset, init_model, train_with_rollback
-from models.train.train_idm import train_idm, train_idm_best_checkpoint
+from models.train.train_agent import create_dataset, init_model, train_with_rollback
+from models.train.train_idm import train_idm_best_checkpoint
     
 class PokeAgentActionConditioned:
     def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, sampling_strategy="default"):
