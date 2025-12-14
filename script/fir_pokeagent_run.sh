@@ -38,11 +38,11 @@ apptainer exec \
     .cache/pokeagent/containers/${CONTAINER_NAME} \
     bash -c "cd /app && . .venv/bin/activate && \
         torchrun \
-          --nproc_per_node=$NUM_GPUS \
-          --nnodes=1 \
-          --node_rank=0 \
-          --master_addr=localhost \
-          --master_port=35332 \
-          main.py \
-          --config \"$1\""
+            --nproc_per_node=$SLURM_GPUS_ON_NODE \
+            --nnodes=$SLURM_NNODES \
+            --node_rank=$SLURM_NODEID \
+            --master_addr=$(scontrol show hostnames "$SLURM_NODELIST" | head -n1) \
+            --master_port=29500 \
+            main.py \
+            --config \"$1\""
 
