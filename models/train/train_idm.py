@@ -22,7 +22,7 @@ def setup_distributed():
     if not dist.is_initialized():
         dist.init_process_group(backend="nccl")
 
-    local_rank = int(os.environ["LOCAL_RANK"])
+    local_rank = int(os.environ["RANK"])
     torch.cuda.set_device(local_rank)
     world_size = dist.get_world_size()
     return local_rank, world_size
