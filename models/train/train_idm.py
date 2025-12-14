@@ -14,7 +14,7 @@ from models.policy import CLASS_TO_KEY
 from models.util.data import reduce_dict
 from pprint import pprint
 from models.dataclass import IDMArguments
-from models.util.data import train_val_split
+from models.util.data import train_val_split, wrap_dataset_getitem
 from models.util.dist import compute_accuracy
 
 def setup_distributed():
@@ -84,6 +84,9 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
                         )
     
     train_ds, eval_ds = train_val_split(dataset, split=split)
+    train_ds = wrap_dataset_getitem(train_ds)
+    eval_ds = wrap_dataset_getitem(eval_ds)
+
     sampler = DistributedSampler(train_ds)
     loader = DataLoader(
         train_ds,

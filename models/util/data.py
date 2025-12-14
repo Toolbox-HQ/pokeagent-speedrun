@@ -4,6 +4,7 @@ import re
 import os.path as path
 from typing import Dict, List
 import random
+import functools
 
 def sample_transform_params():
     hue = random.uniform(-0.2, 0.2)
@@ -236,3 +237,35 @@ def train_val_split(dataset, split: float = 0.05):
     print(f"[SPLIT] Train size: {len(train_ds)}, Eval size: {len(eval_ds)} of {type(dataset)}")
 
     return train_ds, eval_ds
+
+def wrap_dataset_getitem(dataset, max_retries=1_000):
+    original_getitem = dataset.__getitem__
+    length = len(dataset)
+
+    @functools.wraps(original_getitem)
+    def safe_getitem(idx):
+        last_err = None
+        tried = {idx}
+
+        for _ in range(max_retries):
+            try:
+                return original_getitem(idx)
+            except Exception as e:
+                last_err = e
+                print(f"[ERROR] Dataset error at index {idx} | {repr(e)}")
+
+                if length <= 1:
+                    break
+
+                # pick a new, different index
+                idx = random.randrange(length)
+                while idx in tried:
+                    idx = random.randrange(length)
+                tried.add(idx)
+
+        raise RuntimeError(
+            f"Failed to fetch a valid sample after {max_retries} retries"
+        ) from last_err
+
+    dataset.__getitem__ = safe_getitem
+    return dataset
