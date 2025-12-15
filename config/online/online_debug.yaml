@@ -17,13 +17,14 @@ gradient_checkpointing_kwargs:
   use_reentrant: false
 report_to: "wandb"
 eval_strategy: "steps"
+eval_steps: 0.25
 eval_steps: 0.0833333 # 0.0833333 ~= 0.25 * num_train_epochs => eval every ~0.25 epochs
 dataloader_num_workers: 8
 eval_on_start: true
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 1000
+agent_steps: 3000
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
@@ -32,7 +33,7 @@ rom_path: .cache/pokeagent/rom/rom.gba
 online: True
 idm_data_sample_interval: 20
 idm_data_sample_steps: 100
-bootstrap_interval: 400
+bootstrap_interval: 1200
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
@@ -57,4 +58,3 @@ idm_eval_every: 0.25
 idm_scheduler: null
 idm_output_path: rnd_idm_model.pt
 idm_dataloaders_per_device: 4
-

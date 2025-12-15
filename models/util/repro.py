@@ -12,11 +12,16 @@ def repro_init(cfg: str, seed: int = 1234):
 
 
 def get_config_file(path):
-    config_name = re.search(r"/([^/]+?)(?:\.[^./]+)?$", path)
+    config_name: str = re.search(r"/([^/]+?)(?:\.[^./]+)?$", path).group(1)
     assert config_name, "Did not find config file name in path."
-    os.environ["WANDB_NAME"] = config_name.group(1)
+    os.environ["WANDB_NAME"] = config_name
     os.environ["WANDB_PROJECT"] = "pokeagent"
-    return config_name.group(1)
+
+    if "debug" in config_name.lower():
+        print(f"[WANDB] Disabled wandb because of debug config")
+        os.environ["WANDB_MODE"] = "disabled"
+
+    return config_name
 
 
 def get_modified_files():
