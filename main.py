@@ -13,7 +13,6 @@ def run_random_agent(conn, steps, video_path):
 
 def checkpoint(output_dir: str, step: int, agent, emulator):
     import os
-    import torch
     import torch.distributed as dist
     from safetensors.torch import save_file
     save_path = os.path.join(output_dir, f"checkpoint-{step}")
@@ -38,8 +37,8 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     
     print(f"[GPU {dist.get_rank()} LOOP] load from {checkpoint_dir}")
 
-    agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
-    agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
+    agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
+    agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
     emulator.load_state_from_file(os.path.join(checkpoint_dir, f"game.state"))
     dist.barrier()
 
