@@ -47,7 +47,7 @@ idm_fps: 4
 idm_batch_size: 2
 idm_image_size: [128, 128]
 s3_bucket: b4schnei
-idm_epochs: 1
+idm_epochs: 3
 idm_lr: 5.0e-5
 idm_weight_decay: 0
 idm_max_grad_norm: 1.0
