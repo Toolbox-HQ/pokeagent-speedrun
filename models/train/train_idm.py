@@ -210,10 +210,6 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
             global_step += 1
             num_batches += 1
 
-        avg_loss = total_loss / num_batches
-        avg_acc = total_acc / num_batches
-
-            global_step += 1
 
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
