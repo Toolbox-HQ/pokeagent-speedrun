@@ -15,7 +15,6 @@ def init_distributed(backend="nccl"):
 
     dist.init_process_group(
         backend=backend,
-        init_method="env://",
         rank=rank,
         world_size=world_size,
         timeout=timedelta(minutes=30),
