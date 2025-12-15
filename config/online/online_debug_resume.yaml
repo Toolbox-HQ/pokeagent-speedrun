@@ -25,7 +25,7 @@ eval_on_start: true
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 3000
+agent_steps: 28800
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
@@ -34,13 +34,12 @@ rom_path: .cache/pokeagent/rom/rom.gba
 online: True
 idm_data_sample_interval: 20
 idm_data_sample_steps: 100
-bootstrap_interval: 1200
+bootstrap_interval: 7200
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
-max_vid_len: 900
 match_length: 540
-retrieved_videos: 20
+retrieved_videos: 200
 train_eval_split: 0.1
 
 # idm

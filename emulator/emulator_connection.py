@@ -33,6 +33,11 @@ class EmulatorConnection:
         with open(path, "wb") as f:
             f.write(bytes)
 
+    def load_state_from_file(self, path: str) -> None:
+        with open(path, "rb") as f:
+            state_bytes = f.read()
+        self.load_state(state_bytes)
+
     def set_key(self, key: str):
         self.parent_conn.send(("set_key", key))
     

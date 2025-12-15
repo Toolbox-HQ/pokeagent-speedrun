@@ -23,9 +23,25 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     if dist.get_rank() == 0:
         print(f"[GPU {dist.get_rank()} LOOP] save checkpoint at step {step} to {save_path}")
         os.makedirs(save_path, exist_ok=True)
-        torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
+        save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
         emulator.save_state(os.path.join(save_path, f"game.state"))
+
+def load_checkpoint(checkpoint_dir: str, agent, emulator):
+    import os
+    import torch
+    import torch.distributed as dist
+    from safetensors.torch import load_file
+    
+    agent_model: torch.nn.Module = agent.model
+    agent_idm: torch.nn.Module = agent.idm
+    
+    print(f"[GPU {dist.get_rank()} LOOP] load from {checkpoint_dir}")
+
+    agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
+    agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
+    emulator.load_state_from_file(os.path.join(checkpoint_dir, f"game.state"))
+    dist.barrier()
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
@@ -73,6 +89,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.start_video_writer(video_path)
 
     futures = []
+
+    if training_args.resume_from_checkpoint is not None:
+        load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
+        training_args.resume_from_checkpoint = None
 
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration"):
