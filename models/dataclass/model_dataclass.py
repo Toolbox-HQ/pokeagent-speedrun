@@ -57,7 +57,7 @@ class IDMArguments:
     idm_max_grad_norm: float = field(default=1.0)
     wandb_project: str = field(default="pokeagent")
     idm_gradient_accumulation_steps: int = field(default=1)
-    idm_eval_every: int | float = field(default=None)
+    idm_eval_every: Optional[float] = field(default=None)
     idm_scheduler: str = field(default=None)
     # Output
     idm_output_path: str = field(default="model.pt")

@@ -214,13 +214,14 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
             
             should_eval = False
 
-            if cfg.idm_eval_every and isinstance(cfg.idm_eval_every, int)  \
-            and global_step % cfg.idm_eval_every == 0:
-                should_eval = True
-            
-            if cfg.idm_eval_every and isinstance(cfg.idm_eval_every, float) \
-            and global_step % round(cfg.idm_eval_every * len(loader)) == 0:
-                should_eval = True      
+            if cfg.idm_eval_every:
+                if cfg.idm_eval_every >= 1.0:
+                    step_interval = int(cfg.idm_eval_every)
+                else:
+                    step_interval = max(1, round(cfg.idm_eval_every * len(loader)))
+
+                if global_step % step_interval == 0:
+                    should_eval = True      
 
 
             if should_eval:
@@ -383,8 +384,14 @@ def main():
             if cfg.idm_save_every and global_step % cfg.idm_save_every == 0:
                 save(model, os.path.join(save_path,str(global_step)), cfg)
 
-            if cfg.idm_eval_every and global_step % cfg.idm_eval_every == 0:
-                validate(model, val_loader, device, rank)
+            if cfg.idm_eval_every:
+                if cfg.idm_eval_every >= 1.0:
+                    step_interval = int(cfg.idm_eval_every)
+                else:
+                    step_interval = max(1, round(cfg.idm_eval_every * len(loader)))
+
+                if global_step % step_interval == 0:
+                    validate(model, val_loader, device, rank)
 
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
