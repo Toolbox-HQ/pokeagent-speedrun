@@ -15,7 +15,7 @@ from models.util.data import reduce_dict
 from pprint import pprint
 from models.dataclass import IDMArguments
 from models.util.data import train_val_split, ResampleDataset
-from models.util.dist import compute_accuracy
+from models.util.dist import compute_accuracy, get_shared_uuid
 
 def setup_distributed():
 
@@ -32,6 +32,8 @@ def validate(model, val_loader, device, rank):
 
     model.eval()
     stats = []
+    total_loss = 0.0
+    num_batches = 0
 
     for inp, labels in val_loader:
         dummy = {
@@ -46,15 +48,25 @@ def validate(model, val_loader, device, rank):
         loss = out.loss
         logits = out.logits
 
-        stats.append(compute_accuracy(logits, labels, prefix="eval") | {"val_loss": loss.cpu().item()})
-
+        stats.append(compute_accuracy(logits, labels, prefix="eval"))
+        total_loss += loss.detach().item()
+        num_batches += 1
     
+
+    loss_tensor = torch.tensor([total_loss, num_batches], dtype=torch.float32, device=device)
+    if dist.is_initialized():
+        dist.all_reduce(loss_tensor, op=dist.ReduceOp.SUM)
+    global_total_loss, global_num_batches = loss_tensor.tolist()
+    val_loss = global_total_loss / max(global_num_batches, 1.0)
+
     if rank == 0:
         log = reduce_dict(stats)
+        log["val_loss"] = float(val_loss)
         wandb.log(log)
         pprint(log)
-
+    
     model.train()
+    return val_loss
 
 def save(model, save_path, cfg):
     if dist.get_rank() == 0:
@@ -67,7 +79,7 @@ def save(model, save_path, cfg):
 def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, split: float = 0.1):
     
     rank = dist.get_rank()
-    device = f"cuda:{rank}"
+    device = f"cuda:{int(os.environ["LOCAL_RANK"])}"
     world_size = dist.get_world_size()
 
     if rank == 0:
@@ -123,6 +135,14 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
         from torch.optim.lr_scheduler import ConstantLR
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
 
+    run_uuid = get_shared_uuid()
+    tmp_ckpt_dir = os.path.join(".cache", "pokeagent", "tmp_checkpoints")
+    if rank == 0:
+        os.makedirs(tmp_ckpt_dir, exist_ok=True)
+
+    best_val_loss = float("inf")
+    best_ckpt_path = None
+
     for epoch in range(cfg.idm_epochs):
         sampler.set_epoch(epoch)
         epoch_bar = tqdm(
@@ -133,7 +153,6 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
         )
         start_time = time.time()
 
-        # Track metrics for epoch averages
         total_loss = 0.0
         total_acc = 0.0
         num_batches = 0
@@ -205,7 +224,15 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
 
 
             if should_eval:
-                validate(model, val_loader, device, rank)
+                val_loss = validate(model, val_loader, device, rank)
+                if rank == 0 and val_loss is not None:
+
+                    ckpt_path = os.path.join(tmp_ckpt_dir, f"idm_{run_uuid}_step_{global_step}.pt")
+                    torch.save(model.module.state_dict(), ckpt_path)
+
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        best_ckpt_path = ckpt_path
             
             global_step += 1
             num_batches += 1
@@ -214,6 +241,12 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
         avg_loss = total_loss / num_batches
         avg_acc = total_acc / num_batches
 
+    dist.barrier()
+    if best_ckpt_path is not None:
+        state_dict = torch.load(best_ckpt_path, map_location=device)
+        model.module.load_state_dict(state_dict)
+        print(f"[GPU {rank} IDM] best checkpoint was {best_ckpt_path}")
+    dist.barrier()
 
 def main():
 
