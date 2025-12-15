@@ -10,7 +10,6 @@ from models.model.IDM.policy import InverseActionPolicy as IDModel
 from models.dataset import IDMDataset
 from transformers import HfArgumentParser
 from models.util.repro import repro_init
-from models.policy import CLASS_TO_KEY
 from models.util.data import reduce_dict
 from pprint import pprint
 from models.dataclass import IDMArguments
