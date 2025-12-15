@@ -35,7 +35,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     agent_model: torch.nn.Module = agent.model
     agent_idm: torch.nn.Module = agent.idm
     
-    print(f"[GPU {dist.get_rank()} LOOP] load from {checkpoint_dir}")
+    print(f"[GPU {dist.get_rank()} LOOP] load checkpoint from {checkpoint_dir}")
 
     agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
     agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
@@ -208,15 +208,18 @@ if __name__ == "__main__":
 
     init_distributed()
 
-    uuid: str = get_shared_uuid()
     rank: int = dist.get_rank()
+
+    parser: ArgumentParser = ArgumentParser()
+    parser.add_argument("--config", type=str, required=True, help="Config for model run")
+    parser.add_argument("--uuid", type=str, required=False, help="Optional run UUID; if not provided a shared UUID is generated")
+    
+    args = parser.parse_args()
+    uuid: str = args.uuid if getattr(args, "uuid", None) else get_shared_uuid()
 
     if rank == 0:
         print(f"[RUN UUID]: {uuid}")
 
-    parser: ArgumentParser = ArgumentParser()
-    parser.add_argument("--config", type=str, required=True)
-    args = parser.parse_args()
     checkpoint_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(

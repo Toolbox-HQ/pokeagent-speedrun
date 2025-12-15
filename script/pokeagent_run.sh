@@ -11,6 +11,9 @@ set -e
 # Container name (defaults to run.sif if not set)
 CONTAINER_NAME="${CONTAINER_NAME:-run.sif}"
 
+# Run UUID (defaults to container base name without .sif if not set)
+RUN_UUID="${RUN_UUID:-${CONTAINER_NAME%.sif}}"
+
 # Determine number of GPUs
 if [[ -n "$CUDA_VISIBLE_DEVICES" ]]; then
     NUM_GPUS=$(echo "$CUDA_VISIBLE_DEVICES" | tr ',' '\n' | wc -l)
@@ -42,5 +45,6 @@ apptainer exec \
           --master_addr=localhost \
           --master_port=35332 \
           main.py \
-          --config \"$1\""
+          --config \"$1\" \
+          --uuid \"${RUN_UUID}\""
 
