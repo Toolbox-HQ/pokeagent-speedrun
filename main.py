@@ -53,7 +53,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
-    from models.util.misc import finalize_wandb
+    from models.util.misc import finalize_wandb, collect_query_files
     import os
 
     rank = dist.get_rank()
@@ -127,7 +127,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 print(f"[GPU {rank} LOOP] Begin agent training")
 
                 agent.train_agent(agent_data_path) # train agent on cumulative agent data
-                finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
+                
+                agent_artifacts = collect_query_files(output_dir, bootstrap_count)                
+                finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"], artifacts=agent_artifacts)
                 print(f"[GPU {rank} LOOP] Agent training completed")
 
                 bootstrap_count += 1
