@@ -79,13 +79,14 @@ def save(model, save_path, cfg):
 def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset_path: str, split: float = 0.1):
     
     rank = dist.get_rank()
-    device = f"cuda:{int(os.environ["LOCAL_RANK"])}"
+    device = f"cuda:{int(os.environ['LOCAL_RANK'])}"
+    model.to(device=device)
     world_size = dist.get_world_size()
 
     if rank == 0:
         wandb.init(project="pokeagent", config=vars(cfg))
-
-    h,w = cfg.idm_image_size
+    
+    h, w = cfg.idm_image_size
     dataset = IDMDataset(data_path=dataset_path,
                          h=h,
                          w=w,
@@ -119,8 +120,8 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
         collate_fn=IDMDataset.collate
     )
 
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
+    wrapped_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
+    optimizer = torch.optim.Adam(wrapped_model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
 
     avg_loss = 0
     avg_acc = 0
@@ -161,14 +162,14 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
             # TODO refactor out useless but required inputs
             dummy = {
                 "first": torch.zeros((inp.shape[0], 1)).to(device),
-                "state_in": model.module.initial_state(inp.shape[0])
+                "state_in": wrapped_model.module.initial_state(inp.shape[0])
             }
 
             # TODO refactor so that this isn't wrapped in a dict
             inp = {"img": inp.to(device=device)}
             labels = labels.to(dtype=torch.long, device=device)
             
-            out = model(inp, labels=labels, **dummy)
+            out = wrapped_model(inp, labels=labels, **dummy)
             loss = out.loss
             logits = out.logits
 
@@ -176,8 +177,8 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
 
             if global_step % cfg.idm_gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), 
-                    max_norm=cfg.idm_max_grad_norm
+                    wrapped_model.parameters(),
+                    max_norm=cfg.idm_max_grad_norm,
                 )
                 optimizer.step()
                 optimizer.zero_grad()
@@ -224,11 +225,11 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
 
 
             if should_eval:
-                val_loss = validate(model, val_loader, device, rank)
+                val_loss = validate(wrapped_model, val_loader, device, rank)
                 if rank == 0 and val_loss is not None:
 
                     ckpt_path = os.path.join(tmp_ckpt_dir, f"idm_{run_uuid}_step_{global_step}.pt")
-                    torch.save(model.module.state_dict(), ckpt_path)
+                    torch.save(model.state_dict(), ckpt_path)
 
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
@@ -244,7 +245,7 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
     dist.barrier()
     if best_ckpt_path is not None:
         state_dict = torch.load(best_ckpt_path, map_location=device)
-        model.module.load_state_dict(state_dict)
+        model.load_state_dict(state_dict)
         print(f"[GPU {rank} IDM] best checkpoint was {best_ckpt_path}")
     dist.barrier()
 
