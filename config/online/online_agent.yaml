@@ -3,7 +3,7 @@ lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 load_path: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
 output_dir: ".cache/pokeagent/online"
-num_train_epochs: 1
+num_train_epochs: 3
 per_device_train_batch_size: 4
 save_strategy: "no"
 learning_rate: 5.0e-5
@@ -16,14 +16,15 @@ gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
 report_to: "wandb"
-eval_strategy: "no"
+eval_strategy: "steps"
+eval_steps: 0.25
 eval_steps: 0.0833333 # 0.0833333 ~= 0.25 * num_train_epochs => eval every ~0.25 epochs
 dataloader_num_workers: 8
-eval_on_start: false
+eval_on_start: true
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 19200
+agent_steps: 28800
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
@@ -32,12 +33,12 @@ rom_path: .cache/pokeagent/rom/rom.gba
 online: True
 idm_data_sample_interval: 20
 idm_data_sample_steps: 100
-bootstrap_interval: 4800
+bootstrap_interval: 7200
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
 match_length: 540
-retrieved_videos: 200
+retrieved_videos: 100
 train_eval_split: 0.1
 
 # idm
