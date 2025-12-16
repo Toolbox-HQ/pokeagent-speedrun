@@ -18,6 +18,8 @@ class EmulatorConnection:
     
     def load_state(self, state_bytes: bytes):
         self.parent_conn.send(("load_state", state_bytes))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
     
     def get_state(self) -> bytes:
         self.parent_conn.send(("get_state", None))
@@ -40,9 +42,13 @@ class EmulatorConnection:
 
     def set_key(self, key: str):
         self.parent_conn.send(("set_key", key))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
     
     def run_frames(self, num_frames: int):
         self.parent_conn.send(("run_frames", num_frames))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
     
     def get_current_frame(self) -> Image:
         self.parent_conn.send(("get_current_frame", None))
@@ -54,16 +60,26 @@ class EmulatorConnection:
 
     def close(self):
         self.parent_conn.send(("quit", None))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
         self._child.join()
 
     def create_video_writer(self, path: str):
         self.parent_conn.send(("create_video_writer", path))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
     
     def start_video_writer(self, path: str):
         self.parent_conn.send(("start_video_writer", path))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
 
     def pause_video_writer(self, path: str):
         self.parent_conn.send(("pause_video_writer", path))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"
 
     def release_video_writer(self, path: str):
         self.parent_conn.send(("release_video_writer", path))
+        msg_type, payload = self.parent_conn.recv()
+        assert msg_type == "ack"

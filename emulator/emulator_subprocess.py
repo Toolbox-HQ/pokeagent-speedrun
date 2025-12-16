@@ -22,6 +22,7 @@ def _initialize_emulator(rom_path, connection):
 
 def _load_state(state_bytes: bytes):
     EMULATOR.load_state_bytes(state_bytes)
+    CONNECTION.send(("ack", None))
 
 def _get_state():
     CONNECTION.send(("state", EMULATOR.get_state_bytes()))
@@ -29,6 +30,7 @@ def _get_state():
 def _set_key(key: str):
     global KEY
     KEY = key
+    CONNECTION.send(("ack", None))
 
 def _run_frames(num_frames: int):
     global FRAME
@@ -40,6 +42,7 @@ def _run_frames(num_frames: int):
                 value['idx'] += 1
                 value['vw'].write(cv2.cvtColor(np.array(FRAME), cv2.COLOR_RGB2BGR))
                 value['jw'].log(value['idx'], KEY)
+    CONNECTION.send(("ack", None))
 
 def _get_current_frame():
     if FRAME is None: 
@@ -53,6 +56,7 @@ def _quit():
         value['vw'].release()
         value['jw'].close()
     EMULATOR.stop()
+    CONNECTION.send(("ack", None))
 
 def _create_video_writer(path: str):
     os.makedirs(os.path.dirname(path + ".mp4"), exist_ok=True)
@@ -64,17 +68,21 @@ def _create_video_writer(path: str):
     if path in VwJwFrameIdxWritePairs:
         raise Exception(f"video writer path conflict: {path}")
     VwJwFrameIdxWritePairs[path] = {'vw': vw, 'jw': jw, 'idx': frame_idx, 'write': write}
+    CONNECTION.send(("ack", None))
 
 def _start_video_writer(path: str):
     VwJwFrameIdxWritePairs[path]['write'] = True
+    CONNECTION.send(("ack", None))
 
 def _pause_video_writer(path: str):
     VwJwFrameIdxWritePairs[path]['write'] = False
+    CONNECTION.send(("ack", None))
 
 def _release_video_writer(path: str):
     VwJwFrameIdxWritePairs[path]['vw'].release()
     VwJwFrameIdxWritePairs[path]['jw'].close()
     del VwJwFrameIdxWritePairs[path]
+    CONNECTION.send(("ack", None))
 
 def _loop():
     while True:
