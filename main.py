@@ -116,9 +116,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                                                 )
                 print(f"[GPU {rank} LOOP] Finished Retrieval")
                 
-                video_path = agent_path_template + f"{bootstrap_count}.json"
-                os.makedirs(os.path.dirname(video_path), exist_ok=True)
-                with open(video_path, "w") as f:
+                video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
+                os.makedirs(os.path.dirname(video_intervals_path), exist_ok=True)
+                with open(video_intervals_path, "w") as f:
                     json.dump(video_intervals, f)
                 print(f"[GPU {rank} LOOP] Saved intervals")
 
