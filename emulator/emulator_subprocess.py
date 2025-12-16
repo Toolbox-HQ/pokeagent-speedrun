@@ -32,7 +32,7 @@ def _set_key(key: str):
     KEY = key
     CONNECTION.send(("ack", None))
 
-def _run_frames(num_frames: int):
+def _run_frames(num_frames: int, ack: bool = True):
     global FRAME
     for i in range(num_frames):
         EMULATOR.run_frame_with_keys(KEY_TO_MGBA[KEY])
@@ -42,11 +42,12 @@ def _run_frames(num_frames: int):
                 value['idx'] += 1
                 value['vw'].write(cv2.cvtColor(np.array(FRAME), cv2.COLOR_RGB2BGR))
                 value['jw'].log(value['idx'], KEY)
-    CONNECTION.send(("ack", None))
+    if ack:
+        CONNECTION.send(("ack", None))
 
 def _get_current_frame():
     if FRAME is None: 
-        _run_frames(1)
+        _run_frames(1, ack = False)
     buffer = io.BytesIO()
     FRAME.save(buffer, format="PNG")
     CONNECTION.send(("image", buffer.getvalue()))
