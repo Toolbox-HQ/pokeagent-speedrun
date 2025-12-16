@@ -129,7 +129,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 agent.train_agent(agent_data_path) # train agent on cumulative agent data
                 
                 agent_artifacts = collect_query_files(output_dir, bootstrap_count)                
-                finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"], artifacts=agent_artifacts)
+                finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
 
                 bootstrap_count += 1

@@ -33,24 +33,13 @@ def collect_query_files(output_dir: str, bootstrap_count: int) -> List[str]:
     
     return query_files
 
-def finalize_wandb(tags: List[str] = [], artifacts: List[str] = []):
+def finalize_wandb(tags: List[str] = []):
     import torch.distributed as dist
     if dist.get_rank() == 0:
         import wandb
         run = wandb.run
         if tags:
-            run.tags = tags
-        
-        if artifacts:
-            artifact = wandb.Artifact(f"query_files", type="query_files")
-            for artifact_path in artifacts:
-                if os.path.exists(artifact_path):
-                    artifact.add_file(artifact_path)
-                    print(f"[WANDB] Added artifact: {artifact_path}")
-                else:
-                    print(f"[WANDB] ERROR could not locate artifact: {artifact_path}")
-            run.log_artifact(artifact)
-        
+            run.tags = tags        
         run.finish()
     dist.barrier()
 
