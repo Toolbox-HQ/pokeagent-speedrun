@@ -1,27 +1,16 @@
 import os
-import json
+import orjson
 
 class JsonWriter:
 
     def __init__(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        fp = open(path, "w", buffering=1)  # line-buffered
-        fp.write("[\n")
-        fp.flush()
-        self.fp = fp
-        self.first = True
+        self.path = path
+        self.json = []
 
     def log(self, frame_num, key):
-        if not self.first:
-            self.fp.write(",\n")
-        else:
-            self.first = False
-
-        entry = {"frame": frame_num, "keys": key}
-        self.fp.write(json.dumps(entry, ensure_ascii=False))
-        self.fp.flush()
+        self.json.append({"frame": frame_num, "keys": key})
 
     def close(self):
-        self.fp.write("\n]\n")
-        self.fp.flush()
-        self.fp.close()
+        with open(self.path, "wb") as f:
+            f.write(orjson.dumps(self.json, option=orjson.OPT_INDENT_2))

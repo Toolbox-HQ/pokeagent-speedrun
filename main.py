@@ -13,7 +13,6 @@ def run_random_agent(conn, steps, video_path):
 
 def checkpoint(output_dir: str, step: int, agent, emulator):
     import os
-    import torch
     import torch.distributed as dist
     from safetensors.torch import save_file
     save_path = os.path.join(output_dir, f"checkpoint-{step}")
@@ -23,9 +22,25 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     if dist.get_rank() == 0:
         print(f"[GPU {dist.get_rank()} LOOP] save checkpoint at step {step} to {save_path}")
         os.makedirs(save_path, exist_ok=True)
-        torch.save(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.pt"))
+        save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
         emulator.save_state(os.path.join(save_path, f"game.state"))
+
+def load_checkpoint(checkpoint_dir: str, agent, emulator):
+    import os
+    import torch
+    import torch.distributed as dist
+    from safetensors.torch import load_file
+    
+    agent_model: torch.nn.Module = agent.model
+    agent_idm: torch.nn.Module = agent.idm
+    
+    print(f"[GPU {dist.get_rank()} LOOP] load checkpoint from {checkpoint_dir}")
+
+    agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
+    agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
+    emulator.load_state_from_file(os.path.join(checkpoint_dir, f"game.state"))
+    dist.barrier()
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
@@ -38,7 +53,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
-    from models.util.misc import finalize_wandb
+    from models.util.misc import finalize_wandb, collect_query_files
     import os
 
     rank = dist.get_rank()
@@ -62,7 +77,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     idm_data_path_template = f'{idm_data_path}/idm_gpu{rank}_bootstrap'
     dino_embedding_path = '.cache/pokeagent/db_embeddings'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
-    checkpoint_path =  f'{output_dir}/checkpoints/online_debug'
+    checkpoint_path =  f'{output_dir}/checkpoints'
     query_path = query_path_template + str(bootstrap_count)
 
     conn = EmulatorConnection(inference_args.rom_path)
@@ -73,6 +88,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.start_video_writer(video_path)
 
     futures = []
+
+    if training_args.resume_from_checkpoint is not None:
+        load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
+        training_args.resume_from_checkpoint = None
 
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration"):
@@ -97,9 +116,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                                                 )
                 print(f"[GPU {rank} LOOP] Finished Retrieval")
                 
-                video_path = agent_path_template + f"{bootstrap_count}.json"
-                os.makedirs(os.path.dirname(video_path), exist_ok=True)
-                with open(video_path, "w") as f:
+                video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
+                os.makedirs(os.path.dirname(video_intervals_path), exist_ok=True)
+                with open(video_intervals_path, "w") as f:
                     json.dump(video_intervals, f)
                 print(f"[GPU {rank} LOOP] Saved intervals")
 
@@ -108,6 +127,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 print(f"[GPU {rank} LOOP] Begin agent training")
 
                 agent.train_agent(agent_data_path) # train agent on cumulative agent data
+                
+                agent_artifacts = collect_query_files(output_dir, bootstrap_count)                
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
 
@@ -189,15 +210,18 @@ if __name__ == "__main__":
 
     init_distributed()
 
-    uuid: str = get_shared_uuid()
     rank: int = dist.get_rank()
+
+    parser: ArgumentParser = ArgumentParser()
+    parser.add_argument("--config", type=str, required=True, help="Config for model run")
+    parser.add_argument("--uuid", type=str, required=False, help="Optional run UUID; if not provided a shared UUID is generated")
+    
+    args = parser.parse_args()
+    uuid: str = args.uuid if getattr(args, "uuid", None) else get_shared_uuid()
 
     if rank == 0:
         print(f"[RUN UUID]: {uuid}")
 
-    parser: ArgumentParser = ArgumentParser()
-    parser.add_argument("--config", type=str, required=True)
-    args = parser.parse_args()
     checkpoint_path = repro_init(args.config)
 
     parser = transformers.HfArgumentParser(

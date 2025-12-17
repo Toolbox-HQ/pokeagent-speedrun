@@ -2,6 +2,7 @@ architecture: "state_action_conditioned"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 load_path: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
+resume_from_checkpoint: .cache/pokeagent/9cb12fd0-ea21-4698-b77d-73905ef2e350/checkpoints/online_debug/checkpoint-7200
 output_dir: ".cache/pokeagent/online"
 num_train_epochs: 3
 per_device_train_batch_size: 4

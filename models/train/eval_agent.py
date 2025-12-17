@@ -32,7 +32,7 @@ def rank0_print(*args):
 
 def evaluate() -> None:
     global local_rank
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    local_rank = int(os.environ.get("RANK", 0))
     device = torch.device(f"cuda:{local_rank}")
     
     from argparse import ArgumentParser

@@ -39,7 +39,7 @@ def init_model(model_args: ModelArguments, training_args: TrainingArguments):
 
 def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArguments]:
     global local_rank
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    local_rank = int(os.environ.get("RANK", 0))
     
     from argparse import ArgumentParser
 
