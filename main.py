@@ -18,14 +18,18 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     save_path = os.path.join(output_dir, f"checkpoint-{step}")
     agent_model = agent.model
     agent_idm = agent.idm
-    
-    if dist.get_rank() == 0:
-        print(f"[GPU {dist.get_rank()} LOOP] save checkpoint at step {step} to {save_path}")
+    rank = dist.get_rank()
+    os.makedirs(save_path, exist_ok=True)
+
+    if rank == 0:
+        print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         os.makedirs(save_path, exist_ok=True)
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
-        emulator.save_state(os.path.join(save_path, f"game.state"))
-
+    
+    emulator.save_state(os.path.join(save_path, f"game_rank{rank}.state"))
+    print(f"[GPU {rank} LOOP] saved emulator state at step {step} to {save_path}/game_rank{rank}.state")
+    dist.barrier()
 def load_checkpoint(checkpoint_dir: str, agent, emulator):
     import os
     import torch
@@ -34,12 +38,23 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     
     agent_model: torch.nn.Module = agent.model
     agent_idm: torch.nn.Module = agent.idm
+    rank = dist.get_rank()
     
-    print(f"[GPU {dist.get_rank()} LOOP] load checkpoint from {checkpoint_dir}")
+    print(f"[GPU {rank} LOOP] load checkpoint from {checkpoint_dir}")
 
     agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
     agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
-    emulator.load_state_from_file(os.path.join(checkpoint_dir, f"game.state"))
+    rank_state = os.path.join(checkpoint_dir, f"game_rank{rank}.state")
+    single_state = os.path.join(checkpoint_dir, f"game.state")
+    
+    if os.path.exists(rank_state):
+        emulator.load_state_from_file(rank_state)
+        print(f"[GPU {rank} LOOP] loaded rank-specific emulator state from {rank_state}")
+    elif os.path.exists(single_state):
+        emulator.load_state_from_file(single_state)
+        print(f"[GPU {rank} LOOP] loaded emulator state from {single_state} (fallback to old format)")
+    else:
+        raise Exception(f"[GPU {rank} LOOP] WARNING: No emulator state file found in {checkpoint_dir}")
     dist.barrier()
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
