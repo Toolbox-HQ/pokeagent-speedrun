@@ -79,11 +79,13 @@ def s3_exists(bucket, key, s3):
 def upload_to_s3(local_filepath, upload_path, bucket_name, s3client):
     s3client.upload_file(local_filepath, bucket_name, upload_path)
 
-def sync_folder(local: str, remote: str, bucket: str, dry_run: bool = True):
+def sync_folder(local: str, remote: str, bucket: str, dry_run: bool = True, exclude: str = None):
     
     s3 = init_boto3_client()
 
     local_paths = [os.path.join(dp, f) for dp, dn, filenames in os.walk(local) for f in filenames]
+    local_paths = list(filter(lambda x: not (exclude in x), local_paths))
+
     keys = [p.replace(local.rstrip('/'), remote.rstrip('/'), 1) for p in local_paths]    
     upload_paths = [f"s3://{bucket}/{p}" for p in keys]
     pbar = tqdm(list(zip(local_paths, keys, upload_paths)))
@@ -125,6 +127,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--exclude",
+        type=str,
+        required=False,
+        default=None,
+        help="exclude anything that matches this in local path",
+    )
+
+    parser.add_argument(
         "--mode",
         type=str,
         required=True,
@@ -139,6 +149,7 @@ if __name__ == "__main__":
             remote=args.remote,
             bucket=args.bucket,
             dry_run=args.dry_run,
+            exclude=args.exclude,
         )
     elif args.mode == "sync":
         download_prefix(args.bucket, args.remote, args.local)
