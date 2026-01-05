@@ -90,7 +90,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     agent_data_path = f'{output_dir}/agent_data'
     idm_data_path = f'{output_dir}/idm_data'
     query_path_template = f'{output_dir}/query_video/query_gpu{rank}_bootstrap'
-    idm_data_path_template = f'{idm_data_path}/idm_gpu{rank}_bootstrap'
+    idm_data_path_template = f'{idm_data_path}/bootstrap_'
     dino_embedding_path = '.cache/pokeagent/db_embeddings'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
     checkpoint_path =  f'{output_dir}/checkpoints'
@@ -120,7 +120,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 dist.barrier()
                 print(f"[GPU {rank} LOOP] Begin IDM training")
 
-                agent.train_idm(f"{idm_data_path}/bootstrap{bootstrap_count}")
+                agent.train_idm(f"{idm_data_path}/bootstrap_{bootstrap_count}")
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
@@ -158,7 +158,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)
                 new_conn.load_state(conn.get_state())
-                futures.append(executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/{id}"))
+                futures.append(executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/gpu{rank}/{id}"))
 
             tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
             key = agent.infer_action(tensor)
