@@ -24,7 +24,7 @@ eval_on_start: true
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 28800
+agent_steps: 43200
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1

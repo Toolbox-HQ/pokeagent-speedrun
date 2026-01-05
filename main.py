@@ -183,8 +183,10 @@ if __name__ == "__main__":
     from models.train.train_idm import IDMArguments
     from models.util.repro import repro_init
     from models.util.dist import init_distributed, clean_dist_and_exit, get_shared_uuid
-
+    from models.util.misc import inject_traceback
+    
     init_distributed()
+    inject_traceback()
 
     rank: int = dist.get_rank()
 

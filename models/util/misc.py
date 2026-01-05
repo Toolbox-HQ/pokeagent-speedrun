@@ -1,4 +1,7 @@
 import os
+import sys
+import io
+import traceback
 from typing import List
 import glob
 
@@ -42,6 +45,30 @@ def finalize_wandb(tags: List[str] = []):
             run.tags = tags        
         run.finish()
     dist.barrier()
+
+def inject_traceback():
+    """
+    Monkey-patches traceback.print_exc() to skip printing if the traceback
+    contains any NFS-related "Device or resource busy" errors.
+    
+    Call this function once at the start of your program to inject
+    the filtered version globally.
+    """
+    _original_print_exc = traceback.print_exc
+    
+    def _filtered_print_exc(file=None, limit=None, chain=True):
+        f = io.StringIO()
+        _original_print_exc(file=f, limit=limit, chain=chain)
+        output = f.getvalue()
+        
+        if "Device or resource busy" in output and ".nfs" in output:
+            return
+        
+        if file is None:
+            file = sys.stderr
+        file.write(output)
+    
+    traceback.print_exc = _filtered_print_exc
 
 if __name__ == "__main__":
     download_models()
