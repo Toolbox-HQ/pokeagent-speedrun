@@ -19,14 +19,14 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     agent_model = agent.model
     agent_idm = agent.idm
     rank = dist.get_rank()
-    os.makedirs(save_path, exist_ok=True)
 
     if rank == 0:
-        print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         os.makedirs(save_path, exist_ok=True)
+        print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
     
+    dist.barrier()
     emulator.save_state(os.path.join(save_path, f"game_rank{rank}.state"))
     print(f"[GPU {rank} LOOP] saved emulator state at step {step} to {save_path}/game_rank{rank}.state")
     dist.barrier()
