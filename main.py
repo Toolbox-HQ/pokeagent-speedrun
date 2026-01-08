@@ -84,7 +84,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
-    video_path = f'{output_dir}/runs/output_gpu{rank}'
+    #video_path = f'{output_dir}/runs/output_gpu{rank}'
     bootstrap_count = 0
 
     agent_data_path = f'{output_dir}/agent_data'
@@ -100,8 +100,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.load_state(curr_state)
     conn.create_video_writer(query_path)
     conn.start_video_writer(query_path)
-    conn.create_video_writer(video_path)
-    conn.start_video_writer(video_path)
 
     futures = []
 
@@ -149,7 +147,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 query_path = query_path_template + str(bootstrap_count)
                
                 checkpoint(checkpoint_path, step, agent, conn)
+                curr_state = conn.get_state()
+                conn.close()
 
+                conn = EmulatorConnection(curr_state)
                 conn.create_video_writer(query_path)
                 conn.start_video_writer(query_path)
 
@@ -167,7 +168,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
             conn.run_frames(8)
 
     conn.release_video_writer(query_path)
-    conn.release_video_writer(video_path)
     conn.close()
 
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid):
