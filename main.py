@@ -11,7 +11,7 @@ def run_random_agent(conn, steps, video_path):
     conn.release_video_writer(video_path)
     conn.close()
 
-def checkpoint(output_dir: str, step: int, agent, emulator):
+def checkpoint(output_dir: str, step: int, agent, state: bytes):
     import os
     import torch.distributed as dist
     from safetensors.torch import save_file
@@ -27,7 +27,9 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
     
     dist.barrier()
-    emulator.save_state(os.path.join(save_path, f"game_rank{rank}.state"))
+    with open(os.path.join(save_path, f"game_rank{rank}.state"), "wb") as f:
+        f.write(state)
+
     print(f"[GPU {rank} LOOP] saved emulator state at step {step} to {save_path}/game_rank{rank}.state")
     dist.barrier()
 
@@ -114,6 +116,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 futures.clear()
                 
                 conn.release_video_writer(query_path)
+                curr_state = conn.get_state()
+                conn.close()
 
                 dist.barrier()
                 print(f"[GPU {rank} LOOP] Begin IDM training")
@@ -146,14 +150,11 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)
                
-                checkpoint(checkpoint_path, step, agent, conn)
-                curr_state = conn.get_state()
-                conn.close()
-
+                checkpoint(checkpoint_path, step, agent, curr_state)
+    
                 conn = EmulatorConnection(curr_state)
                 conn.create_video_writer(query_path)
                 conn.start_video_writer(query_path)
-
 
             if step % inference_args.idm_data_sample_interval == 0:
                 id = str(uuid.uuid4())
