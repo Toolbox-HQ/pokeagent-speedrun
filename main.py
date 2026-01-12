@@ -152,7 +152,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                
                 checkpoint(checkpoint_path, step, agent, curr_state)
                 gathered = [None] * dist.get_world_size()
-                dist.gather_object(curr_state, gathered)            
+                dist.all_gather_object(gathered, curr_state)            
                 
                 conn = EmulatorConnection(inference_args.rom_path)
                 conn.load_state(gathered[world_idx])

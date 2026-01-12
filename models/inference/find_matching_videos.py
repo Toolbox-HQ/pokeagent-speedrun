@@ -207,11 +207,12 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
     query_emb = dino_embeddings_every(query_path)
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
 
-    self_sim_matrix = (query_emb @ query_emb.T).mean()
-    self_similarity = self_sim_matrix.mean()
-    gather_list = [torch.empty_like(self_similarity) for _ in range(dist.get_world_size())]
-    dist.all_gather(gather_list, self_similarity)
-    world_idx = torch.argmin(torch.stack(gather_list)).item()
+    self_sim_matrix = (query_emb @ query_emb.T)
+    self_similarity = self_sim_matrix.mean().item()
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] had self-similarity of {self_similarity}")
+    gather_list = [None for _ in range(dist.get_world_size())]
+    dist.all_gather_object(gather_list, self_similarity)
+    world_idx = torch.argmin(torch.tensor(gather_list, dtype=torch.float32)).item()
     print(f"[GPU {dist.get_rank()} RETRIEVAL] GPU {world_idx} has the lowest self-similarity from {gather_list} on {self_sim_matrix.size()} matrix")
     
     top_videos = self_sim_matrix.topk(k=num_intervals, dim=1)[1][0]
