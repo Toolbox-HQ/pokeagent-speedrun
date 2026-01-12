@@ -4,6 +4,7 @@ From: ubuntu:24.04
 %environment
     export DEBIAN_FRONTEND=noninteractive
     export PATH="/root/.local/bin:$PATH"
+    export UV_CONCURRENT_BUILDS=4
 
 %post
     apt-get update && \

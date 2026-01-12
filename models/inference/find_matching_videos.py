@@ -209,7 +209,7 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
 
     self_sim_matrix = (query_emb @ query_emb.T).mean()
     self_similarity = self_sim_matrix.mean()
-    gather_list = [torch.empty_like(self_similarity) for _ in dist.get_world_size()]
+    gather_list = [torch.empty_like(self_similarity) for _ in range(dist.get_world_size())]
     dist.all_gather(gather_list, self_similarity)
     world_idx = torch.argmin(torch.stack(gather_list)).item()
     print(f"[GPU {dist.get_rank()} RETRIEVAL] GPU {world_idx} has the lowest self-similarity from {gather_list} on {self_sim_matrix.size()} matrix")
