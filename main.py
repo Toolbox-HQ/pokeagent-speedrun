@@ -126,7 +126,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
-                video_intervals = get_videos(f"{query_path}.mp4",
+                video_intervals, world_idx = get_videos(f"{query_path}.mp4",
                                                 dino_embedding_path,
                                                 inference_args.match_length,
                                                 inference_args.retrieved_videos,
@@ -151,9 +151,12 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 query_path = query_path_template + str(bootstrap_count)
                
                 checkpoint(checkpoint_path, step, agent, curr_state)
-    
+                gathered = [None] * dist.get_world_size()
+                dist.gather_object(curr_state, gathered)            
+                
                 conn = EmulatorConnection(inference_args.rom_path)
-                conn.load_state(curr_state)
+                conn.load_state(gathered[world_idx])
+                print(f"[GPU {rank} LOOP] Loaded state from GPU {world_idx} for bootstrap {bootstrap_count}")
                 conn.create_video_writer(query_path)
                 conn.start_video_writer(query_path)
 

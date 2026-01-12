@@ -207,6 +207,14 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
     query_emb = dino_embeddings_every(query_path)
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
 
+    self_sim_matrix = (query_emb @ query_emb.T).mean()
+    self_similarity = self_sim_matrix.mean()
+    gather_list = [torch.empty_like(self_similarity) for _ in dist.get_world_size()]
+    dist.all_gather(gather_list, self_similarity)
+    world_idx = torch.argmin(torch.stack(gather_list)).item()
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] GPU {world_idx} has the lowest self-similarity from {gather_list} on {self_sim_matrix.size()} matrix")
+    
+    top_videos = self_sim_matrix.topk(k=num_intervals, dim=1)[1][0]
     sims, idxs, meta = cosine_search(query_emb, emb_dir)
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed embeddings load")
 
@@ -242,10 +250,10 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
         
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
 
-    return videos
+    return videos, world_idx
 
 def main():
-    videos = get_videos(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
+    videos, _ = get_videos(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
     for i, video in enumerate(videos):
         if i > 390:
             print(video["video_path"])
