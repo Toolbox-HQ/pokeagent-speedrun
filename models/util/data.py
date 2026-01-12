@@ -128,9 +128,6 @@ def upload_to_s3(local_filepath, upload_path, bucket_name, s3client):
     print(f"Uploading {local_filepath} => s3://{bucket_name}/{upload_path}")
     s3client.upload_file(local_filepath, bucket_name, upload_path)
 
-import os
-import boto3
-
 def resumable_download_s3_folder(bucket_name: str, s3_folder: str, local_dir: str, s3=None, check_size: bool = True):
     """
     Download the contents of an S3 folder to a local directory, skipping files that already exist.

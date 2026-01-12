@@ -187,8 +187,8 @@ class OnlinePokeagentStateOnly:
         self.idx = 0
         print("[AGENT] Initialized agent")
     
-    def train_agent(self, intervals: str):
-        train_ds, eval_ds = create_dataset(intervals, self.processor, split = self.inference_args.train_eval_split)
+    def train_agent(self, intervals: str, bootstrap: int):
+        train_ds, eval_ds = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
@@ -263,9 +263,9 @@ class OnlinePokeagentStateActionConditioned:
         self.input_ids = torch.zeros(1, self.buffersize, dtype=torch.long) 
         self.idx = 0
         print("[AGENT] Initialized agent")
-    
-    def train_agent(self, data_dir: str):
-        train_ds, eval_ds = create_dataset(data_dir, self.processor)
+     
+    def train_agent(self, data_dir: str, bootstrap: int):
+        train_ds, eval_ds = create_dataset(data_dir, self.processor, bootstrap, split = self.inference_args.train_eval_split)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()

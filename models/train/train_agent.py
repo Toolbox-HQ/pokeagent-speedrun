@@ -64,10 +64,12 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     
     return model, processor, data_args, training_args
 
-def create_dataset(data_dir: str, processor: Callable, split: float = 0.1) -> Tuple[Dataset, Dataset]:
+def create_dataset(data_dir: str, processor: Callable, bootstrap: int, split: float = 0.1) -> Tuple[Dataset, Dataset]:
     videos_json = []
     videos_json_files = list_files_with_extentions(data_dir, ".json")
-
+    videos_json_files = list(filter(lambda x: f"bootstrap{bootstrap}" in x, videos_json_files))
+    print(f"[AGENT] Creating dataset for bootstrap {bootstrap} with {len(videos_json_files)} files")
+ 
     for json_file in videos_json_files:
         with open(json_file, "r", encoding="utf-8") as f:
             items = json.load(f)

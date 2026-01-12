@@ -4,14 +4,14 @@ def run_random_agent(conn, steps, video_path):
     agent = RandomAgent(30, 180, KEY_LIST_FOR_IDM)
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)
-    for i in range(steps):
+    for _ in range(steps):
         key, num_frames = agent.infer()
         conn.set_key(key)
         conn.run_frames(num_frames)
     conn.release_video_writer(video_path)
     conn.close()
 
-def checkpoint(output_dir: str, step: int, agent, emulator):
+def checkpoint(output_dir: str, step: int, agent, state: bytes):
     import os
     import torch.distributed as dist
     from safetensors.torch import save_file
@@ -19,17 +19,20 @@ def checkpoint(output_dir: str, step: int, agent, emulator):
     agent_model = agent.model
     agent_idm = agent.idm
     rank = dist.get_rank()
-    os.makedirs(save_path, exist_ok=True)
 
     if rank == 0:
-        print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         os.makedirs(save_path, exist_ok=True)
+        print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
     
-    emulator.save_state(os.path.join(save_path, f"game_rank{rank}.state"))
+    dist.barrier()
+    with open(os.path.join(save_path, f"game_rank{rank}.state"), "wb") as f:
+        f.write(state)
+
     print(f"[GPU {rank} LOOP] saved emulator state at step {step} to {save_path}/game_rank{rank}.state")
     dist.barrier()
+
 def load_checkpoint(checkpoint_dir: str, agent, emulator):
     import os
     import torch
@@ -68,7 +71,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
-    from models.util.misc import finalize_wandb, collect_query_files
+    from models.util.misc import finalize_wandb
     import os
 
     rank = dist.get_rank()
@@ -83,13 +86,13 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
-    video_path = f'{output_dir}/runs/output_gpu{rank}'
+    #video_path = f'{output_dir}/runs/output_gpu{rank}'
     bootstrap_count = 0
 
     agent_data_path = f'{output_dir}/agent_data'
     idm_data_path = f'{output_dir}/idm_data'
     query_path_template = f'{output_dir}/query_video/query_gpu{rank}_bootstrap'
-    idm_data_path_template = f'{idm_data_path}/idm_gpu{rank}_bootstrap'
+    idm_data_path_template = f'{idm_data_path}/bootstrap_'
     dino_embedding_path = '.cache/pokeagent/db_embeddings'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
     checkpoint_path =  f'{output_dir}/checkpoints'
@@ -99,8 +102,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.load_state(curr_state)
     conn.create_video_writer(query_path)
     conn.start_video_writer(query_path)
-    conn.create_video_writer(video_path)
-    conn.start_video_writer(video_path)
 
     futures = []
 
@@ -115,11 +116,13 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 futures.clear()
                 
                 conn.release_video_writer(query_path)
+                curr_state = conn.get_state()
+                conn.close()
 
                 dist.barrier()
                 print(f"[GPU {rank} LOOP] Begin IDM training")
 
-                agent.train_idm(idm_data_path) # train idm on cumulative idm data
+                agent.train_idm(f"{idm_data_path}/bootstrap_{bootstrap_count}")
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
@@ -135,32 +138,30 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 os.makedirs(os.path.dirname(video_intervals_path), exist_ok=True)
                 with open(video_intervals_path, "w") as f:
                     json.dump(video_intervals, f)
+
                 print(f"[GPU {rank} LOOP] Saved intervals")
-
-
                 dist.barrier()
-                print(f"[GPU {rank} LOOP] Begin agent training")
-
-                agent.train_agent(agent_data_path) # train agent on cumulative agent data
                 
-                agent_artifacts = collect_query_files(output_dir, bootstrap_count)                
+                print(f"[GPU {rank} LOOP] Begin agent training")
+                agent.train_agent(agent_data_path, bootstrap_count) # train agent on cumulative agent data
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
 
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)
                
-                checkpoint(checkpoint_path, step, agent, conn)
-
+                checkpoint(checkpoint_path, step, agent, curr_state)
+    
+                conn = EmulatorConnection(inference_args.rom_path)
+                conn.load_state(curr_state)
                 conn.create_video_writer(query_path)
                 conn.start_video_writer(query_path)
-
 
             if step % inference_args.idm_data_sample_interval == 0:
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)
                 new_conn.load_state(conn.get_state())
-                futures.append(executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/{id}"))
+                futures.append(executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/gpu{rank}/{id}"))
 
             tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
             key = agent.infer_action(tensor)
@@ -169,49 +170,11 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
             conn.run_frames(8)
 
     conn.release_video_writer(query_path)
-    conn.release_video_writer(video_path)
     conn.close()
-
-def run_agent(inference_architecture, model_checkpoint, agent_steps, save_state, sampling_strategy,  temperature, actions_per_second, inference_save_path, agent_fps, context_length, online, rom_path, idm_data_sample_interval, idm_data_sample_steps, bootstrap_interval):
-    from models.inference.agent_inference import PokeagentStateOnly, PokeAgentActionConditioned
-    from emulator.emulator_connection import EmulatorConnection
-    from tqdm import tqdm
-    import numpy as np
-    import torch
-    import uuid
-    
-    with open(save_state, 'rb') as f:
-        state_bytes = f.read()
-    
-    if inference_architecture == "state_only":
-        agent = PokeagentStateOnly(model_path=model_checkpoint, device="cuda", temperature=temperature, actions_per_second=actions_per_second, sampling_strategy=sampling_strategy, context_len=context_length, model_fps=agent_fps)
-    elif inference_architecture == "state_action_conditioned":
-        agent = PokeAgentActionConditioned(model_path=model_checkpoint, device="cuda", temperature=temperature, actions_per_second=actions_per_second, sampling_strategy=sampling_strategy, context_len=context_length, model_fps=agent_fps)
-    else:
-        raise Exception(f"{inference_architecture} is not supported")
-    
-    video_path = inference_save_path + f'/{str(uuid.uuid4())}'
-    conn = EmulatorConnection(rom_path)
-    conn.load_state(state_bytes)
-    conn.create_video_writer(video_path)
-    conn.start_video_writer(video_path)
-    for i in tqdm(range(agent_steps), desc="Inference Agent"):
-        tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
-        key = agent.infer_action(tensor)
-        conn.run_frames(7)
-        conn.set_key(key)
-        conn.run_frames(8)
-    conn.release_video_writer(video_path)
-    conn.close()
-
 
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid):
-   
-    if inference_args.online:
-        run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid)
-    else:
-        run_agent(*inference_args)
-
+    assert inference_args.online, "online must be set"
+    run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid)
 
 if __name__ == "__main__":
     import torch.distributed as dist
@@ -222,8 +185,10 @@ if __name__ == "__main__":
     from models.train.train_idm import IDMArguments
     from models.util.repro import repro_init
     from models.util.dist import init_distributed, clean_dist_and_exit, get_shared_uuid
-
+    from models.util.misc import inject_traceback
+    
     init_distributed()
+    inject_traceback()
 
     rank: int = dist.get_rank()
 
