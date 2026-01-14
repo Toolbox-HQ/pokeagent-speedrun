@@ -384,9 +384,9 @@ class LMStateAgent(Module, GenerationMixin):
 def init_vision_prcoessor(vision: str = None, use_cache: bool = True):
     from models.util.misc import local_model_map
     if use_cache:
-        return AutoProcessor.from_pretrained(local_model_map(vision))
+        return AutoProcessor.from_pretrained(local_model_map(vision), use_fast=True)
     else:
-        return AutoProcessor.from_pretrained(vision)
+        return AutoProcessor.from_pretrained(vision, use_fast=True)
 
 def init_lm_agent(arch: str = "default", lm: str = None, vision: str = None, use_cache: bool = True)  -> nn.Module:
     from models.util.misc import local_model_map

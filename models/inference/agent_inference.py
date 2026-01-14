@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
@@ -82,9 +83,9 @@ class PokeAgentActionConditioned:
 
         return CLASS_TO_KEY[int(cls.item())]
 
+
 class PokeagentStateOnly:
     def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, sampling_strategy="default"):
-
         pprint({
             "model_path": model_path,
             "device": device,
@@ -183,7 +184,7 @@ class OnlinePokeagentStateOnly:
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
         self.model.load_state_dict(load_file(model_args.load_path))
         self.model.to(self.device).eval()
-        self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8)  
+        self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8, device=self.device)  
         self.idx = 0
         print("[AGENT] Initialized agent")
     
@@ -201,8 +202,17 @@ class OnlinePokeagentStateOnly:
                                   split = self.inference_args.train_eval_split)
         self.idm.eval()
 
+    def broadcast_agent_state(self, src=1):
+        if dist.is_initialized():
+            dist.broadcast(self.agent_frames, src=src)
+            input_ids_device = self.input_ids.to(self.device)
+            dist.broadcast(input_ids_device, src=src)
+            self.input_ids = input_ids_device.to('cpu')
+
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
+        
+        frame = frame.to(self.device)
 
         if self.idx == self.buffersize - 1:
             self.agent_frames = torch.cat((self.agent_frames[1:], frame.unsqueeze(0)), dim=0)
@@ -229,7 +239,7 @@ class OnlinePokeagentStateOnly:
         if self.idx < self.buffersize - 1:
             self.idx += 1
 
-        return CLASS_TO_KEY[int(cls.item())]
+        return CLASS_TO_KEY[cls.item()]
 
 class OnlinePokeagentStateActionConditioned:
     def __init__(self,
@@ -259,7 +269,7 @@ class OnlinePokeagentStateActionConditioned:
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
         self.model.load_state_dict(load_file(model_args.load_path))
         self.model.to(self.device).eval()
-        self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8) 
+        self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8, device=self.device) 
         self.input_ids = torch.zeros(1, self.buffersize, dtype=torch.long) 
         self.idx = 0
         print("[AGENT] Initialized agent")
@@ -275,8 +285,17 @@ class OnlinePokeagentStateActionConditioned:
         train_idm_best_checkpoint(self.idm, self.idm_args, data_dir, split = self.inference_args.train_eval_split)
         self.idm.eval()
 
+    def broadcast_agent_state(self, src=1):
+        if dist.is_initialized():
+            dist.broadcast(self.agent_frames, src=src)
+            input_ids_device = self.input_ids.to(self.device)
+            dist.broadcast(input_ids_device, src=src)
+            self.input_ids = input_ids_device.to('cpu')
+
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
+
+        frame = frame.to(self.device)
 
         if self.idx == self.buffersize - 1:
             self.agent_frames = torch.cat((self.agent_frames[1:], frame.unsqueeze(0)), dim=0)
@@ -310,4 +329,4 @@ class OnlinePokeagentStateActionConditioned:
         if self.idx < self.buffersize - 1:
             self.idx += 1
 
-        return CLASS_TO_KEY[int(cls.item())]
+        return CLASS_TO_KEY[cls.item()]
