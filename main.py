@@ -110,8 +110,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
         training_args.resume_from_checkpoint = None
 
     with ThreadPoolExecutor(max_workers=100) as executor:
-        for step in tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration"):
+        for step in (pbar := tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration")):
             if step != 0 and step % inference_args.bootstrap_interval == 0:
+                pbar.disable = True
                 wait(futures)
                 futures.clear()
                 
@@ -159,6 +160,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 print(f"[GPU {rank} LOOP] Loaded state from GPU {world_idx} for bootstrap {bootstrap_count}")
                 conn.create_video_writer(query_path)
                 conn.start_video_writer(query_path)
+                agent.broadcast_agent_state(src=world_idx)
+                pbar.disable = False
 
             if step % inference_args.idm_data_sample_interval == 0:
                 id = str(uuid.uuid4())

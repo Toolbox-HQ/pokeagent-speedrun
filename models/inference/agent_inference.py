@@ -81,7 +81,7 @@ class PokeAgentActionConditioned:
         if self.idx < self.buffersize - 1:
             self.idx += 1
 
-        return CLASS_TO_KEY[int(cls.item())]
+        return CLASS_TO_KEY[cls.item()]
 
 
 class PokeagentStateOnly:
@@ -154,7 +154,7 @@ class PokeagentStateOnly:
         if self.idx < self.buffersize - 1:
             self.idx += 1
 
-        return CLASS_TO_KEY[int(cls.item())]
+        return CLASS_TO_KEY[cls.item()]
 
 class OnlinePokeagentStateOnly:
     def __init__(self,
@@ -208,6 +208,7 @@ class OnlinePokeagentStateOnly:
             input_ids_device = self.input_ids.to(self.device)
             dist.broadcast(input_ids_device, src=src)
             self.input_ids = input_ids_device.to('cpu')
+            print(F"[AGENT] Broadcasted agent state from GPU {src}")
 
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
