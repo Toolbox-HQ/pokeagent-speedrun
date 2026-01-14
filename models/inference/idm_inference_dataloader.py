@@ -37,16 +37,19 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     return (frames, actions) if labels else frames
 
 class IDMWindowDataset(Dataset):
-    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True):
+    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None):
         
         self.processor = processor
         self.samples = []
         total_seconds = 0
         
         if isinstance(videos_json, str):
-            with open(videos_json, "r", encoding="utf-8") as f:
-                videos_json = json.load(f)
+            with open(videos_json, "rb") as f:
+                videos_json = orjson.loads(f.read())
         
+        if max_videos is not None:
+            videos_json = videos_json[:max_videos]
+
         for it in tqdm(videos_json, desc="[AGENT] Preparing dataset", disable=disable_progress):
             decoder = VideoDecoder(it["video_path"])
             fps = decoder.metadata.average_fps

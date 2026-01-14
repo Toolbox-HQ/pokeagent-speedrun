@@ -64,7 +64,12 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     
     return model, processor, data_args, training_args
 
-def create_dataset(data_dir: str, processor: Callable, bootstrap: None | int, split: float = 0.1) -> Tuple[Dataset, Dataset]:
+def create_dataset(data_dir: str,
+                   processor: Callable,
+                   bootstrap: None | int,
+                   split: float = 0.1,
+                   max_videos = None) -> Tuple[Dataset, Dataset]:
+    
     videos_json = []
     videos_json_files = list_files_with_extentions(data_dir, ".json") if os.path.isdir(data_dir) else [data_dir]
 
@@ -80,7 +85,7 @@ def create_dataset(data_dir: str, processor: Callable, bootstrap: None | int, sp
                 if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
                     videos_json.append({"video_path": item["video_path"]})
 
-    dataset = IDMWindowDataset(videos_json)
+    dataset = IDMWindowDataset(videos_json, max_videos=max_videos)
     dataset.processor = processor
     train_ds, eval_ds = train_val_split(dataset, split=split)
 
@@ -113,5 +118,7 @@ if __name__ == "__main__":
     init_distributed()
     
     model, processor, data_args, training_args = setup_training()
-    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None)
+    print("setup complete")
+    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0, max_videos=1000)
+    print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)

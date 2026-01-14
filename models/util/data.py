@@ -219,6 +219,9 @@ def train_val_split(dataset, split: float = 0.05):
     from torch.utils.data import Subset
     import torch.distributed as dist
     
+    if split == 0:
+        return dataset, None
+    
     num_samples = len(dataset)
     indices = list(range(num_samples))
     
