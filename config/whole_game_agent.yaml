@@ -16,7 +16,7 @@ logging_steps: 1
 gradient_checkpointing: true
 max_steps: 15000
 report_to: "wandb"
-eval_strategy: "steps"
-eval_steps: 237 # 1/2 epoch
+eval_strategy: "no"
+eval_steps: 999999999
 dataloader_num_workers: 8
 data_path: ".cache/pokeagent/agent_data/all_data.json"
