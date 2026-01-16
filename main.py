@@ -181,6 +181,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid):
     assert inference_args.online, "online must be set"
     run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid)
+    print(f"Run {uuid} completed ")
 
 if __name__ == "__main__":
     import torch.distributed as dist
