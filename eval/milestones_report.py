@@ -4,6 +4,7 @@ import torch
 from torchcodec.decoders import VideoDecoder
 from pathlib import Path
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 def load_milestones(milestones_dir):
     """Load all milestones from the milestones directory."""
@@ -114,11 +115,13 @@ def main():
         print(f"Error: {video_path} is not a valid file or directory")
         return
     
-    # Process each video file and collect all matches
-    all_matches = []
-    for video_file in video_files:
-        matches = check_video_milestones(str(video_file), milestones)
-        all_matches.extend(matches)
+    # Process each video file in parallel and collect all matches
+    all_matches = Parallel(n_jobs=-1)(
+        delayed(check_video_milestones)(str(video_file), milestones)
+        for video_file in video_files
+    )
+    # Flatten the list of matches from all videos
+    all_matches = [match for video_matches in all_matches for match in video_matches]
     
     # Print combined report
     print_combined_report(all_matches, milestone_order)
