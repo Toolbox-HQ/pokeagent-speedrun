@@ -93,7 +93,7 @@ def print_combined_report(all_matches, milestone_order):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--video-path", type=str, required=True)
-    parser.add_argument("--milestones-dir", type=str, default="models/eval/milestones")
+    parser.add_argument("--milestones-dir", type=str, default="eval/milestones")
     args = parser.parse_args()
     
     # Load all milestones once (shared across all videos)
