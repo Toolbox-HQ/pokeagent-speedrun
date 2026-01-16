@@ -13,7 +13,7 @@ CLAUDE.md
 **.s3cfg**
 # Ignore everything inside Data/
 emulator/data/*
-
+/tmp
 # Ignore everything inside Emerald-GBAdvance/
 emulator/Emerald-GBAdvance/*
 
