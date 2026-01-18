@@ -163,7 +163,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 agent.broadcast_agent_state(src=world_idx)
                 pbar.disable = False
 
-            if step % inference_args.idm_data_sample_interval == 0:
+            if step != 0 and step % inference_args.idm_data_sample_interval == 0:
                 id = str(uuid.uuid4())
                 new_conn = EmulatorConnection(inference_args.rom_path)
                 new_conn.load_state(conn.get_state())
@@ -174,7 +174,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
             conn.run_frames(7)
             conn.set_key(key)
             conn.run_frames(8)
-
     conn.release_video_writer(query_path)
     conn.close()
 
