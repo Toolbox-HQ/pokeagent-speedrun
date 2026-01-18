@@ -1,0 +1,59 @@
+architecture: "state_action_conditioned"
+lm_name_or_path: "Qwen/Qwen3-1.7B"
+vision_name_or_path: "google/siglip-base-patch16-224"
+load_path: .cache/pokeagent/checkpoints/whole_game_agent/a4e963dfdb08ed11b7f8bb3ac82861fa535a76d7/checkpoint-15000/model.safetensors
+output_dir: ".cache/pokeagent/online"
+num_train_epochs: 3
+per_device_train_batch_size: 4
+save_strategy: "no"
+learning_rate: 5.0e-5
+weight_decay: 0.00001
+adam_beta2: 0.95
+warmup_ratio: 0.05
+lr_scheduler_type: "linear"
+logging_steps: 1
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+report_to: "wandb"
+eval_strategy: "steps"
+eval_steps: 0.25
+eval_steps: 0.0833333 # 0.0833333 ~= 0.25 * num_train_epochs => eval every ~0.25 epochs
+dataloader_num_workers: 8
+eval_on_start: true
+
+# inference
+inference_architecture: state_action_conditioned
+agent_steps: 21600
+save_state: .cache/pokeagent/save_state/truck_start.state
+sampling_strategy: temperature
+temperature: 1
+inference_save_path: .cache/pokeagent/runs
+rom_path: .cache/pokeagent/rom/rom.gba
+online: True
+idm_data_sample_interval: 20
+idm_data_sample_steps: 100
+bootstrap_interval: 7200
+context_length: 64
+actions_per_second: 4
+agent_fps: 2
+match_length: 540
+retrieved_videos: 100
+train_eval_split: 0.1
+
+# idm
+output_classes: 9
+idm_fps: 4
+idm_batch_size: 2
+idm_image_size: [128, 128]
+s3_bucket: b4schnei
+idm_epochs: 3
+idm_lr: 5.0e-5
+idm_weight_decay: 0
+idm_max_grad_norm: 1.0
+wandb_project: pokeagent
+idm_gradient_accumulation_steps: 1
+idm_eval_every: 0.25
+idm_scheduler: null
+idm_output_path: rnd_idm_model.pt
+idm_dataloaders_per_device: 4

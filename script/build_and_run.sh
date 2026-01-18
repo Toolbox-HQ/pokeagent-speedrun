@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Builds the apptainer container with a unique name and submits it to SLURM
 #
-# Usage: ./build_and_run.sh [--local] [--dry-build] <config_file>
+# Usage: ./build_and_run.sh [--local] [--dry-build] <config_file> [-- <sbatch_flags>]
 # Example: ./build_and_run.sh config/online/online_agent.yaml
 # Example: ./build_and_run.sh --local config/online/online_agent.yaml
 # Example: ./build_and_run.sh --dry-build config/online/online_agent.yaml
+# Example: ./build_and_run.sh config/online/online_agent.yaml -- --time=2:00:00 --mem=16G
 
 set -e
 
@@ -12,6 +13,7 @@ set -e
 LOCAL_MODE=false
 DRY_BUILD=false
 CONFIG_FILE=""
+SBATCH_FLAGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -22,6 +24,12 @@ while [[ $# -gt 0 ]]; do
         --dry-build)
             DRY_BUILD=true
             shift
+            ;;
+        --)
+            # Everything after -- goes to sbatch
+            shift
+            SBATCH_FLAGS=("$@")
+            break
             ;;
         *)
             if [[ -z "$CONFIG_FILE" ]]; then
@@ -36,10 +44,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$CONFIG_FILE" ]]; then
-    echo "Usage: $0 [--local] [--dry-build] <config_file>"
+    echo "Usage: $0 [--local] [--dry-build] <config_file> [-- <sbatch_flags>]"
     echo "Example: $0 config/online/online_agent.yaml"
     echo "Example: $0 --local config/online/online_agent.yaml"
     echo "Example: $0 --dry-build config/online/online_agent.yaml"
+    echo "Example: $0 config/online/online_agent.yaml -- --time=2:00:00 --mem=16G"
     exit 1
 fi
 
@@ -76,7 +85,12 @@ if [[ "$DRY_BUILD" == "true" ]]; then
         echo "    CONTAINER_NAME=\"${CONTAINER_NAME}\" RUN_UUID=\"${RUN_UUID}\" bash script/pokeagent_run.sh \"${CONFIG_FILE}\""
     else
         echo "  SLURM mode:"
-        echo "    sbatch --export=CONTAINER_NAME=\"${CONTAINER_NAME}\",RUN_UUID=\"${RUN_UUID}\" script/pokeagent_run.sh \"${CONFIG_FILE}\""
+        SBATCH_CMD="sbatch --export=CONTAINER_NAME=\"${CONTAINER_NAME}\",RUN_UUID=\"${RUN_UUID}\""
+        if [[ ${#SBATCH_FLAGS[@]} -gt 0 ]]; then
+            SBATCH_CMD="${SBATCH_CMD} ${SBATCH_FLAGS[*]}"
+        fi
+        SBATCH_CMD="${SBATCH_CMD} script/pokeagent_run.sh \"${CONFIG_FILE}\""
+        echo "    ${SBATCH_CMD}"
         echo ""
         echo "  Local mode:"
         echo "    CONTAINER_NAME=\"${CONTAINER_NAME}\" RUN_UUID=\"${RUN_UUID}\" bash script/pokeagent_run.sh \"${CONFIG_FILE}\""
@@ -92,6 +106,7 @@ else
     # Submit to SLURM with the container name as an environment variable
     sbatch \
         --export=CONTAINER_NAME="${CONTAINER_NAME}",RUN_UUID="${RUN_UUID}" \
+        "${SBATCH_FLAGS[@]}" \
         script/pokeagent_run.sh "${CONFIG_FILE}"
     echo "Job submitted with container: ${CONTAINER_NAME}"
 fi
