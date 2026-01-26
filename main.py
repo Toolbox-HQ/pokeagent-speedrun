@@ -154,7 +154,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 checkpoint(checkpoint_path, step, agent, curr_state)                
                 conn = EmulatorConnection(inference_args.rom_path)
                 conn.load_state(curr_state)
-                print(f"[GPU {rank} LOOP] Loaded state from GPU {world_idx} for bootstrap {bootstrap_count}")
                 conn.create_video_writer(query_path)
                 conn.start_video_writer(query_path)
                 pbar.disable = False
