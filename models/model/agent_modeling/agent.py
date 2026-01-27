@@ -401,7 +401,7 @@ def init_lm_agent(arch: str = "default", lm: str = None, vision: str = None, use
         "text_config": AutoConfig.from_pretrained(lm),
         "vision_config": AutoConfig.from_pretrained(vision)
     }
-    if arch == "default":
+    if arch == "default" or arch == "state_action_conditioned":
         model = LMAgent(config)
     elif arch == "state_only":
         model = LMStateAgent(config)
