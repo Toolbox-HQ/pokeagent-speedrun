@@ -18,4 +18,4 @@ report_to: "wandb"
 eval_strategy: "steps"
 eval_steps: 370 # 1/4 epoch
 dataloader_num_workers: 8
-data_path: ".cache/pokeagent/intervals.json"
+data_path: ".cache/pokeagent/agent_data/early_game.json"

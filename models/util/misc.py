@@ -12,7 +12,7 @@ def local_model_map(model_name: str):
         "google/siglip-base-patch16-224": f"{hf_dir}/hub/models--google--siglip-base-patch16-224/snapshots/7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed",
         "Qwen/Qwen3-1.7B": f"{hf_dir}/hub/models--Qwen--Qwen3-1.7B/snapshots/70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
         "facebook/dinov2-base" : f"{hf_dir}/hub/models--facebook--dinov2-base/snapshots/f9e44c814b77203eaa57a6bdbbd535f21ede1415",
-        "Toolbox-HQ/NitroSigLIP": f"{hf_dir}/hub/models--Toolbox-HQ--NitroSigLIP/snapshots/d02df8f42b114d1aa55213d6d2e29010d11a830b",
+        "Toolbox-HQ/NitroSigLIP": f"{hf_dir}/hub/models--Toolbox-HQ--NitroSigLIP/snapshots/cc66f54289033d7ad08f7c4f93a40f7c5b7610c9",
     }[model_name]
 
 def download_models():
@@ -20,10 +20,12 @@ def download_models():
     AutoModel.from_pretrained("google/siglip-base-patch16-224")
     AutoModel.from_pretrained("Qwen/Qwen3-1.7B")
     AutoModel.from_pretrained("facebook/dinov2-base")
+    AutoModel.from_pretrained("Toolbox-HQ/NitroSigLIP")
 
     AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
     AutoProcessor.from_pretrained("Qwen/Qwen3-1.7B")
     AutoProcessor.from_pretrained("facebook/dinov2-base")
+    AutoProcessor.from_pretrained("Toolbox-HQ/NitroSigLIP")
 
 def collect_query_files(output_dir: str, bootstrap_count: int) -> List[str]:
     import torch.distributed as dist
