@@ -65,7 +65,7 @@ class LMAgent(Module, GenerationMixin):
 
         self.config = config
         self.tconfig = config["text_config"]
-        self.vconfig = config["vision_config"].vision_config
+        self.vconfig = config["vision_config"].vision_config if hasattr(config["vision_config"], "vision_config") else config["vision_config"]
         self.num_actions = config["num_actions"]
         self.idm_labelling_fn = None
 
@@ -235,7 +235,7 @@ class LMStateAgent(Module, GenerationMixin):
 
         self.config = config
         self.tconfig = config["text_config"]
-        self.vconfig = config["vision_config"].vision_config
+        self.vconfig = config["vision_config"].vision_config if hasattr(config["vision_config"], "vision_config") else config["vision_config"]
         self.num_actions = config["num_actions"]
         self.idm_labelling_fn = None
 
