@@ -31,3 +31,5 @@ slurm*
 scratch
 wandb
 __pycache__
+/query_video
+/comparison_output

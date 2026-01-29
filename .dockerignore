@@ -5,3 +5,5 @@ docker_build
 checkpoints
 /wandb
 .cache
+/query_video
+/comparison_output
