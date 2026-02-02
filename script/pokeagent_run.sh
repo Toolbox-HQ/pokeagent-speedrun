@@ -7,7 +7,6 @@
 #SBATCH --mail-type=ALL
 
 set -e
-module load ffmpeg/7.1.1
 # Container name (defaults to run.sif if not set)
 CONTAINER_NAME="${CONTAINER_NAME:-run.sif}"
 
