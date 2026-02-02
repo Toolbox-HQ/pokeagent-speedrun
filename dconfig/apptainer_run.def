@@ -43,6 +43,7 @@ From: ubuntu:24.04
 
 %files
     pyproject.toml /app/
+    uv.lock /app/
     .python-version /app/
     config /app/
     dconfig /app/
