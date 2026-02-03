@@ -59,7 +59,8 @@ def check_video_milestones(video_path, milestones):
             # Check against all milestone frames
             for t in range(milestone_frames.shape[0]):
                 milestone_frame = milestone_frames[t]  # [C, h, w]
-                if milestone_frame.shape == video_region.shape and torch.equal(milestone_frame, video_region):
+                assert milestone_frame.shape == video_region.shape
+                if torch.equal(milestone_frame, video_region):
                     matches.append((name, video_name, v, t))
                     matched_milestone_names.add(name)  # Mark this milestone as matched
                     break
@@ -90,6 +91,24 @@ def print_combined_report(all_matches, milestone_order):
         print(f"{status}  [{milestone_id}] {name:20s}  {details}")
     
     print("=" * 80 + "\n")
+
+
+@torch.no_grad()
+def frames_approx_equal_torch(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    atol: int = 2,
+    max_bad_frac: float = 1e-4,  # allow this fraction of elements to exceed atol
+) -> bool:
+    if a.shape != b.shape:
+        return False
+
+    # upcast to avoid uint wraparound on subtraction
+    diff = (a.to(torch.int16) - b.to(torch.int16)).abs()
+    bad_count = int((diff > atol).sum().item())
+    total = diff.numel()
+
+    return bad_count <= max_bad_frac * total
 
 def main():
     parser = argparse.ArgumentParser()
