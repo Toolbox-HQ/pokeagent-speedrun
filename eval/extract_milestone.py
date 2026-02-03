@@ -45,19 +45,19 @@ def main():
 
     frame_np = target_frame.cpu().numpy().transpose(1, 2, 0)
     image = Image.fromarray(frame_np, mode='RGB')
-    image_path = f"tmp/frame_{args.frame_index}.png"
+    image_path = f"./tmp/frame_{args.frame_index}.png"
     image.save(image_path)
     print(f"Saved frame {args.frame_index} as image to {image_path}")
 
     if bounded_frames is not None:
         bounded_np = bounded_frames.cpu().numpy().transpose(1, 2, 0)
         bounded_image = Image.fromarray(bounded_np, mode='RGB')
-        bounded_image_path = f"tmp/frame_{args.frame_index}_bounded.png"
+        bounded_image_path = f"./tmp/frame_{args.frame_index}_bounded.png"
         bounded_image.save(bounded_image_path)
         print(f"Saved bounded frame {args.frame_index} as image to {bounded_image_path}")
     
     # Save tensor with all surrounding frames
-    tensor_path = f"tmp/frame_{args.frame_index}.pt"
+    tensor_path = f"./tmp/frame_{args.frame_index}.pt"
     torch.save(frames_tensor, tensor_path)
     print(f"Saved {len(frames)} frames as tensor (shape: {frames_tensor.shape}) to {tensor_path}")
 
