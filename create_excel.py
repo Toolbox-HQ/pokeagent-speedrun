@@ -133,7 +133,7 @@ def main():
     # -------------------------
     # Configuration
     # -------------------------
-    OUTPUT_DIR = "comparison_output"
+    OUTPUT_DIR = ".cache/pokeagent/xav/comparison_output"
     OUT_XLSX = os.path.join(OUTPUT_DIR, "retrieval_comparison.xlsx")
 
     JSONS = {

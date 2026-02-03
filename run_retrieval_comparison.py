@@ -23,7 +23,7 @@ def main():
 
     #QUERY_VIDEO_PATH = "query_video/query_gpu0_bootstrap1.mp4"
     EMB_DIR = ".cache/pokeagent/db_embeddings"
-    OUTPUT_DIR = "comparison_output"
+    OUTPUT_DIR = ".cache/pokeagent/xav/comparison_output"
 
     INTERVAL_LENGTH = 540
     NUM_RESULTS = 20
