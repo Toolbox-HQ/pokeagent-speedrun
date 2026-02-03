@@ -117,15 +117,12 @@ def print_combined_report(all_matches, milestone_order):
             matches = matched_milestones[name]
             status = "✅"
 
-            first_video, first_v, first_t, first_v_time_s, first_t_time_s = matches[0]
             print(
-                f"{status}  [{milestone_id}] {name:20s}  "
-                f"{first_video} - Frame {first_v} @ {format_hhmmss(first_v_time_s)} ({first_v_time_s:.3f}s) "
-                f"(milestone frame {first_t} @ {format_hhmmss(first_t_time_s)} ({first_t_time_s:.3f}s))"
+                f"{status}  [{milestone_id}] {name:20s}"
             )
 
-            if len(matches) > 1:
-                for video_name, v, t, v_time_s, t_time_s in matches[1:]:
+            if len(matches) > 0:
+                for video_name, v, t, v_time_s, t_time_s in matches:
                     print(
                         f"    ↳ {video_name} - Frame {v} @ {format_hhmmss(v_time_s)} ({v_time_s:.3f}s) "
                         f"(milestone frame {t} @ {format_hhmmss(t_time_s)} ({t_time_s:.3f}s))"
