@@ -72,7 +72,7 @@ def print_combined_report(all_matches, milestone_order):
     matched_milestones = {name: (video_name, v, t) for name, video_name, v, t in all_matches}
     
     print("\n" + "=" * 80)
-    print("MILESTONE REPORT (Combined)")
+    print("MILESTONE REPORT")
     print("=" * 80)
     
     # Sort by milestone ID
@@ -95,6 +95,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--video-path", type=str, required=True)
     parser.add_argument("--milestones-dir", type=str, default="eval/milestones")
+    parser.add_argument("--filter", type=str, default=None)
+    
     args = parser.parse_args()
     
     # Load all milestones once (shared across all videos)
@@ -105,6 +107,9 @@ def main():
     if video_path.is_dir():
         # Get all .mp4 files in the directory (in arbitrary order)
         video_files = list(video_path.glob("*.mp4"))
+        if args.filter is not None:
+            video_files = list(filter(lambda x: args.filter in str(x), video_files))
+
         if not video_files:
             print(f"No .mp4 files found in directory: {video_path}")
             return
