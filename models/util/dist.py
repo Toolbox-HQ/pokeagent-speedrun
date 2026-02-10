@@ -35,8 +35,9 @@ def get_shared_uuid() -> str:
 
 def clean_dist_and_exit():
     import torch.distributed as dist
-    dist.destroy_process_group()
-    exit(0)
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
+        dist.destroy_process_group()
 
 def gather_and_stack(t):
     import torch
