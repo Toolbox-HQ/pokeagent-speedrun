@@ -30,14 +30,7 @@ def main():
             break
     
     # Stack frames into tensor with time dimension: [T, C, H, W]
-    frames_tensor = torch.stack(frames, dim=0)
-    
-    # Save only the requested frame as image
     target_frame = decoder[args.frame_index]
-    bounded_frames = None
-    if all(v is not None for v in [args.x1, args.y1, args.x2, args.y2]):
-        bounded_frames = target_frame.clone()
-        bounded_frames[:, args.y1:args.y2, args.x1:args.x2] = 0
 
     frame_np = target_frame.cpu().numpy().transpose(1, 2, 0)
     image = Image.fromarray(frame_np, mode='RGB')
