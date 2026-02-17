@@ -200,6 +200,39 @@ def cosine_search(query_embed, emb_dir: str):
         i += 1
     return similarity_scores, similiarity_idxs, metadata
 
+
+def cosine_search_with_embeddings(query_embed, emb_dir: str):
+    """
+    Like cosine_search, but also returns a single concatenated tensor of all
+    database embeddings in the same global index order as the returned metadata.
+    This avoids re-reading the massive embedding shards from disk when we need
+    per-video embeddings.
+    """
+    num_files = sum(1 for entry in os.scandir(emb_dir) if entry.is_file()) // 2
+    i = 0
+    metadata = []
+    similarity_scores_list = []
+    similarity_idxs_list = []
+    embedding_chunks = []
+
+    while i < num_files:
+        metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f'{emb_dir}/{i}')
+        print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
+
+        similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
+        metadata.extend(metadata_chunk)
+        similarity_scores_list.append(similarity_scores_chunk)
+        similarity_idxs_list.append(similarity_idxs_chunk)
+        embedding_chunks.append(db_embed_chunk.float())
+
+        i += 1
+
+    similarity_scores = np.concatenate(similarity_scores_list) if similarity_scores_list else np.array([])
+    similarity_idxs = np.concatenate(similarity_idxs_list) if similarity_idxs_list else np.array([])
+    all_embeddings = torch.cat(embedding_chunks, dim=0) if embedding_chunks else torch.empty(0)
+
+    return similarity_scores, similarity_idxs, metadata, all_embeddings
+
 def get_videos(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
@@ -253,11 +286,102 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
 
     return videos, world_idx
 
+
+def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Begin retrieval process")
+    num_embeds_per_sample = interval_length // 2
+
+    query_emb = dino_embeddings_every(query_path)
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
+
+    self_sim_matrix = (query_emb @ query_emb.T)
+    self_similarity = self_sim_matrix.mean().item()
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] had self-similarity of {self_similarity}")
+    gather_list = [None for _ in range(dist.get_world_size())]
+    dist.all_gather_object(gather_list, self_similarity)
+    world_idx = torch.argmin(torch.tensor(gather_list, dtype=torch.float32)).item()
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] GPU {world_idx} has the lowest self-similarity from {gather_list} on {self_sim_matrix.size()} matrix")
+    
+    top_videos = self_sim_matrix.topk(k=num_intervals, dim=1)[1][0]
+    sims, idxs, meta, all_embeddings = cosine_search_with_embeddings(query_emb, emb_dir)
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed embeddings load")
+
+    top_videos = get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers=8, entropy_threshold=2.5)
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed similarity search")
+
+    total_seconds = 0
+    videos = []
+    video_embeddings = []
+    i = 0
+    j = 0
+    while i < len(top_videos) and j < num_intervals:
+        (start, _, score) = top_videos[i]
+
+        start_meta = meta[start]
+        video_path = start_meta["video_path"]
+        fps = float(start_meta["video_fps"])
+
+        # Find the full contiguous range of this video in meta (all its embeddings).
+        vid_start = start
+        while vid_start > 0 and meta[vid_start - 1]["video_path"] == video_path:
+            vid_start -= 1
+
+        curr = start
+        while curr < len(meta) and meta[curr]["video_path"] == video_path:
+            curr += 1
+        video_length = float(meta[curr - 1]["sampled_frame_index"]) / fps
+        i += 1
+        if max_vid_len and video_length > max_vid_len:
+            continue
+        
+        j += 1
+        # Slice out this video's embeddings directly from the in-memory tensor.
+        video_embeddings.append(all_embeddings[vid_start:curr])
+        videos.append({
+                "video_path": video_path,
+                "score": score
+            })
+        
+        total_seconds += video_length
+        
+    print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
+
+    return videos, video_embeddings, world_idx
+
+
 def main():
-    videos, _ = get_videos(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
-    for i, video in enumerate(videos):
-        if i > 390:
-            print(video["video_path"])
-            
+    """
+    Small helper for debugging retrieval.
+
+    Usage:
+        python -m models.inference.find_matching_videos /path/to/query_video.mp4
+
+    This uses the same parameters as the online agent:
+      - emb_dir: '.cache/pokeagent/db_embeddings'
+      - interval_length: 540 (match_length)
+      - num_intervals: 100 (retrieved_videos)
+      - max_vid_len: None
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "query_path",
+        type=str,
+        help="Path to the query video (.mp4) to use for retrieval.",
+    )
+    args = parser.parse_args()
+
+    videos, video_embeddings, _ = get_videos_with_embeddings(
+        args.query_path,
+        ".cache/pokeagent/db_embeddings",
+        interval_length=540,
+        num_intervals=100,
+        max_vid_len=None,
+    )
+    for video, embeds in zip(videos, video_embeddings):
+        print(video["video_path"])
+
+
 if __name__ == "__main__":
     main()
