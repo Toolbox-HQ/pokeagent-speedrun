@@ -13,16 +13,15 @@ cuml.set_global_output_type("numpy")
 
 arr: np.ndarray = torch.load("./tmp/embs.nd", weights_only=False) # (B x S) x D
 arr_unflattened = torch.load("./tmp/video_emb.nd", weights_only=False) # B x S x D
-with open("/tmp/videos.json", "r") as f:
+with open("./tmp/videos.json", "r") as f:
     info = json.load(f)
     
 arr = np.ascontiguousarray(arr, dtype=np.float32)
-print(arr.shape)
 
 t = time.time()
 from cuml import DBSCAN
 cluster_labels = DBSCAN(
-    eps=0.1,
+    eps=0.05,
     min_samples=100,
     algorithm="brute",
     metric="euclidean",
