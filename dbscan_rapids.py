@@ -1,11 +1,15 @@
 cache_dir = ".cache/pokeagent/cupy"
 import os
+import random
 os.environ["CUPY_CACHE_DIR"] = cache_dir
 os.makedirs(cache_dir, exist_ok=True)
 
 
 import time
 import numpy as np
+from pathlib import Path
+from PIL import Image
+from torchcodec.decoders import VideoDecoder
 import torch
 import cuml
 import json
@@ -18,13 +22,20 @@ with open("./tmp/videos.json", "r") as f:
     
 arr = np.ascontiguousarray(arr, dtype=np.float32)
 
+print(f"data shape: {arr.shape}")
+dbscan_eps = 0.05
+dbscan_min_samples = 100
+dbscan_algorithm = "brute"
+dbscan_metric = "euclidean"
+print(f"DBSCAN settings: eps={dbscan_eps}, min_samples={dbscan_min_samples}, algorithm={dbscan_algorithm}, metric={dbscan_metric}")
+
 t = time.time()
 from cuml import DBSCAN
 cluster_labels = DBSCAN(
-    eps=0.05,
-    min_samples=100,
-    algorithm="brute",
-    metric="euclidean",
+    eps=dbscan_eps,
+    min_samples=dbscan_min_samples,
+    algorithm=dbscan_algorithm,
+    metric=dbscan_metric,
 ).fit_predict(arr)
 print(f"time: {time.time() - t}")
 
@@ -65,10 +76,42 @@ for cid in cluster_ids:
         "frames_by_video": {k: sorted(v) for k, v in frames_by_video.items()},
     }
 
+clusters_sorted = sorted(
+    cluster_ids,
+    key=lambda cid: cluster_info[int(cid)]["n_distinct_videos"],
+    reverse=True,
+)
+
 for cid in cluster_ids:
     inf = cluster_info[int(cid)]
     print(f"\nCluster {cid}: size={inf['n_points']}, distinct_videos={inf['n_distinct_videos']}")
     for path in inf["video_paths"]:
         frames = inf["frames_by_video"][path]
         print(f"  {path}: frames {min(frames)}..{max(frames)} (n={len(frames)})")
+
+embed_interval_sec = 2.0
+out_root = Path("./tmp/cluster_test")
+out_root.mkdir(parents=True, exist_ok=True)
+for cluster_num, cid in enumerate(clusters_sorted):
+    inf = cluster_info[int(cid)]
+    cluster_dir = out_root / str(cluster_num)
+    cluster_dir.mkdir(exist_ok=True)
+    for path in inf["video_paths"]:
+        frames = inf["frames_by_video"][path]
+        frame_idx = random.choice(frames)
+        try:
+            decoder = VideoDecoder(path)
+            sec = embed_interval_sec * frame_idx
+            frame_tensor = decoder.get_frames_played_at(seconds=[sec]).data[0]
+            frame_np = frame_tensor.cpu().numpy().transpose(1, 2, 0)
+            if frame_np.max() <= 1.0:
+                frame_np = (frame_np * 255).astype(np.uint8)
+            else:
+                frame_np = frame_np.astype(np.uint8)
+            img = Image.fromarray(frame_np, mode="RGB")
+            video_name = Path(path).stem
+            out_path = cluster_dir / f"{video_name}.png"
+            img.save(out_path)
+        except Exception as e:
+            print(f"  skip {path}: {e}")
 
