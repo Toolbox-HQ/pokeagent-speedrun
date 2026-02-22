@@ -47,9 +47,10 @@ arr = np.ascontiguousarray(arr, dtype=np.float32)
 
 print(f"data shape: {arr.shape}")
 dbscan_eps = 0.1
-dbscan_min_samples = 100
+dbscan_min_samples = 20
 dbscan_algorithm = "brute"
 dbscan_metric = "euclidean"
+dbscan_min_unique_videos = 5
 print(f"DBSCAN settings: eps={dbscan_eps}, min_samples={dbscan_min_samples}, algorithm={dbscan_algorithm}, metric={dbscan_metric}")
 
 t = time.time()
