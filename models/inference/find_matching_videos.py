@@ -1,5 +1,5 @@
 import os
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "96")
+os.environ["OPENBLAS_NUM_THREADS"] = "64"
 import torch
 import numpy as np
 from transformers import AutoImageProcessor, AutoModel
@@ -192,7 +192,7 @@ def cosine_search(query_embed, emb_dir: str):
     similarity_scores = np.array([])
     while i < num_files:
         metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f'{emb_dir}/{i}')
-        print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
+        print(f"[GPU {dist.get_rank()} RETRIEVAL] Loaded embeddings {i} from disk")
         similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
         del db_embed_chunk
         metadata.extend(metadata_chunk)
@@ -231,7 +231,7 @@ def cosine_search_with_embeddings(query_embed, emb_dir: str):
 
     for i in range(num_files):
         metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f"{emb_dir}/{i}")
-        print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
+        print(f"[GPU {dist.get_rank()} RETRIEVAL] Loaded embeddings {i} from disk")
 
         if rank == 0:
             if all_embeddings is None and total_rows > 0:
@@ -436,10 +436,19 @@ def main():
         num_intervals=100,
         max_vid_len=None,
     )
-    embs = torch.cat(video_embeddings, dim=0).numpy()
+    embs: np.ndarray = torch.cat(video_embeddings, dim=0).numpy()
     del video_embeddings
 
-    cluster_labels = DBSCAN(eps=0.5, min_samples=5).fit_predict(embs)
+    torch.save(embs, "./tmp/embs.pt")
+    exit()
+
+    print(embs.shape)
+    print("BEGIN CLUSTERING")
+    if dist.get_rank() == 0:
+        cluster_labels = DBSCAN(eps=0.5, min_samples=5, n_jobs=1).fit_predict(embs)
+    else:
+        cluster_labels = []
+
     import resource
     import psutil
 
