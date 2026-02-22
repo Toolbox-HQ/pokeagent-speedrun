@@ -5,7 +5,9 @@ os.environ["CUPY_CACHE_DIR"] = cache_dir
 os.makedirs(cache_dir, exist_ok=True)
 
 
+import sys
 import time
+from io import StringIO
 import numpy as np
 from pathlib import Path
 from PIL import Image
@@ -13,7 +15,27 @@ from torchcodec.decoders import VideoDecoder
 import torch
 import cuml
 import json
+from joblib import Parallel, delayed
+from tqdm import tqdm
 cuml.set_global_output_type("numpy")
+
+
+class _Tee:
+    def __init__(self, *files):
+        self.files = files
+
+    def write(self, obj):
+        for f in self.files:
+            f.write(obj)
+
+    def flush(self):
+        for f in self.files:
+            f.flush()
+
+
+log_buffer = StringIO()
+_original_stdout = sys.stdout
+sys.stdout = _Tee(_original_stdout, log_buffer)
 
 arr: np.ndarray = torch.load("./tmp/embs.nd", weights_only=False) # (B x S) x D
 arr_unflattened = torch.load("./tmp/video_emb.nd", weights_only=False) # B x S x D
@@ -49,6 +71,7 @@ n_clusters = len(cluster_ids)
 print(f"n_points: {len(cluster_labels)}")
 print(f"n_noise: {n_noise}")
 print(f"n_clusters: {n_clusters}")
+print(f"n_point_in_clusters: {len(cluster_labels) - n_noise}")
 
 frame_counts = np.array([t.shape[0] for t in arr_unflattened], dtype=np.int64)
 video_offsets = np.concatenate([[0], np.cumsum(frame_counts)[:-1]])
@@ -89,9 +112,30 @@ for cid in cluster_ids:
         frames = inf["frames_by_video"][path]
         print(f"  {path}: frames {min(frames)}..{max(frames)} (n={len(frames)})")
 
+def _save_one_frame(args):
+    cluster_dir, path, frame_idx, embed_interval_sec = args
+    try:
+        decoder = VideoDecoder(path)
+        sec = embed_interval_sec * frame_idx
+        frame_tensor = decoder.get_frames_played_at(seconds=[sec]).data[0]
+        frame_np = frame_tensor.cpu().numpy().transpose(1, 2, 0)
+        if frame_np.max() <= 1.0:
+            frame_np = (frame_np * 255).astype(np.uint8)
+        else:
+            frame_np = frame_np.astype(np.uint8)
+        img = Image.fromarray(frame_np, mode="RGB")
+        video_name = Path(path).stem
+        out_path = cluster_dir / f"{video_name}.png"
+        img.save(out_path)
+        return (path, None)
+    except Exception as e:
+        return (path, str(e))
+
+
 embed_interval_sec = 2.0
 out_root = Path("./tmp/cluster_test")
 out_root.mkdir(parents=True, exist_ok=True)
+tasks = []
 for cluster_num, cid in enumerate(clusters_sorted):
     inf = cluster_info[int(cid)]
     cluster_dir = out_root / str(cluster_num)
@@ -99,19 +143,16 @@ for cluster_num, cid in enumerate(clusters_sorted):
     for path in inf["video_paths"]:
         frames = inf["frames_by_video"][path]
         frame_idx = random.choice(frames)
-        try:
-            decoder = VideoDecoder(path)
-            sec = embed_interval_sec * frame_idx
-            frame_tensor = decoder.get_frames_played_at(seconds=[sec]).data[0]
-            frame_np = frame_tensor.cpu().numpy().transpose(1, 2, 0)
-            if frame_np.max() <= 1.0:
-                frame_np = (frame_np * 255).astype(np.uint8)
-            else:
-                frame_np = frame_np.astype(np.uint8)
-            img = Image.fromarray(frame_np, mode="RGB")
-            video_name = Path(path).stem
-            out_path = cluster_dir / f"{video_name}.png"
-            img.save(out_path)
-        except Exception as e:
-            print(f"  skip {path}: {e}")
+        tasks.append((cluster_dir, path, frame_idx, embed_interval_sec))
+results = Parallel(n_jobs=-1)(
+    delayed(_save_one_frame)(t) for t in tqdm(tasks, desc="Exporting frames")
+)
+for path, err in results:
+    if err is not None:
+        print(f"  skip {path}: {err}")
+
+sys.stdout = _original_stdout
+Path("./tmp/out.txt").parent.mkdir(parents=True, exist_ok=True)
+with open("./tmp/out.txt", "w") as f:
+    f.write(log_buffer.getvalue())
 
