@@ -51,7 +51,7 @@ dbscan_min_samples = 20
 dbscan_algorithm = "brute"
 dbscan_metric = "euclidean"
 dbscan_min_unique_videos = 5
-print(f"DBSCAN settings: eps={dbscan_eps}, min_samples={dbscan_min_samples}, algorithm={dbscan_algorithm}, metric={dbscan_metric}")
+print(f"DBSCAN settings: eps={dbscan_eps}, min_samples={dbscan_min_samples}, algorithm={dbscan_algorithm}, metric={dbscan_metric}, min_unique_videos={dbscan_min_unique_videos}")
 
 t = time.time()
 from cuml import DBSCAN
@@ -99,6 +99,14 @@ for cid in cluster_ids:
         "video_paths": sorted(videos_in_cluster),
         "frames_by_video": {k: sorted(v) for k, v in frames_by_video.items()},
     }
+
+n_clusters_before_filter = n_clusters
+cluster_ids = np.array([
+    cid for cid in cluster_ids
+    if cluster_info[int(cid)]["n_distinct_videos"] >= dbscan_min_unique_videos
+])
+n_clusters = len(cluster_ids)
+print(f"clusters after min_unique_videos filter: {n_clusters} (dropped {n_clusters_before_filter - n_clusters})")
 
 clusters_sorted = sorted(
     cluster_ids,
