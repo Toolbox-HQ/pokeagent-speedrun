@@ -433,36 +433,18 @@ def main():
         args.query_path,
         ".cache/pokeagent/db_embeddings",
         interval_length=540,
-        num_intervals=100,
+        num_intervals=400,
         max_vid_len=None,
     )
     embs: np.ndarray = torch.cat(video_embeddings, dim=0).numpy()
-    del video_embeddings
+   
 
-    torch.save(embs, "./tmp/embs.pt")
+    torch.save(embs, "./tmp/embs.nd")
+    torch.save(video_embeddings, "./tmp/video_emb.nd")
+    import json
+    with open("/tmp/videos.json") as f:
+        json.dump(videos, f)
     exit()
-
-    print(embs.shape)
-    print("BEGIN CLUSTERING")
-    if dist.get_rank() == 0:
-        cluster_labels = DBSCAN(eps=0.5, min_samples=5, n_jobs=1).fit_predict(embs)
-    else:
-        cluster_labels = []
-
-    import resource
-    import psutil
-
-    process = resource.getrusage(resource.RUSAGE_SELF)
-    peak_rss_mb = process.ru_maxrss / 1024.0
-    current_rss_mb = psutil.Process().memory_info().rss / (1024.0 ** 2)
-    print(f"\n[Memory Usage] Process RSS - Current: {current_rss_mb:.2f} MB, Peak: {peak_rss_mb:.2f} MB")
-    if torch.cuda.is_available():
-        for i in range(torch.cuda.device_count()):
-            alloc = torch.cuda.memory_allocated(i) / (1024.0 ** 3)
-            res = torch.cuda.memory_reserved(i) / (1024.0 ** 3)
-            max_alloc = torch.cuda.max_memory_allocated(i) / (1024.0 ** 3)
-            max_res = torch.cuda.max_memory_reserved(i) / (1024.0 ** 3)
-            print(f"[Memory Usage] GPU {i} - Allocated: {alloc:.2f} GB (peak {max_alloc:.2f}), Reserved: {res:.2f} GB (peak {max_res:.2f})")
 
 
 if __name__ == "__main__":
