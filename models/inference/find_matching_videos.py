@@ -209,7 +209,14 @@ def cosine_search_with_embeddings(query_embed, emb_dir: str):
     This avoids re-reading the massive embedding shards from disk when we need
     per-video embeddings. Uses a pre-allocated buffer and in-place copies to
     avoid a full 100GB+ copy from torch.cat.
+    Only rank 0 allocates the full embedding tensor; other ranks use a placeholder.
+    query_embed is gathered and concatenated across all ranks before search.
     """
+    gather_list = [None for _ in range(dist.get_world_size())]
+    dist.all_gather_object(gather_list, query_embed)
+    query_embed = torch.cat([t for t in gather_list], dim=0)
+
+    rank = dist.get_rank()
     num_files = sum(1 for entry in os.scandir(emb_dir) if entry.is_file()) // 2
     total_rows = 0
     for i in range(num_files):
@@ -220,24 +227,32 @@ def cosine_search_with_embeddings(query_embed, emb_dir: str):
     similarity_scores_list = []
     similarity_idxs_list = []
     offset = 0
-    all_embeddings = torch.empty(0) if total_rows == 0 else None
+    all_embeddings = None
 
     for i in range(num_files):
         metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f"{emb_dir}/{i}")
         print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
 
-        if all_embeddings is None:
-            embed_dim = db_embed_chunk.shape[1]
-            all_embeddings = torch.empty(total_rows, embed_dim, dtype=torch.float32)
+        if rank == 0:
+            if all_embeddings is None and total_rows > 0:
+                embed_dim = db_embed_chunk.shape[1]
+                all_embeddings = torch.empty(total_rows, embed_dim, dtype=torch.float32)
+        else:
+            if all_embeddings is None:
+                all_embeddings = torch.empty(0)
 
         similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
         metadata.extend(metadata_chunk)
         similarity_scores_list.append(similarity_scores_chunk)
         similarity_idxs_list.append(similarity_idxs_chunk)
         n = db_embed_chunk.shape[0]
-        all_embeddings[offset:offset + n].copy_(db_embed_chunk.float())
+        if rank == 0 and all_embeddings.numel() > 0:
+            all_embeddings[offset:offset + n].copy_(db_embed_chunk.float())
         offset += n
         del db_embed_chunk
+
+    if all_embeddings is None:
+        all_embeddings = torch.empty(0)
 
     similarity_scores = np.concatenate(similarity_scores_list) if similarity_scores_list else np.array([])
     similarity_idxs = np.concatenate(similarity_idxs_list) if similarity_idxs_list else np.array([])
@@ -320,42 +335,49 @@ def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: i
     top_videos = get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers=8, entropy_threshold=2.5)
     print(f"[GPU RETRIEVAL] Completed similarity search")
 
-    total_seconds = 0
-    videos = []
-    video_embeddings = []
-    i = 0
-    j = 0
-    while i < len(top_videos) and j < num_intervals:
-        (start, _, score) = top_videos[i]
+    rank = dist.get_rank()
+    if rank == 0:
+        total_seconds = 0
+        videos = []
+        video_embeddings = []
+        i = 0
+        j = 0
+        while i < len(top_videos) and j < num_intervals:
+            (start, _, score) = top_videos[i]
 
-        start_meta = meta[start]
-        video_path = start_meta["video_path"]
-        fps = float(start_meta["video_fps"])
+            start_meta = meta[start]
+            video_path = start_meta["video_path"]
+            fps = float(start_meta["video_fps"])
 
-        # Find the full contiguous range of this video in meta (all its embeddings).
-        vid_start = start
-        while vid_start > 0 and meta[vid_start - 1]["video_path"] == video_path:
-            vid_start -= 1
+            vid_start = start
+            while vid_start > 0 and meta[vid_start - 1]["video_path"] == video_path:
+                vid_start -= 1
 
-        curr = start
-        while curr < len(meta) and meta[curr]["video_path"] == video_path:
-            curr += 1
-        video_length = float(meta[curr - 1]["sampled_frame_index"]) / fps
-        i += 1
-        if max_vid_len and video_length > max_vid_len:
-            continue
-        
-        j += 1
-        # Slice out this video's embeddings directly from the in-memory tensor.
-        video_embeddings.append(all_embeddings[vid_start:curr])
-        videos.append({
-                "video_path": video_path,
-                "score": score
-            })
-        
-        total_seconds += video_length
-        
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
+            curr = start
+            while curr < len(meta) and meta[curr]["video_path"] == video_path:
+                curr += 1
+            video_length = float(meta[curr - 1]["sampled_frame_index"]) / fps
+            i += 1
+            if max_vid_len and video_length > max_vid_len:
+                continue
+
+            j += 1
+            video_embeddings.append(all_embeddings[vid_start:curr].clone())
+            videos.append({
+                    "video_path": video_path,
+                    "score": score
+                })
+
+            total_seconds += video_length
+
+        print(f"[GPU 0 RETRIEVAL] Hrs: {total_seconds / 3600}")
+    else:
+        videos = []
+        video_embeddings = []
+
+    obj_list = [videos, video_embeddings]
+    dist.broadcast_object_list(obj_list, src=0)
+    videos, video_embeddings = obj_list[0], obj_list[1]
 
     return videos, video_embeddings, world_idx
 
@@ -414,10 +436,10 @@ def main():
         num_intervals=100,
         max_vid_len=None,
     )
-    embs = torch.cat(video_embeddings, dim=0)
+    embs = torch.cat(video_embeddings, dim=0).numpy()
     del video_embeddings
-    embs_flat = embs.numpy()
-    cluster_labels = DBSCAN(eps=0.5, min_samples=5).fit_predict(embs_flat)
+
+    cluster_labels = DBSCAN(eps=0.5, min_samples=5).fit_predict(embs)
     import resource
     import psutil
 
