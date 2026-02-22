@@ -147,7 +147,7 @@ if out_root.exists():
     shutil.rmtree(out_root)
 out_root.mkdir(parents=True, exist_ok=True)
 tasks = []
-max_frames_per_cluster = 10
+max_frames_per_cluster = 5
 for cluster_num, cid in enumerate(clusters_sorted):
     inf = cluster_info[int(cid)]
     cluster_dir = out_root / str(cluster_num)
