@@ -15,6 +15,7 @@ from torchcodec.decoders import VideoDecoder
 import torch
 import cuml
 import json
+import shutil
 from joblib import Parallel, delayed
 from tqdm import tqdm
 cuml.set_global_output_type("numpy")
@@ -45,7 +46,7 @@ with open("./tmp/videos.json", "r") as f:
 arr = np.ascontiguousarray(arr, dtype=np.float32)
 
 print(f"data shape: {arr.shape}")
-dbscan_eps = 0.05
+dbscan_eps = 0.1
 dbscan_min_samples = 100
 dbscan_algorithm = "brute"
 dbscan_metric = "euclidean"
@@ -71,7 +72,6 @@ n_clusters = len(cluster_ids)
 print(f"n_points: {len(cluster_labels)}")
 print(f"n_noise: {n_noise}")
 print(f"n_clusters: {n_clusters}")
-print(f"n_point_in_clusters: {len(cluster_labels) - n_noise}")
 
 frame_counts = np.array([t.shape[0] for t in arr_unflattened], dtype=np.int64)
 video_offsets = np.concatenate([[0], np.cumsum(frame_counts)[:-1]])
@@ -134,6 +134,8 @@ def _save_one_frame(args):
 
 embed_interval_sec = 2.0
 out_root = Path("./tmp/cluster_test")
+if out_root.exists():
+    shutil.rmtree(out_root)
 out_root.mkdir(parents=True, exist_ok=True)
 tasks = []
 for cluster_num, cid in enumerate(clusters_sorted):
