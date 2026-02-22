@@ -16,7 +16,7 @@ emulator/data/*
 /tmp
 # Ignore everything inside Emerald-GBAdvance/
 emulator/Emerald-GBAdvance/*
-
+AGENTS.md
 emulator/agent_direct_save.state
 /wandb
 # Keep the folders themselves (optional)

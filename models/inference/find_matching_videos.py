@@ -1,4 +1,5 @@
 import os
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "96")
 import torch
 import numpy as np
 from transformers import AutoImageProcessor, AutoModel
@@ -9,6 +10,7 @@ import math
 import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
+from sklearn.cluster import DBSCAN
 from models.util.misc import local_model_map
 import torch.distributed as dist
 
@@ -30,7 +32,7 @@ def get_embeddings(model, processor, path: str):
 
 def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base"):
     model_id = local_model_map(model_id)
-    processor = AutoImageProcessor.from_pretrained(model_id)
+    processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
     model = AutoModel.from_pretrained(model_id).eval()
     embeds = get_embeddings(model, processor, video_path)
     return embeds
@@ -205,30 +207,40 @@ def cosine_search_with_embeddings(query_embed, emb_dir: str):
     Like cosine_search, but also returns a single concatenated tensor of all
     database embeddings in the same global index order as the returned metadata.
     This avoids re-reading the massive embedding shards from disk when we need
-    per-video embeddings.
+    per-video embeddings. Uses a pre-allocated buffer and in-place copies to
+    avoid a full 100GB+ copy from torch.cat.
     """
     num_files = sum(1 for entry in os.scandir(emb_dir) if entry.is_file()) // 2
-    i = 0
+    total_rows = 0
+    for i in range(num_files):
+        with open(f"{emb_dir}/{i}.json", "r") as f:
+            total_rows += len(json.load(f))
+
     metadata = []
     similarity_scores_list = []
     similarity_idxs_list = []
-    embedding_chunks = []
+    offset = 0
+    all_embeddings = torch.empty(0) if total_rows == 0 else None
 
-    while i < num_files:
-        metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f'{emb_dir}/{i}')
+    for i in range(num_files):
+        metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f"{emb_dir}/{i}")
         print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
+
+        if all_embeddings is None:
+            embed_dim = db_embed_chunk.shape[1]
+            all_embeddings = torch.empty(total_rows, embed_dim, dtype=torch.float32)
 
         similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
         metadata.extend(metadata_chunk)
         similarity_scores_list.append(similarity_scores_chunk)
         similarity_idxs_list.append(similarity_idxs_chunk)
-        embedding_chunks.append(db_embed_chunk.float())
-
-        i += 1
+        n = db_embed_chunk.shape[0]
+        all_embeddings[offset:offset + n].copy_(db_embed_chunk.float())
+        offset += n
+        del db_embed_chunk
 
     similarity_scores = np.concatenate(similarity_scores_list) if similarity_scores_list else np.array([])
     similarity_idxs = np.concatenate(similarity_idxs_list) if similarity_idxs_list else np.array([])
-    all_embeddings = torch.cat(embedding_chunks, dim=0) if embedding_chunks else torch.empty(0)
 
     return similarity_scores, similarity_idxs, metadata, all_embeddings
 
@@ -363,6 +375,24 @@ def main():
       - max_vid_len: None
     """
     
+    # Initialize distributed process group if not already initialized
+    if not dist.is_initialized():
+        if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
+            # Use environment variables if available
+            from models.util.dist import init_distributed
+            init_distributed()
+        else:
+            # Initialize as single-process group for standalone execution
+            # Use file-based initialization for single process
+            import tempfile
+            init_file = os.path.join(tempfile.gettempdir(), f"dist_init_{os.getpid()}")
+            dist.init_process_group(
+                backend="gloo" if not torch.cuda.is_available() else "nccl",
+                init_method=f"file://{init_file}",
+                rank=0,
+                world_size=1,
+            )
+    
     # python models/inference/find_matching_videos.py --query_path ./tmp/0.mp4
     import argparse
 
@@ -384,9 +414,24 @@ def main():
         num_intervals=100,
         max_vid_len=None,
     )
-    for video, embeds in zip(videos, video_embeddings):
-        print(video["video_path"])
-        print(embeds.shape)
+    embs = torch.cat(video_embeddings, dim=0)
+    del video_embeddings
+    embs_flat = embs.numpy()
+    cluster_labels = DBSCAN(eps=0.5, min_samples=5).fit_predict(embs_flat)
+    import resource
+    import psutil
+
+    process = resource.getrusage(resource.RUSAGE_SELF)
+    peak_rss_mb = process.ru_maxrss / 1024.0
+    current_rss_mb = psutil.Process().memory_info().rss / (1024.0 ** 2)
+    print(f"\n[Memory Usage] Process RSS - Current: {current_rss_mb:.2f} MB, Peak: {peak_rss_mb:.2f} MB")
+    if torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            alloc = torch.cuda.memory_allocated(i) / (1024.0 ** 3)
+            res = torch.cuda.memory_reserved(i) / (1024.0 ** 3)
+            max_alloc = torch.cuda.max_memory_allocated(i) / (1024.0 ** 3)
+            max_res = torch.cuda.max_memory_reserved(i) / (1024.0 ** 3)
+            print(f"[Memory Usage] GPU {i} - Allocated: {alloc:.2f} GB (peak {max_alloc:.2f}), Reserved: {res:.2f} GB (peak {max_res:.2f})")
 
 
 if __name__ == "__main__":
