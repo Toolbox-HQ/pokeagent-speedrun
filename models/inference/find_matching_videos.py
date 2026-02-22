@@ -5,7 +5,6 @@ from transformers import AutoImageProcessor, AutoModel
 import json
 import glob
 from torchcodec.decoders import VideoDecoder
-import cv2
 import math
 import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -288,26 +287,26 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
 
 
 def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] Begin retrieval process")
+    print(f"[GPU RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
 
     query_emb = dino_embeddings_every(query_path)
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
+    print(f"[GPU RETRIEVAL] Created dino embeddings")
 
     self_sim_matrix = (query_emb @ query_emb.T)
     self_similarity = self_sim_matrix.mean().item()
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] had self-similarity of {self_similarity}")
+    print(f"[GPU RETRIEVAL] had self-similarity of {self_similarity}")
     gather_list = [None for _ in range(dist.get_world_size())]
     dist.all_gather_object(gather_list, self_similarity)
     world_idx = torch.argmin(torch.tensor(gather_list, dtype=torch.float32)).item()
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] GPU {world_idx} has the lowest self-similarity from {gather_list} on {self_sim_matrix.size()} matrix")
+    print(f"[GPU RETRIEVAL] GPU {world_idx} has the lowest self-similarity from {gather_list} on {self_sim_matrix.size()} matrix")
     
     top_videos = self_sim_matrix.topk(k=num_intervals, dim=1)[1][0]
     sims, idxs, meta, all_embeddings = cosine_search_with_embeddings(query_emb, emb_dir)
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed embeddings load")
+    print(f"[GPU RETRIEVAL] Completed embeddings load")
 
     top_videos = get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers=8, entropy_threshold=2.5)
-    print(f"[GPU {dist.get_rank()} RETRIEVAL] Completed similarity search")
+    print(f"[GPU RETRIEVAL] Completed similarity search")
 
     total_seconds = 0
     videos = []
@@ -350,6 +349,7 @@ def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: i
 
 
 def main():
+    
     """
     Small helper for debugging retrieval.
 
@@ -362,12 +362,17 @@ def main():
       - num_intervals: 100 (retrieved_videos)
       - max_vid_len: None
     """
+    
+    # python models/inference/find_matching_videos.py --query_path ./tmp/0.mp4
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "query_path",
+        "--query-path",
+        "--query_path",
+        dest="query_path",
         type=str,
+        required=True,
         help="Path to the query video (.mp4) to use for retrieval.",
     )
     args = parser.parse_args()
@@ -381,6 +386,7 @@ def main():
     )
     for video, embeds in zip(videos, video_embeddings):
         print(video["video_path"])
+        print(embeds.shape)
 
 
 if __name__ == "__main__":
