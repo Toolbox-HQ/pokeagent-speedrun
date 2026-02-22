@@ -147,11 +147,15 @@ if out_root.exists():
     shutil.rmtree(out_root)
 out_root.mkdir(parents=True, exist_ok=True)
 tasks = []
+max_frames_per_cluster = 10
 for cluster_num, cid in enumerate(clusters_sorted):
     inf = cluster_info[int(cid)]
     cluster_dir = out_root / str(cluster_num)
     cluster_dir.mkdir(exist_ok=True)
-    for path in inf["video_paths"]:
+    paths = inf["video_paths"]
+    if len(paths) > max_frames_per_cluster:
+        paths = random.sample(paths, max_frames_per_cluster)
+    for path in paths:
         frames = inf["frames_by_video"][path]
         frame_idx = random.choice(frames)
         tasks.append((cluster_dir, path, frame_idx, embed_interval_sec))
