@@ -442,7 +442,7 @@ def main():
     torch.save(embs, "./tmp/embs.nd")
     torch.save(video_embeddings, "./tmp/video_emb.nd")
     import json
-    with open("/tmp/videos.json") as f:
+    with open("/tmp/videos.json", "w") as f:
         json.dump(videos, f)
     exit()
 
