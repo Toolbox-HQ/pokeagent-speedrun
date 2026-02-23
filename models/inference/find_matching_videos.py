@@ -444,8 +444,6 @@ def main():
     import json
     with open("./tmp/videos.json", "w") as f:
         json.dump(videos, f)
-    exit()
-
 
 if __name__ == "__main__":
     main()

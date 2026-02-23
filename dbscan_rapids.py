@@ -38,6 +38,8 @@ log_buffer = StringIO()
 _original_stdout = sys.stdout
 sys.stdout = _Tee(_original_stdout, log_buffer)
 
+
+# -----------------------------------------------------------------------------
 arr: np.ndarray = torch.load("./tmp/embs.nd", weights_only=False) # (B x S) x D
 arr_unflattened = torch.load("./tmp/video_emb.nd", weights_only=False) # B x S x D
 with open("./tmp/videos.json", "r") as f:
@@ -74,6 +76,7 @@ print(f"n_points: {len(cluster_labels)}")
 print(f"n_noise: {n_noise}")
 print(f"n_clusters: {n_clusters}")
 
+
 frame_counts = np.array([t.shape[0] for t in arr_unflattened], dtype=np.int64)
 video_offsets = np.concatenate([[0], np.cumsum(frame_counts)[:-1]])
 video_paths = [v["video_path"] for v in info]
@@ -107,6 +110,8 @@ cluster_ids = np.array([
 ])
 n_clusters = len(cluster_ids)
 print(f"clusters after min_unique_videos filter: {n_clusters} (dropped {n_clusters_before_filter - n_clusters})")
+
+# -----------------------------------------------------------------------------
 
 clusters_sorted = sorted(
     cluster_ids,
