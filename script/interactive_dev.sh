@@ -20,6 +20,7 @@ INDIVIDUAL_BINDS=" \
     --bind ./script:/app/script \
     --bind ./.s3cfg:/app/.s3cfg \
     --bind ./main.py:/app/main.py \
+    --bind ./random_agent.py:/app/random_agent.py \
     --bind ./.git:/app/.git \
     --bind ./wandb:/app/wandb \
     --bind $HOME/.config/wandb:$HOME/.config/wandb
