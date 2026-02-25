@@ -13,9 +13,12 @@ def run_random_agent(inference_args, training_args):
 
     
     if inference_args.save_state is not None:
+        print("loaded")
         with open(inference_args.save_state, 'rb') as f:
             state = f.read()
         conn.load_state(state)
+    else:
+        print("skip")
 
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)

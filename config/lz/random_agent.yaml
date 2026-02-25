@@ -3,3 +3,4 @@ output_dir: ".cache/lz/random_agent"
 # inference
 agent_steps: 500
 rom_path: .cache/lz/rom/lz_rom.gba
+save_state: .cache/lz/rom/lz_rom.gba
