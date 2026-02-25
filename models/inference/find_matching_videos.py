@@ -5,6 +5,7 @@ import numpy as np
 from transformers import AutoImageProcessor, AutoModel
 import json
 import glob
+from pathlib import Path
 from torchcodec.decoders import VideoDecoder
 import math
 import torch.nn.functional as F
@@ -334,6 +335,30 @@ def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: i
 
     top_videos = get_top_videos_by_score(sims, idxs, meta, num_embeds_per_sample, max_workers=8, entropy_threshold=2.5)
     print(f"[GPU RETRIEVAL] Completed similarity search")
+
+    inference_dir = Path(__file__).resolve().parent
+    excluded_path = inference_dir / "excluded_keywords.json"
+    if not excluded_path.exists():
+        excluded_path = inference_dir / "excluded_videos.json"
+
+    if excluded_path.exists():
+        with excluded_path.open("r") as f:
+            excluded_keywords = tuple(
+                keyword.lower()
+                for keyword in json.load(f)
+                if isinstance(keyword, str) and keyword
+            )
+    else:
+        excluded_keywords = tuple()
+    
+    top_videos = [
+        (start, end, score)
+        for (start, end, score) in top_videos
+        if not any(
+            keyword in meta[start]["video_path"].lower()
+            for keyword in excluded_keywords
+        )
+    ]
 
     rank = dist.get_rank()
     if rank == 0:
