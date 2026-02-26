@@ -31,3 +31,4 @@ slurm*
 scratch
 wandb
 __pycache__
+/tmp
