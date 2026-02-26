@@ -31,8 +31,10 @@ class IDMDataset(Dataset):
         self.data_files = list_files_with_extentions(self.local_path, ".json")
         self.is_val = is_val
         # this is slow as data gets large
+        print("Running filter step, this may take a while...")
         self.raw_data = [(filter_map(load_json(path)), map_json_to_mp4(path)) for path in self.data_files]
 
+        print("Processing samples, this may take a while...")
         self.samples = IDMDataset.process_raw_into_samples(self.raw_data, self.fps, 60, 128)
 
     @staticmethod
