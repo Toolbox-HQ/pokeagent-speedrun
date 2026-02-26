@@ -9,7 +9,7 @@ epochs: 1
 lr: 5.0e-5
 weight_decay: 0
 wandb_project: "pokeagent"
-output_path: ".cache/pokeagent/idm_checkpoints/idm_rnd_data_v2/rnd_idm_model.pt"
+output_path: "rnd_idm_model.pt"
 torch_compile: false
 eval_every: 100
 save_every: 100
