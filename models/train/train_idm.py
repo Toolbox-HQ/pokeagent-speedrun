@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Tuple
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, DistributedSampler
 import wandb
 from tqdm.auto import tqdm
@@ -75,6 +76,19 @@ def compute_accuracy(logits: torch.Tensor, labels: torch.Tensor, is_val=False) -
         c = c[l == label]
         if c.numel():
             accuracy[f"{s}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item()
+
+    assert logits.dim() == 3, "should have 3 dims"
+    B, T, C = logits.shape
+    pos_correct = correct.mean(dim=0)
+    dist.all_reduce(pos_correct, op=dist.ReduceOp.AVG)
+    for i, v in enumerate(pos_correct.tolist()):
+        accuracy[f"{s}acc_pos_{i}"] = v
+
+    pos_loss = F.cross_entropy(logits.reshape(B * T, C), labels.reshape(B * T), reduction='none')
+    pos_loss = pos_loss.view(B, T).mean(dim=0)
+    dist.all_reduce(pos_loss, op=dist.ReduceOp.AVG)
+    for i, v in enumerate(pos_loss.tolist()):
+        accuracy[f"{s}loss_pos_{i}"] = v
 
     return accuracy
 
