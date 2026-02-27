@@ -2,8 +2,8 @@
 #SBATCH --nodes=1
 #SBATCH --time=08:00:00
 #SBATCH --gpus-per-node=1
-#SBATCH --job-name=agent_job
-#SBATCH --output=/scratch/bsch/slurm_out/agent_job_output_%j.txt
+#SBATCH --job-name=idm_job
+#SBATCH --output=/scratch/%u/slurm_out/%j_idm_job_output.txt
 #SBATCH --mail-type=ALL
 
 source .venv/bin/activate
