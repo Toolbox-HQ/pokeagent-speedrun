@@ -97,19 +97,16 @@ class IDMWindowDataset(Dataset):
 
 class AgentPretrainingDataset(IDMWindowDataset):
 
-    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, **kwargs):
+    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, **kwargs):
         
         self.processor = processor
         self.samples = []
         
         if isinstance(videos_json, str):
-            with open(videos_json, "rb") as f:
-                videos_json = orjson.loads(f.read())
-        
-        intervals_json = videos_json
-
-        with open(intervals_json, "r", encoding="utf-8") as f:
-            items = json.load(f)
+            with open(str(videos_json), "r", encoding="utf-8") as f:
+                items = json.load(f)
+        else:
+            items = videos_json
 
         for it in items:
             start = int(it["start"])

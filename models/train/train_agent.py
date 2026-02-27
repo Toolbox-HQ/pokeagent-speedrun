@@ -68,7 +68,7 @@ def create_dataset(data_dir: str,
                    processor: Callable,
                    bootstrap: None | int,
                    split: float = 0.1,
-                   max_videos = None,
+                   max_videos = None, # depreciated
                    online: bool = True) -> Tuple[Dataset, Dataset]:
     
     videos_json = []
@@ -89,7 +89,7 @@ def create_dataset(data_dir: str,
     if online:
         dataset = IDMWindowDataset(videos_json, processor=processor)
     else:
-        dataset = AgentPretrainingDataset(videos_json, processor=processor)
+        dataset = AgentPretrainingDataset(data_dir, processor=processor)
 
     train_ds, eval_ds = train_val_split(dataset, split=split)
 
@@ -123,6 +123,6 @@ if __name__ == "__main__":
     
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0.05)
+    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
     print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
