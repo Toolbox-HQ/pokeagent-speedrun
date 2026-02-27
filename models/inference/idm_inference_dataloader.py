@@ -36,7 +36,7 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     frames: torch.Tensor = VideoDecoder(video_path).get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
     return (frames, actions) if labels else frames
 
-class IDMWindowDataset(Dataset):
+class OnlineAgentDataset(Dataset):
     def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None):
         
         self.processor = processor
@@ -95,7 +95,7 @@ class IDMWindowDataset(Dataset):
 
         return inputs if inputs else idm_frames # (T,C,HW) RGB
 
-class AgentPretrainingDataset(IDMWindowDataset):
+class AgentPretrainingDataset(OnlineAgentDataset):
 
     def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, **kwargs):
         
@@ -127,7 +127,7 @@ class AgentPretrainingDataset(IDMWindowDataset):
                     "video_fps": fps,
                 })
 
-class LabelledWindowDataset(IDMWindowDataset):
+class LabelledWindowDataset(OnlineAgentDataset):
 
     def __getitem__(self, idx):
         s = self.samples[idx]
@@ -220,7 +220,7 @@ def batched_infer_idm_labels(x, idm=None):
 
 
 def get_dataloader(path, batch_size=1, num_workers=0, shuffle=False):
-    ds = IDMWindowDataset(path, IDM_FPS, WINDOW)
+    ds = OnlineAgentDataset(path, IDM_FPS, WINDOW)
     return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
 
 def downsample(x, stride, offset=0):

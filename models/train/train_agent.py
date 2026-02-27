@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.util.repro import repro_init
 from models.util.dist import init_distributed
-from models.inference.idm_inference_dataloader import IDMWindowDataset, AgentPretrainingDataset, get_idm_labeller
+from models.inference.idm_inference_dataloader import OnlineAgentDataset, AgentPretrainingDataset, get_idm_labeller
 import os
 from models.util.data import train_val_split, list_files_with_extentions, ResampleDataset
 import torch.distributed as dist
@@ -87,7 +87,7 @@ def create_dataset(data_dir: str,
                     videos_json.append({"video_path": item["video_path"]})
 
     if online:
-        dataset = IDMWindowDataset(videos_json, processor=processor)
+        dataset = OnlineAgentDataset(videos_json, processor=processor)
     else:
         dataset = AgentPretrainingDataset(data_dir, processor=processor)
 
@@ -102,7 +102,7 @@ def create_dataset(data_dir: str,
 def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
 
     for param in model.parameters(): param.requires_grad = True
-    trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
+    trainer = Trainer(model=model, args=training_args, data_collator=OnlineAgentDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.train()
 
 def train_with_rollback(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
@@ -111,7 +111,7 @@ def train_with_rollback(model: nn.Module, training_args: TrainingArguments, trai
         train_ds, eval_ds = train_val_split(train_ds, split=0.05)
 
     for param in model.parameters(): param.requires_grad = True
-    trainer = Trainer(model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
+    trainer = Trainer(model=model, args=training_args, data_collator=OnlineAgentDataset.collate_fn, train_dataset=train_ds, eval_dataset=eval_ds)
     trainer.rollback_on_overfit(".cache/pokeagent/tmp_checkpoints")
     trainer.train()
     print(f"[RANK {dist.get_rank()} TRAINER] Agent training completes")
