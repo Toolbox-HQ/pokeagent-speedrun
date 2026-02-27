@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.util.repro import repro_init
 from models.util.dist import init_distributed
-from models.inference.idm_inference_dataloader import IDMWindowDataset, get_idm_labeller
+from models.inference.idm_inference_dataloader import IDMWindowDataset, AgentPretrainingDataset, get_idm_labeller
 import os
 from models.util.data import train_val_split, list_files_with_extentions, ResampleDataset
 import torch.distributed as dist
@@ -68,7 +68,8 @@ def create_dataset(data_dir: str,
                    processor: Callable,
                    bootstrap: None | int,
                    split: float = 0.1,
-                   max_videos = None) -> Tuple[Dataset, Dataset]:
+                   max_videos = None,
+                   online: bool = True) -> Tuple[Dataset, Dataset]:
     
     videos_json = []
     videos_json_files = list_files_with_extentions(data_dir, ".json") if os.path.isdir(data_dir) else [data_dir]
@@ -85,8 +86,11 @@ def create_dataset(data_dir: str,
                 if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
                     videos_json.append({"video_path": item["video_path"]})
 
-    dataset = IDMWindowDataset(videos_json, max_videos=max_videos)
-    dataset.processor = processor
+    if online:
+        dataset = IDMWindowDataset(videos_json, processor=processor)
+    else:
+        dataset = AgentPretrainingDataset(videos_json, processor=processor)
+
     train_ds, eval_ds = train_val_split(dataset, split=split)
 
     # error wrapping
@@ -119,6 +123,6 @@ if __name__ == "__main__":
     
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0, max_videos=1000)
+    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0.05)
     print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)

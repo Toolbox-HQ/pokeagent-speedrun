@@ -1,14 +1,13 @@
 architecture: "state_action_conditioned"
-load_path: ".cache/pokeagent/checkpoints/agent.safetensors"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 output_dir: ".cache/pokeagent/checkpoints"
-num_train_epochs: 1
+num_train_epochs: 5
 per_device_train_batch_size: 4
 save_strategy: "steps"
-save_steps: 1000
+save_steps: 500
 save_total_limit: 10
-learning_rate: 5.0e-5 # this is very low
+learning_rate: 5.0e-5
 weight_decay: 0.00001
 adam_beta2: 0.95
 warmup_ratio: 0.05
@@ -17,7 +16,6 @@ logging_steps: 1
 gradient_checkpointing: true
 report_to: "wandb"
 eval_strategy: "steps"
-eval_steps: 1
-dataloader_num_workers: 0
+eval_steps: 370 # 1/4 epoch
+dataloader_num_workers: 8
 data_path: ".cache/pokeagent/intervals.json"
-max_steps: 3

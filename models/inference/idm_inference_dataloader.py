@@ -95,6 +95,41 @@ class IDMWindowDataset(Dataset):
 
         return inputs if inputs else idm_frames # (T,C,HW) RGB
 
+class AgentPretrainingDataset(IDMWindowDataset):
+
+    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, **kwargs):
+        
+        self.processor = processor
+        self.samples = []
+        
+        if isinstance(videos_json, str):
+            with open(videos_json, "rb") as f:
+                videos_json = orjson.loads(f.read())
+        
+        intervals_json = videos_json
+
+        with open(intervals_json, "r", encoding="utf-8") as f:
+            items = json.load(f)
+
+        for it in items:
+            start = int(it["start"])
+            end = int(it["end"])
+            fps = float(it["video_fps"])
+            stride = max(1, int(round(fps / idm_fps)))
+            n_raw = max(0, end - start)
+            n_idm = n_raw // stride
+            n_full = (n_idm // window) * window
+            n_windows = n_full // window
+            for w in range(n_windows):
+                win_start = start + w * window * stride
+                win_end = win_start + window * stride
+                self.samples.append({
+                    "video_path": it["video_path"],
+                    "start": win_start,
+                    "end": win_end,
+                    "video_fps": fps,
+                })
+
 class LabelledWindowDataset(IDMWindowDataset):
 
     def __getitem__(self, idx):
