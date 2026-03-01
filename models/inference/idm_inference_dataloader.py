@@ -57,11 +57,10 @@ class OnlineAgentDataset(Dataset):
             stride = max(1, int(round(fps / idm_fps)))
             n_raw = decoder.metadata.num_frames
             n_idm = n_raw // stride
-            n_full = (n_idm // window) * window
-            n_windows = n_full // window
+            n_windows = max(0, (n_idm - 2 * window) // window + 1) if n_idm >= 2 * window else 0
             for w in range(n_windows):
                 win_start = w * window * stride
-                win_end = win_start + window * stride
+                win_end = win_start + 2 * window * stride
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
@@ -115,11 +114,10 @@ class AgentPretrainingDataset(OnlineAgentDataset):
             stride = max(1, int(round(fps / idm_fps)))
             n_raw = max(0, end - start)
             n_idm = n_raw // stride
-            n_full = (n_idm // window) * window
-            n_windows = n_full // window
+            n_windows = max(0, (n_idm - 2 * window) // window + 1) if n_idm >= 2 * window else 0
             for w in range(n_windows):
                 win_start = start + w * window * stride
-                win_end = win_start + window * stride
+                win_end = win_start + 2 * window * stride
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
