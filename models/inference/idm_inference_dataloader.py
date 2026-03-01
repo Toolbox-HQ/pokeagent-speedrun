@@ -37,7 +37,7 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     return (frames, actions) if labels else frames
 
 class IDMWindowDataset(Dataset):
-    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None):
+    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None, objectives_lookup=None):
         
         self.processor = processor
         self.samples = []
@@ -67,6 +67,7 @@ class IDMWindowDataset(Dataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
                 })
         
         print(f"[AGENT] Data hrs: {total_seconds / 3600}")

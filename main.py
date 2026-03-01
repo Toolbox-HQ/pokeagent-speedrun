@@ -73,6 +73,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     import torch.distributed as dist
     from models.util.misc import finalize_wandb
     import os
+    import pickle
 
     rank = dist.get_rank()
 
@@ -104,6 +105,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.start_video_writer(query_path)
 
     futures = []
+    query_embeds = []
 
     if training_args.resume_from_checkpoint is not None:
         load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
@@ -127,12 +129,13 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
-                video_intervals, _ = get_videos(f"{query_path}.mp4",
+                video_intervals, _, query_emb = get_videos(f"{query_path}.mp4",
                                                 dino_embedding_path,
                                                 inference_args.match_length,
                                                 inference_args.retrieved_videos,
                                                 inference_args.max_vid_len
                                                 )
+                query_embeds.append(query_emb)
                 print(f"[GPU {rank} LOOP] Finished Retrieval")
                 
                 video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
@@ -144,14 +147,15 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 dist.barrier()
                 
                 print(f"[GPU {rank} LOOP] Begin agent training")
-                agent.train_agent(agent_data_path, bootstrap_count) # train agent on cumulative agent data
+                objective_manager = agent.train_agent(agent_data_path, bootstrap_count, query_embeds) # train agent on cumulative agent data
+
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
 
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)
                
-                checkpoint(checkpoint_path, step, agent, curr_state)                
+                checkpoint(checkpoint_path, step, agent, curr_state, objective_manager)                
                 conn = EmulatorConnection(inference_args.rom_path)
                 conn.load_state(curr_state)
                 conn.create_video_writer(query_path)

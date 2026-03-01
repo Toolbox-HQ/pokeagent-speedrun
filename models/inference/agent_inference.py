@@ -188,11 +188,12 @@ class OnlinePokeagentStateOnly:
         self.idx = 0
         print("[AGENT] Initialized agent")
     
-    def train_agent(self, intervals: str, bootstrap: int):
-        train_ds, eval_ds = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split)
+    def train_agent(self, intervals: str, bootstrap: int, query_embeds: list):
+        train_ds, eval_ds, objective_manager = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split, query_embeds=query_embeds)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
+        return objective_manager
 
     def train_idm(self, data_dir: str):
         self.idm.train()

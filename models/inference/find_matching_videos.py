@@ -311,7 +311,7 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
         
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
 
-    return videos, world_idx
+    return videos, world_idx, query_emb
 
 
 def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
