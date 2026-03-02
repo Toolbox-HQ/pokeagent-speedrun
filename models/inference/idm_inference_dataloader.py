@@ -85,7 +85,8 @@ class OnlineAgentDataset(Dataset):
         idm_frames = decode_idm_rate_frames(s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS, labels=False)
         inputs = None
         if self.processor:
-            agent_frames = downsample(idm_frames, 2)
+            middle_frames = idm_frames[idm_frames.shape[0] // 6 : 5 * idm_frames.shape[0] // 6]
+            agent_frames = downsample(middle_frames, 2)
             inputs = self.processor(
             images=agent_frames,
             return_tensors="pt"
