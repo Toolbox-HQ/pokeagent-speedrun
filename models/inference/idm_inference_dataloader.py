@@ -218,6 +218,7 @@ def batched_infer_idm_labels(x, idm=None):
         labels = torch.stack((labels[:B], labels[B:]))
         labels = torch.cat((labels[0,:, offset // 2 : -offset // 2], labels[1,:, offset // 2 : -offset // 2]), dim = 1)
         labels = labels[:,1::2] # strided downsampling, offset by 1
+        assert labels.shape == (B, 64), f"shape was {labels.shape}"
     return labels
 
 
