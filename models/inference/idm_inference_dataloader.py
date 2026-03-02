@@ -57,10 +57,10 @@ class OnlineAgentDataset(Dataset):
             stride = max(1, int(round(fps / idm_fps)))
             n_raw = decoder.metadata.num_frames
             n_idm = n_raw // stride
-            n_windows = max(0, (n_idm - 2 * window) // window + 1) if n_idm >= 2 * window else 0
+            n_windows = max(0, (n_idm - 3 * window // 2) // window + 1) if n_idm >= 3 * window // 2 else 0
             for w in range(n_windows):
                 win_start = w * window * stride
-                win_end = win_start + 2 * window * stride
+                win_end = win_start + 3 * window // 2 * stride
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
@@ -114,10 +114,10 @@ class AgentPretrainingDataset(OnlineAgentDataset):
             stride = max(1, int(round(fps / idm_fps)))
             n_raw = max(0, end - start)
             n_idm = n_raw // stride
-            n_windows = max(0, (n_idm - 2 * window) // window + 1) if n_idm >= 2 * window else 0
+            n_windows = max(0, (n_idm - 3 * window // 2) // window + 1) if n_idm >= 3 * window // 2 else 0
             for w in range(n_windows):
                 win_start = start + w * window * stride
-                win_end = win_start + 2 * window * stride
+                win_end = win_start + 3 * window // 2 * stride
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
@@ -135,7 +135,8 @@ class LabelledWindowDataset(OnlineAgentDataset):
 
         inputs = None
         if self.processor:
-            agent_frames = downsample(idm_frames, 2)
+            middle_frames = idm_frames[idm_frames.shape[0] // 6 : 5 * idm_frames.shape[0] // 6]
+            agent_frames = downsample(middle_frames, 2)
             inputs = self.processor(
             images=agent_frames,
             return_tensors="pt"
@@ -201,8 +202,10 @@ def get_idm_labeller(device):
 def batched_infer_idm_labels(x, idm=None):
     with torch.no_grad():
         (B, S, C, H, W) = x.shape
-        assert (S, C, H, W) == (128, 3, 128, 128)
-
+        assert (S, C, H, W) == (192, 3, 128, 128), f"shape was {(S, C, H, W)}"
+        offset = 64
+        x = torch.cat((x[:, :-offset], x[:, offset:]))
+        assert x.shape == (B*2,128,3,128,128), f"shape was {x.shape}"
         frames_bthwc = einops.rearrange(x, "b t c h w -> b t h w c") # (128, 128, 128, 3)
 
         dummy = {
@@ -212,6 +215,8 @@ def batched_infer_idm_labels(x, idm=None):
 
         logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
         labels = torch.argmax(logits, dim=-1)
+        labels = torch.stack((labels[:B], labels[B:]))
+        labels = torch.cat((labels[0,:, offset // 2 : -offset // 2], labels[1,:, offset // 2 : -offset // 2]), dim = 1)
         labels = labels[:,1::2] # strided downsampling, offset by 1
     return labels
 
