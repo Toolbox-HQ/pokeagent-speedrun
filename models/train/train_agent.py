@@ -206,16 +206,20 @@ def create_dataset(data_dir: str,
                 if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
                     videos_json.append({"video_path": item["video_path"]})
 
-    # objective mining
-    print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(videos_json_files)} files")
-    objectives_lookup, objective_manager = mine_objectives(all_videos_json_files)
+    # objective mining (rank 0 only, then broadcast)
+    objects = [None, None]
+    if dist.get_rank() == 0:
+        print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(videos_json_files)} files")
+        objects = list(mine_objectives(all_videos_json_files))
+    dist.broadcast_object_list(objects, src=0)
+    objectives_lookup, objective_manager = objects[0], objects[1]
     for query_embed in query_embeds:
-        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed])
+        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed]) # Finds completed objectives in current trajectory
 
     if online:
-        dataset = OnlineAgentDataset(videos_json, processor=processor)
+        dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup)
     else:
-        dataset = AgentPretrainingDataset(data_dir, processor=processor)
+        dataset = AgentPretrainingDataset(data_dir, processor=processor, objectives_lookup=objectives_lookup)
 
     train_ds, eval_ds = train_val_split(dataset, split=split)
 

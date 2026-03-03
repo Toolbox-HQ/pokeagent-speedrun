@@ -41,6 +41,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     import torch
     import torch.distributed as dist
     from safetensors.torch import load_file
+    import pickle
     
     agent_model: torch.nn.Module = agent.model
     agent_idm: torch.nn.Module = agent.idm
@@ -52,6 +53,8 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
     rank_state = os.path.join(checkpoint_dir, f"game_rank{rank}.state")
     single_state = os.path.join(checkpoint_dir, f"game.state")
+    with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
+        agent.objective_manager = pickle.load(f)
     
     if os.path.exists(rank_state):
         emulator.load_state_from_file(rank_state)

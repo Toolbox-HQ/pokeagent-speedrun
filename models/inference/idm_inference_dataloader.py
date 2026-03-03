@@ -98,7 +98,7 @@ class OnlineAgentDataset(Dataset):
 
 class AgentPretrainingDataset(OnlineAgentDataset):
 
-    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, **kwargs):
+    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, objectives_lookup=None, **kwargs):
         
         self.processor = processor
         self.samples = []
@@ -126,6 +126,7 @@ class AgentPretrainingDataset(OnlineAgentDataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
                 })
 
 class LabelledWindowDataset(OnlineAgentDataset):
