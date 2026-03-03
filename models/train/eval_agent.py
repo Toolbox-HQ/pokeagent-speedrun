@@ -8,7 +8,7 @@ from models.util.trainer import Trainer
 from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.util.repro import repro_init
-from models.inference.idm_inference_dataloader import IDMWindowDataset, LabelledWindowDataset, get_idm_labeller
+from models.inference.idm_inference_dataloader import OnlineAgentDataset, LabelledWindowDataset, get_idm_labeller
 import os
 import random
 from pprint import pprint
@@ -69,7 +69,7 @@ def evaluate() -> None:
         dataset = {"clock": LabelledWindowDataset(".cache/pokeagent/agent_eval_data/intervals_1f6ef6b5.json", processor = processor)}
 
         trainer = Trainer(
-            model=model, args=training_args, data_collator=IDMWindowDataset.collate_fn, train_dataset=None, eval_dataset=dataset
+            model=model, args=training_args, data_collator=OnlineAgentDataset.collate_fn, train_dataset=None, eval_dataset=dataset
         )
 
         pprint(trainer.evaluate())

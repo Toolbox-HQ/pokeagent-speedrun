@@ -51,6 +51,7 @@ def gather_and_stack(t):
 
 def compute_accuracy(logits, labels, prefix: str = "") -> float:
     import torch
+    import torch.nn.functional as F
     import torch.distributed as dist
     from models.policy import CLASS_TO_KEY
 
@@ -67,5 +68,18 @@ def compute_accuracy(logits, labels, prefix: str = "") -> float:
             c = c[l == label]
             if c.numel():
                 accuracy[f"{prefix}acc_class_{CLASS_TO_KEY[label]}"] = c.mean().item()
+
+        if logits.dim() == 3:
+            B, T, C = logits.shape
+            pos_correct = correct.mean(dim=0)
+            dist.all_reduce(pos_correct, op=dist.ReduceOp.AVG)
+            for i, v in enumerate(pos_correct.tolist()):
+                accuracy[f"{prefix}acc_pos_{i}"] = v
+
+            pos_loss = F.cross_entropy(logits.reshape(B * T, C), labels.reshape(B * T), reduction='none')
+            pos_loss = pos_loss.view(B, T).mean(dim=0)
+            dist.all_reduce(pos_loss, op=dist.ReduceOp.AVG)
+            for i, v in enumerate(pos_loss.tolist()):
+                accuracy[f"{prefix}loss_pos_{i}"] = v
 
     return accuracy
