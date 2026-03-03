@@ -21,10 +21,13 @@ def checkpoint(output_dir: str, step: int, agent, state: bytes):
     rank = dist.get_rank()
 
     if rank == 0:
+        import pickle
         os.makedirs(save_path, exist_ok=True)
         print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
+        with open(os.path.join(save_path, "objective_manager.pkl"), "wb") as f:
+            pickle.dump(agent.objective_manager, f)
     
     dist.barrier()
     with open(os.path.join(save_path, f"game_rank{rank}.state"), "wb") as f:
@@ -147,7 +150,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 dist.barrier()
                 
                 print(f"[GPU {rank} LOOP] Begin agent training")
-                objective_manager = agent.train_agent(agent_data_path, bootstrap_count, query_embeds) # train agent on cumulative agent data
+                agent.train_agent(agent_data_path, bootstrap_count, query_embeds) # train agent on cumulative agent data
 
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
@@ -155,7 +158,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)
                
-                checkpoint(checkpoint_path, step, agent, curr_state, objective_manager)                
+                checkpoint(checkpoint_path, step, agent, curr_state)                
                 conn = EmulatorConnection(inference_args.rom_path)
                 conn.load_state(curr_state)
                 conn.create_video_writer(query_path)
