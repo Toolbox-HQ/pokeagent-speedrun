@@ -473,8 +473,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None, # important
-        objectives: Optional[torch.FloatTensor] = None, # important - N x 786
-        objective_mask: Optional[torch.LongTensor] = None, # important - B x N s.t. N = num_objectives
+        objectives: Optional[torch.FloatTensor] = None, # important - B x N x 786
         ground_labels: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
@@ -520,9 +519,8 @@ class LMObjectiveAgent(Module, GenerationMixin):
         hiddens = hiddens.masked_scatter(state_mask, vision_tokens.to(torch.bfloat16))
         hiddens = hiddens.masked_scatter(action_mask, action_tokens)
 
-        flags = ((objective_mask*2)-1).unsqueeze(-1) * objectives.unsqueeze(0) 
-        flags = self.objective_embed(flags)
-        hiddens = torch.cat([flags.to(hiddens.dtype), hiddens], dim=1)
+        objective_embeds = self.objective_embed(objectives)
+        hiddens = torch.cat([objective_embeds.to(hiddens.dtype), hiddens], dim=1)
 
         if not attention_mask:
             B, S, H = hiddens.shape
