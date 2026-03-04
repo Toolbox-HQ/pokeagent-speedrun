@@ -1,0 +1,7 @@
+.cache/pokeagent/rnd_policy/
+.cache/pokeagent/rnd_policy_v2/
+.cache/pokeagent/rnd_policy_v2_backup/
+.cache/pokeagent/online/
+.cache/pokeagent/tmp/
+.cache/pokeagent/checkpoints/
+.cache/pokeagent/tmp_checkpoints/
