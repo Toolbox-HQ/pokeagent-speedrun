@@ -1,6 +1,9 @@
 # This code is based on the revised code from fastchat based on tatsu-lab/stanford_alpaca.
+import bisect
 import json
-from typing import Tuple, Callable
+import pickle
+from pathlib import Path
+from typing import Tuple, Callable, List
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
@@ -13,8 +16,11 @@ from models.util.repro import repro_init
 from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import OnlineAgentDataset, AgentPretrainingDataset, get_idm_labeller
 import os
-from models.util.data import train_val_split, list_files_with_extentions, ResampleDataset
+from models.util.data import train_val_split, list_files_with_extensions, ResampleDataset
 import torch.distributed as dist
+from cuml.cluster import HDBSCAN
+from cuml.cluster.hdbscan import approximate_predict
+import numpy as np
 
 local_rank = None
 
@@ -64,19 +70,134 @@ def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArgume
     
     return model, processor, data_args, training_args
 
+
+class ObjectivesLookup:
+
+    def __init__(self, metadata):
+        self.lookup_dict = {}
+        for data in metadata:
+            if data["video_path"] in self.lookup_dict:
+                frame_objective_data_list = self.lookup_dict[data["video_path"]]
+                objectives = frame_objective_data_list[len(frame_objective_data_list) - 1]["objective_embeds"].copy()
+                frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : objectives}
+                if "cluster_embed" in data:
+                    frame_objective_data["objective_embeds"].append(torch.tensor(data["cluster_embed"]))
+                frame_objective_data_list.append(frame_objective_data)
+            else:
+                frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : []}
+                if "cluster_embed" in data:
+                    frame_objective_data["objective_embeds"].append(torch.tensor(data["cluster_embed"]))
+                self.lookup_dict[data["video_path"]] = [frame_objective_data]
+
+    def lookup(self, video_path, frame_idx) -> List: # Returns a list of torch tensors representing previously completed objectives from oldest to most recent
+        entries = self.lookup_dict[video_path]
+        pos = bisect.bisect_left(entries, frame_idx, key=lambda e: e["idx"])
+        if pos == 0:
+            return []
+        return entries[pos - 1]["objective_embeds"]
+
+class AgentObjectiveManager:
+
+    def __init__(self, clusterer, valid_cluster_ids):
+        self.clusterer = clusterer
+        self.matched_objectives = {id : False for id in valid_cluster_ids}
+        self.achieved_objectives = []
+        
+    def mine_and_add_objectives(self, embeds: List[np.ndarray]):
+        labels, _ = approximate_predict(self.clusterer, np.stack(embeds))
+        for idx, label in enumerate(labels):
+            if label in self.matched_objectives:
+                if not self.matched_objectives[label]:
+                    self.matched_objectives[label] = True
+                    self.achieved_objectives.append(embeds[idx])
+
+    def retrieve_last_n_objectives(self, n) -> List[np.ndarray]:
+        return self.achieved_objectives[:n]
+
+def create_clusters(
+                    data,
+                    min_cluster_size = 30,
+                    min_samples = 30,
+                    metric = "euclidean",
+                    build_algo = "brute_force",
+                    ):
+    
+    clusterer = HDBSCAN(
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        metric=metric,
+        build_algo=build_algo,
+        prediction_data=True,
+    )
+    return clusterer.fit(data)
+    
+def filter_clusters(labels, per_frame_metadata, min_unique_videos_per_cluster = 30):
+    
+    unique_vids_per_cluster = {}
+    for label_idx, label in enumerate(labels):
+        vids = unique_vids_per_cluster.get(label, [])
+        if per_frame_metadata[label_idx]["video_path"] not in vids:
+            vids.append(per_frame_metadata[label_idx]["video_path"])
+            unique_vids_per_cluster[label] = vids
+    return [label if len(unique_vids_per_cluster[label]) > min_unique_videos_per_cluster else -1 for label in labels]
+
+
+def get_objective_dataset_json(all_videos_json_files):
+    videos_json = []
+
+    for json_file in all_videos_json_files:
+        with open(json_file, "r", encoding="utf-8") as f:
+            items = json.load(f)
+            for item in items:
+                if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
+                    videos_json.append({"video_path": item["video_path"]})
+    return videos_json
+
+def load_objective_dataset(videos_json, emb_dir=".cache/pokeagent/dinov2"):
+    per_frame_embed, per_frame_metadata = [], []
+    for item in videos_json:
+        video_id = Path(item["video_path"]).stem
+        pt_path = os.path.join(emb_dir, f"{video_id}.pt")
+        json_path = os.path.join(emb_dir, f"{video_id}.json")
+        emb = torch.load(pt_path, map_location="cpu", weights_only=True).numpy()  # (n, d)
+        with open(json_path, "r") as f:
+            meta = json.load(f)
+        per_frame_embed.append(emb)
+        per_frame_metadata.extend(meta)
+    return np.concatenate(per_frame_embed, axis=0), per_frame_metadata
+
+def mine_objectives(all_videos_json_files):
+    json = get_objective_dataset_json(all_videos_json_files)
+    per_frame_embed, per_frame_metadata = load_objective_dataset(json)
+    clusterer = create_clusters(per_frame_embed)
+    filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
+    valid_cluster_idxs = []
+    for meta_idx, metadata in enumerate(per_frame_metadata):
+        cluster_idx = filtered_labels[meta_idx]
+        metadata['cluster_idx'] = cluster_idx
+        if cluster_idx > -1:
+            metadata['cluster_embed'] = per_frame_embed[meta_idx]
+            valid_cluster_idxs.append(cluster_idx)
+    return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
+
 def create_dataset(data_dir: str,
                    processor: Callable,
                    bootstrap: None | int,
                    split: float = 0.1,
-                   max_videos = None, # depreciated
-                   online: bool = True) -> Tuple[Dataset, Dataset]:
+                   max_videos = None,
+                   query_embeds: list = [],
+                   online: bool = True
+                   ) -> Tuple[Dataset, Dataset, AgentObjectiveManager]:
     
     videos_json = []
-    videos_json_files = list_files_with_extentions(data_dir, ".json") if os.path.isdir(data_dir) else [data_dir]
+    if os.path.isdir(data_dir):
+        all_videos_json_files = list_files_with_extensions(data_dir, ".json")
+    else: 
+        all_videos_json_files = [data_dir]
 
     # filter by bootstrap
     if bootstrap is not None:
-        videos_json_files = list(filter(lambda x: f"bootstrap{bootstrap}" in x, videos_json_files))
+        videos_json_files = list(filter(lambda x: f"bootstrap{bootstrap}" in x, all_videos_json_files))
         print(f"[AGENT] Creating dataset for bootstrap {bootstrap} with {len(videos_json_files)} files")
  
     for json_file in videos_json_files:
@@ -86,10 +207,20 @@ def create_dataset(data_dir: str,
                 if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
                     videos_json.append({"video_path": item["video_path"]})
 
+    # objective mining (rank 0 only, then broadcast)
+    objects = [None, None]
+    if dist.get_rank() == 0:
+        print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(videos_json_files)} files")
+        objects = list(mine_objectives(all_videos_json_files))
+    dist.broadcast_object_list(objects, src=0)
+    objectives_lookup, objective_manager = objects[0], objects[1]
+    for query_embed in query_embeds:
+        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed]) # Finds completed objectives in current trajectory
+
     if online:
-        dataset = OnlineAgentDataset(videos_json, processor=processor)
+        dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup)
     else:
-        dataset = AgentPretrainingDataset(data_dir, processor=processor)
+        dataset = AgentPretrainingDataset(data_dir, processor=processor, objectives_lookup=objectives_lookup)
 
     train_ds, eval_ds = train_val_split(dataset, split=split)
 
@@ -97,7 +228,7 @@ def create_dataset(data_dir: str,
     train_ds = ResampleDataset(train_ds)
     eval_ds = ResampleDataset(eval_ds)
     
-    return train_ds, eval_ds
+    return train_ds, eval_ds, objective_manager
 
 def train(model: nn.Module, training_args: TrainingArguments, train_ds: Dataset = None, eval_ds: Dataset = None) -> None:
 
@@ -123,6 +254,9 @@ if __name__ == "__main__":
     
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
+    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
     print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
+    if dist.get_rank() == 0:
+        with open(os.path.join(training_args.output_dir, "objective_manager.pkl"), "wb") as f:
+            pickle.dump(agent_objective_manager, f)

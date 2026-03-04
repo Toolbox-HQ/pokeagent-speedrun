@@ -81,7 +81,7 @@ class ValueInterval():
 
         return (start_idx, self.curr_idx-1), item
 
-def list_files_with_extentions(dir: str, ext: str):
+def list_files_with_extensions(dir: str, ext: str):
     matches = []
     for root, _, files in os.walk(dir):
         for name in files:

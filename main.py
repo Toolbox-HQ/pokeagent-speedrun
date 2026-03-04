@@ -21,10 +21,13 @@ def checkpoint(output_dir: str, step: int, agent, state: bytes):
     rank = dist.get_rank()
 
     if rank == 0:
+        import pickle
         os.makedirs(save_path, exist_ok=True)
         print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
+        with open(os.path.join(save_path, "objective_manager.pkl"), "wb") as f:
+            pickle.dump(agent.objective_manager, f)
     
     dist.barrier()
     with open(os.path.join(save_path, f"game_rank{rank}.state"), "wb") as f:
@@ -38,6 +41,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     import torch
     import torch.distributed as dist
     from safetensors.torch import load_file
+    import pickle
     
     agent_model: torch.nn.Module = agent.model
     agent_idm: torch.nn.Module = agent.idm
@@ -49,6 +53,8 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
     rank_state = os.path.join(checkpoint_dir, f"game_rank{rank}.state")
     single_state = os.path.join(checkpoint_dir, f"game.state")
+    with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
+        agent.objective_manager = pickle.load(f)
     
     if os.path.exists(rank_state):
         emulator.load_state_from_file(rank_state)
@@ -73,6 +79,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     import torch.distributed as dist
     from models.util.misc import finalize_wandb
     import os
+    import pickle
 
     rank = dist.get_rank()
 
@@ -104,6 +111,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.start_video_writer(query_path)
 
     futures = []
+    query_embeds = []
 
     if training_args.resume_from_checkpoint is not None:
         load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
@@ -127,12 +135,13 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
-                video_intervals, _ = get_videos(f"{query_path}.mp4",
+                video_intervals, _, query_emb = get_videos(f"{query_path}.mp4",
                                                 dino_embedding_path,
                                                 inference_args.match_length,
                                                 inference_args.retrieved_videos,
                                                 inference_args.max_vid_len
                                                 )
+                query_embeds.append(query_emb)
                 print(f"[GPU {rank} LOOP] Finished Retrieval")
                 
                 video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
@@ -144,7 +153,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 dist.barrier()
                 
                 print(f"[GPU {rank} LOOP] Begin agent training")
-                agent.train_agent(agent_data_path, bootstrap_count) # train agent on cumulative agent data
+                agent.train_agent(agent_data_path, bootstrap_count, query_embeds) # train agent on cumulative agent data
+
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
 

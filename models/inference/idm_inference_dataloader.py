@@ -12,6 +12,7 @@ from functools import partial
 import orjson
 import json 
 from tqdm import tqdm
+from models.train.train_agent import ObjectivesLookup
 
 DEVICE = "cpu"
 IDM_FPS = 4
@@ -37,11 +38,12 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     return (frames, actions) if labels else frames
 
 class OnlineAgentDataset(Dataset):
-    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None):
+    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None, objectives_lookup: ObjectivesLookup = None, num_objectives=10):
         
         self.processor = processor
         self.samples = []
         total_seconds = 0
+        self.num_objectives = num_objectives
         
         if isinstance(videos_json, str):
             with open(videos_json, "rb") as f:
@@ -67,6 +69,7 @@ class OnlineAgentDataset(Dataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
                 })
         
         print(f"[AGENT] Data hrs: {total_seconds / 3600}")
@@ -92,12 +95,13 @@ class OnlineAgentDataset(Dataset):
             return_tensors="pt"
             )
             inputs["labels"] = resize(idm_frames, (128, 128))
+            inputs["objectives"] = s["objectives"]
 
         return inputs if inputs else idm_frames # (T,C,HW) RGB
 
 class AgentPretrainingDataset(OnlineAgentDataset):
 
-    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, **kwargs):
+    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, objectives_lookup: ObjectivesLookup =None, num_objectives=10, **kwargs):
         
         self.processor = processor
         self.samples = []
@@ -125,6 +129,7 @@ class AgentPretrainingDataset(OnlineAgentDataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
                 })
 
 class LabelledWindowDataset(OnlineAgentDataset):

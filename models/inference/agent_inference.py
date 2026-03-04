@@ -7,7 +7,7 @@ from safetensors.torch import load_file
 import math
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments, IDMArguments
 from pprint import pprint
-from models.train.train_agent import create_dataset, init_model, train_with_rollback
+from models.train.train_agent import create_dataset, init_model, train_with_rollback, AgentObjectiveManager
 from models.train.train_idm import train_idm_best_checkpoint
     
 class PokeAgentActionConditioned:
@@ -188,11 +188,12 @@ class OnlinePokeagentStateOnly:
         self.idx = 0
         print("[AGENT] Initialized agent")
     
-    def train_agent(self, intervals: str, bootstrap: int):
-        train_ds, eval_ds = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split)
+    def train_agent(self, intervals: str, bootstrap: int, query_embeds: list):
+        train_ds, eval_ds, objective_manager = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split, query_embeds=query_embeds)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
+        self.objective_manager = objective_manager
 
     def train_idm(self, data_dir: str):
         self.idm.train()
@@ -248,7 +249,8 @@ class OnlinePokeagentStateActionConditioned:
                 training_args: TrainingArguments,
                 data_args: DataArguments,
                 inference_args: InferenceArguments,
-                idm_args: IDMArguments
+                idm_args: IDMArguments,
+                objective_manager: AgentObjectiveManager
                 ):
         
         self.model_args: ModelArguments = model_args
@@ -256,6 +258,7 @@ class OnlinePokeagentStateActionConditioned:
         self.data_args: DataArguments = data_args
         self.inference_args: InferenceArguments = inference_args
         self.idm_args: IDMArguments = idm_args
+        self.objective_manager = objective_manager
 
         assert inference_args.model_checkpoint is None, "Use model_args.load_path"
          
@@ -276,10 +279,11 @@ class OnlinePokeagentStateActionConditioned:
         print("[AGENT] Initialized agent")
      
     def train_agent(self, data_dir: str, bootstrap: int):
-        train_ds, eval_ds = create_dataset(data_dir, self.processor, bootstrap, split = self.inference_args.train_eval_split)
+        train_ds, eval_ds, objective_manager = create_dataset(data_dir, self.processor, bootstrap, split = self.inference_args.train_eval_split)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
+        self.objective_manager = objective_manager
 
     def train_idm(self, data_dir: str):
         self.idm.train()
