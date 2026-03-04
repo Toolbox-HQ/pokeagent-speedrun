@@ -5,3 +5,4 @@
 .cache/pokeagent/tmp/
 .cache/pokeagent/checkpoints/
 .cache/pokeagent/tmp_checkpoints/
+.venev
