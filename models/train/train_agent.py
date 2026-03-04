@@ -1,6 +1,7 @@
 # This code is based on the revised code from fastchat based on tatsu-lab/stanford_alpaca.
 import bisect
 import json
+import pickle
 from pathlib import Path
 from typing import Tuple, Callable, List
 import torch
@@ -253,6 +254,9 @@ if __name__ == "__main__":
     
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
+    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
     print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
+    if dist.get_rank() == 0:
+        with open(os.path.join(training_args.output_dir, "objective_manager.pkl"), "wb") as f:
+            pickle.dump(agent_objective_manager, f)
