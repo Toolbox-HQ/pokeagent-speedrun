@@ -199,7 +199,9 @@ def create_dataset(data_dir: str,
     if bootstrap is not None:
         videos_json_files = list(filter(lambda x: f"bootstrap{bootstrap}" in x, all_videos_json_files))
         print(f"[AGENT] Creating dataset for bootstrap {bootstrap} with {len(videos_json_files)} files")
- 
+    else:
+        videos_json_files = all_videos_json_files
+
     for json_file in videos_json_files:
         with open(json_file, "r", encoding="utf-8") as f:
             items = json.load(f)
