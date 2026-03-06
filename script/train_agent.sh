@@ -1,12 +1,11 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=24:00:00
+#SBATCH --time=20:00:00
 #SBATCH --gpus-per-node=1
-#SBATCH --job-name=agent_job
-#SBATCH --output=/scratch/bsch/slurm_out/%j_agent_job_output.txt
+#SBATCH --job-name=pretrain_agent_job
+#SBATCH --output=/scratch/%u/slurm_out/%j_agent_job_output.txt
 #SBATCH --mail-type=ALL
 
-cd /scratch/bsch/pokeagent-speedrun
 source .venv/bin/activate
 
 # Environment variables
@@ -15,11 +14,10 @@ export WANDB_MODE="offline"
 export PYTHONPATH=$(pwd)
 export WANDB_DIR="./wandb"
 
-export WORK="/scratch/bsch"
-export CUDA_HOME="$WORK/anaconda3/envs/cuda"
-export HF_HOME="$WORK/hf_cache"
-export APPTAINER_CACHEDIR="$WORK/.apptainer"
-export TRITON_CACHE_DIR="$WORK/.triton"
+#export WORK="/scratch/bsch"
+#export CUDA_HOME="$WORK/anaconda3/envs/cuda"
+#export APPTAINER_CACHEDIR="$WORK/.apptainer"
+export TRITON_CACHE_DIR="./.triton"
 
 # Automatically detect all available GPUs
 NUM_GPUS=$(nvidia-smi -L | wc -l)

@@ -12,7 +12,6 @@ from functools import partial
 import orjson
 import json 
 from tqdm import tqdm
-from models.train.train_agent import ObjectivesLookup
 
 DEVICE = "cpu"
 IDM_FPS = 4
@@ -38,7 +37,7 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     return (frames, actions) if labels else frames
 
 class OnlineAgentDataset(Dataset):
-    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None, objectives_lookup: ObjectivesLookup = None, num_objectives=10):
+    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None, objectives_lookup = None, num_objectives=10):
         
         self.processor = processor
         self.samples = []
@@ -64,12 +63,14 @@ class OnlineAgentDataset(Dataset):
             for w in range(n_windows):
                 win_start = w * window * stride
                 win_end = win_start + window * stride
+                objs = objectives_lookup.lookup(it["video_path"], win_end)[:num_objectives]
+                objs_padded = objs + [torch.zeros(768)] * (num_objectives - len(objs))
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
+                    "objectives": torch.stack(objs_padded)
                 })
         
         print(f"[AGENT] Data hrs: {total_seconds / 3600}")
@@ -101,7 +102,7 @@ class OnlineAgentDataset(Dataset):
 
 class AgentPretrainingDataset(OnlineAgentDataset):
 
-    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, objectives_lookup: ObjectivesLookup =None, num_objectives=10, **kwargs):
+    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, objectives_lookup = None, num_objectives=10, **kwargs):
         
         self.processor = processor
         self.samples = []
@@ -124,12 +125,14 @@ class AgentPretrainingDataset(OnlineAgentDataset):
             for w in range(n_windows):
                 win_start = start + w * window * stride
                 win_end = win_start + window * stride
+                objs = objectives_lookup.lookup(it["video_path"], win_end)[:num_objectives]
+                objs_padded = objs + [torch.zeros(768)] * (num_objectives - len(objs))
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
+                    "objectives": torch.stack(objs_padded)
                 })
 
 class LabelledWindowDataset(OnlineAgentDataset):
