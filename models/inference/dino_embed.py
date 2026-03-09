@@ -77,6 +77,21 @@ def prcoess_batch(model, processor, path: str, batch: List[List]):
 
 
 def main():
+
+    global INPUT_DIR
+    global OUTPUT_DIR
+
+    import sys
+    if len(sys.argv) == 3:
+        INPUT_DIR = sys.argv[1]
+        OUTPUT_DIR = sys.argv[2]
+
+    
+    print(f"Creating embeddings from {INPUT_DIR}")
+    print(f"Saving embeddings to {OUTPUT_DIR}")
+
+    
+
     model = AutoModel.from_pretrained(MODEL_PATH)
     processor = AutoImageProcessor.from_pretrained(MODEL_PATH, use_fast=True)
     ds = EmbeddingDataset()
