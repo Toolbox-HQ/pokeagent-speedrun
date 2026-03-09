@@ -81,15 +81,15 @@ class ObjectivesLookup:
                 objectives = frame_objective_data_list[len(frame_objective_data_list) - 1]["objective_embeds"].copy()
                 frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : objectives}
                 if "cluster_embed" in data:
-                    frame_objective_data["objective_embeds"].append(torch.tensor(data["cluster_embed"]))
+                    frame_objective_data["objective_embeds"].append(data["cluster_embed"])
                 frame_objective_data_list.append(frame_objective_data)
             else:
                 frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : []}
                 if "cluster_embed" in data:
-                    frame_objective_data["objective_embeds"].append(torch.tensor(data["cluster_embed"]))
+                    frame_objective_data["objective_embeds"].append(data["cluster_embed"])
                 self.lookup_dict[data["video_path"]] = [frame_objective_data]
 
-    def lookup(self, video_path, frame_idx) -> List: # Returns a list of torch tensors representing previously completed objectives from oldest to most recent
+    def lookup(self, video_path, frame_idx) -> List[List]: # Returns a list of torch tensors representing previously completed objectives from oldest to most recent
         entries = self.lookup_dict[video_path]
         pos = bisect.bisect_left(entries, frame_idx, key=lambda e: e["idx"])
         if pos == 0:
@@ -171,12 +171,17 @@ def mine_objectives(all_videos_json_files):
     per_frame_embed, per_frame_metadata = load_objective_dataset(json)
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
+    # Build mapping from cluster_idx -> list of all embeddings in that cluster
+    cluster_to_embeds = {}
+    for meta_idx, cluster_idx in enumerate(filtered_labels):
+        if cluster_idx > -1:
+            cluster_to_embeds.setdefault(cluster_idx, []).append(torch.tensor(per_frame_embed[meta_idx]))
     valid_cluster_idxs = []
     for meta_idx, metadata in enumerate(per_frame_metadata):
         cluster_idx = filtered_labels[meta_idx]
         metadata['cluster_idx'] = cluster_idx
         if cluster_idx > -1:
-            metadata['cluster_embed'] = per_frame_embed[meta_idx]
+            metadata['cluster_embed'] = cluster_to_embeds[cluster_idx]
             valid_cluster_idxs.append(cluster_idx)
     return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
 
