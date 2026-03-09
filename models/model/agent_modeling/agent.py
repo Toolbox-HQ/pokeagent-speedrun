@@ -582,8 +582,8 @@ def init_lm_agent(arch: str = "default", lm: str = None, vision: str = None, use
     }
     if arch == "default" or arch == "state_action_conditioned":
         model = LMAgent(config)
-    elif arch == "state_only":
-        model = LMStateAgent(config)
+    elif arch == "EmbedObjectiveAgent":
+        model = LMObjectiveAgent(config)
     else:
         raise Exception("NotImplementedError")
 
