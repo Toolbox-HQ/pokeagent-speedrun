@@ -540,7 +540,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
             **kwargs,
         )
 
-        hidden_states = outputs.last_hidden_state
+        hidden_states = outputs.last_hidden_state[:, objective_embeds.shape[1]:]
         action_hiddens = hidden_states[last_token_mask].view(B, T, H)
 
         if labels is not None: # training
