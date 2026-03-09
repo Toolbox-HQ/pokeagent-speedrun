@@ -171,12 +171,18 @@ def mine_objectives(all_videos_json_files):
     per_frame_embed, per_frame_metadata = load_objective_dataset(json)
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
+    # Build mapping from cluster_idx -> list of all embeddings in that cluster
+    cluster_to_embeds = {}
+    for meta_idx, cluster_idx in enumerate(filtered_labels):
+        if cluster_idx > -1:
+            cluster_to_embeds.setdefault(cluster_idx, []).append(per_frame_embed[meta_idx])
+    cluster_to_embeds = {k: np.mean(v, axis=0) for k, v in cluster_to_embeds.items()}
     valid_cluster_idxs = []
     for meta_idx, metadata in enumerate(per_frame_metadata):
         cluster_idx = filtered_labels[meta_idx]
         metadata['cluster_idx'] = cluster_idx
         if cluster_idx > -1:
-            metadata['cluster_embed'] = per_frame_embed[meta_idx]
+            metadata['cluster_embed'] = cluster_to_embeds[cluster_idx]
             valid_cluster_idxs.append(cluster_idx)
     return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
 
