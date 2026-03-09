@@ -92,9 +92,16 @@ class OnlineAgentDataset(Dataset):
         if self.processor:
             agent_frames = downsample(idm_frames, 2)
             inputs = self.processor(
-            images=agent_frames,
-            return_tensors="pt"
+                images=agent_frames,
+                return_tensors="pt"
             )
+            # new = self.processor(
+            #     images=s["objectives"],
+            #     return_tensors="pt"
+            # )
+            # inputs["objectives"] = new["input_ids"]
+            
+
             inputs["labels"] = resize(idm_frames, (128, 128))
             inputs["objectives"] = s["objectives"]
 
