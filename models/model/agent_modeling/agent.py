@@ -406,7 +406,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
         self.mlp = MLP(self.vision_hidden_dim, self.hidden_dim)
         self.action_embedding = nn.Embedding(self.num_actions, self.hidden_dim)
         self.output_actions = nn.Linear(self.hidden_dim, self.num_actions, bias=False)
-        self.objective_embed = MLP(786, self.hidden_dim)
+        self.objective_embed = MLP(768, self.hidden_dim)
 
         self.finish_init()
 
@@ -473,7 +473,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None, # important
-        objectives: Optional[torch.FloatTensor] = None, # important - B x N x 786
+        objectives: Optional[torch.FloatTensor] = None, # important - B x N x 768
         ground_labels: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
