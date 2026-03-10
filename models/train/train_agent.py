@@ -75,22 +75,40 @@ class ObjectivesLookup:
 
     def __init__(self, metadata):
         self.lookup_dict = {}
-        for data in metadata:
-            if data["video_path"] in self.lookup_dict:
-                frame_objective_data_list = self.lookup_dict[data["video_path"]]
-                objectives = frame_objective_data_list[len(frame_objective_data_list) - 1]["objective_embeds"].copy()
-                frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : objectives}
-                if "cluster_embed" in data:
-                    frame_objective_data["objective_embeds"].append(data["cluster_embed"])
-                frame_objective_data_list.append(frame_objective_data)
-            else:
-                frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : []}
-                if "cluster_embed" in data:
-                    frame_objective_data["objective_embeds"].append(data["cluster_embed"])
-                self.lookup_dict[data["video_path"]] = [frame_objective_data]
 
-    def lookup(self, video_path, frame_idx) -> List[List]: # Returns a list of torch tensors representing previously completed objectives from oldest to most recent
-        entries = self.lookup_dict[video_path]
+        # Group frames by video first
+        by_video = {}
+        for data in metadata:
+            by_video.setdefault(data["video_path"], []).append(data)
+
+        for video_path, items in by_video.items():
+            # Make bisect safe and deterministic
+            items = sorted(items, key=lambda x: x["sampled_frame_index"])
+
+            seen_clusters = set()
+            history = []
+            frame_objective_data_list = []
+
+            for data in items:
+                cluster_idx = data.get("cluster_idx", -1)
+
+                # Only add each cluster once per video
+                if cluster_idx > -1 and cluster_idx not in seen_clusters:
+                    seen_clusters.add(cluster_idx)
+                    history = history + [data["cluster_embed"]]
+
+                frame_objective_data_list.append({
+                    "idx": data["sampled_frame_index"],
+                    "objective_embeds": history.copy(),
+                })
+
+            self.lookup_dict[video_path] = frame_objective_data_list
+
+    def lookup(self, video_path, frame_idx) -> List[List[torch.Tensor]]:
+        entries = self.lookup_dict.get(video_path, [])
+        if not entries:
+            return []
+
         pos = bisect.bisect_left(entries, frame_idx, key=lambda e: e["idx"])
         if pos == 0:
             return []
@@ -112,7 +130,7 @@ class AgentObjectiveManager:
                     self.achieved_objectives.append(embeds[idx])
 
     def retrieve_last_n_objectives(self, n) -> List[np.ndarray]:
-        return self.achieved_objectives[:n]
+        return self.achieved_objectives[-n:]
 
 def create_clusters(
                     data,
