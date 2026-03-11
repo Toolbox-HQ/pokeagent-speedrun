@@ -41,4 +41,4 @@ apptainer exec \
           --master_addr=localhost \
           --master_port=35332 \
           models/train/train_agent.py \
-          --config \"$1\" \
+          --config \"$1\""
