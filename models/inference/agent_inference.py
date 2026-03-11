@@ -189,7 +189,7 @@ class OnlinePokeagentStateOnly:
         print("[AGENT] Initialized agent")
     
     def train_agent(self, intervals: str, bootstrap: int, query_embeds: list):
-        train_ds, eval_ds, objective_manager = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split, query_embeds=query_embeds)
+        train_ds, eval_ds, objective_manager = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split, query_embeds=query_embeds, data_args=self.data_args)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
@@ -279,7 +279,7 @@ class OnlinePokeagentStateActionConditioned:
         print("[AGENT] Initialized agent")
      
     def train_agent(self, data_dir: str, bootstrap: int):
-        train_ds, eval_ds, objective_manager = create_dataset(data_dir, self.processor, bootstrap, split = self.inference_args.train_eval_split)
+        train_ds, eval_ds, objective_manager = create_dataset(data_dir, self.processor, bootstrap, split = self.inference_args.train_eval_split, data_args=self.data_args)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
         self.model.eval()
