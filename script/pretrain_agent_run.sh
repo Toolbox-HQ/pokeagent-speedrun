@@ -26,6 +26,7 @@ apptainer exec \
     --nv \
     --bind ./.cache/pokeagent/tmp:/tmp \
     --bind ./.cache:/app/.cache \
+    --bind ./checkpoints:/app/checkpoints \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
