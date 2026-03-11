@@ -182,7 +182,7 @@ def load_objective_dataset(videos_json, emb_dir=".cache/pokeagent/dinov2"):
             meta = json.load(f)
         per_frame_embed.append(emb)
         per_frame_metadata.extend(meta)
-    return np.concatenate(per_frame_embed, axis=0), per_frame_metadata
+    return np.concatenate(per_frame_embed, axis=0), per_frame_metadata # N x 768 and list where len(list) == N
 
 def mine_objectives(all_videos_json_files):
     json = get_objective_dataset_json(all_videos_json_files)
@@ -190,7 +190,7 @@ def mine_objectives(all_videos_json_files):
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
     # Build mapping from cluster_idx -> list of all embeddings in that cluster
-    cluster_to_embeds = {}
+    cluster_to_embeds = {} # K : V - K = cluster id, V is a list of all matching frame embeddings
     for meta_idx, cluster_idx in enumerate(filtered_labels):
         if cluster_idx > -1:
             cluster_to_embeds.setdefault(cluster_idx, []).append(torch.tensor(per_frame_embed[meta_idx]))
