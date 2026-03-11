@@ -33,7 +33,7 @@ apptainer exec \
     --env WANDB_MODE="offline" \
     ${EXTRA_ENV:-} \
     .cache/pokeagent/containers/${CONTAINER_NAME} \
-    bash -c "cd /app && . .venv/bin/activate && \
+    bash -c "cd /app && . .venv/bin/activate && export PYTHONPATH=/app && \
         torchrun \
           --nproc_per_node=$NUM_GPUS \
           --nnodes=1 \
@@ -42,4 +42,3 @@ apptainer exec \
           --master_port=35332 \
           models/train/train_agent.py \
           --config \"$1\" \
-          --uuid \"${RUN_UUID}\""
