@@ -25,6 +25,10 @@ class DataArguments:
         default=None, metadata={"help": "Path to the evaluation data."}
     )
 
+    num_objectives: int = field(
+        default=10, metadata={"help": "Number of objectives to use."}
+    )
+
 @dataclass
 class TrainingArguments(transformers.TrainingArguments):
     cache_dir: Optional[str] = field(default=None)
