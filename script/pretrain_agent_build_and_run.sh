@@ -64,7 +64,7 @@ mkdir -p .cache/pokeagent/containers
 echo "Building container: ${CONTAINER_NAME}"
 echo "This may take several minutes..."
 
-apptainer build --mksquashfs-args "-processors 4" "${CONTAINER_PATH}" ./dconfig/apptainer_run.def
+apptainer build --mksquashfs-args "-processors 32" "${CONTAINER_PATH}" ./dconfig/apptainer_run.def
 
 echo "Container built successfully: ${CONTAINER_PATH}"
 
