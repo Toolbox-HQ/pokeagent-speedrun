@@ -102,6 +102,7 @@ class OnlineAgentDataset(Dataset):
             # )
             # inputs["objectives"] = new["input_ids"]
             
+            inputs["labels"] = resize(idm_frames, (128, 128))
             objs = [random.choice(cluster) for cluster in s["objectives"][-self.num_objectives:]]
             objs_padded = torch.stack(objs + [torch.zeros(768)] * (self.num_objectives - len(objs)))
             inputs["objectives"] = objs_padded
