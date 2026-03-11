@@ -10,11 +10,20 @@ EXCLUDES=(
     .triton
     wandb
     tmp
+    checkpoints
+)
+
+SKIP_ONLY=(
+    core.*
+    slurm-*.out
 )
 
 RSYNC_ARGS=(--archive --delete --info=progress2)
 for dir in "${EXCLUDES[@]}"; do
     RSYNC_ARGS+=(--exclude="$dir")
+done
+for pat in "${SKIP_ONLY[@]}"; do
+    RSYNC_ARGS+=(--exclude="$pat")
 done
 
 rsync "${RSYNC_ARGS[@]}" "$SRC/" "$DST/"
