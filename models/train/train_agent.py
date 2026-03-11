@@ -209,7 +209,8 @@ def create_dataset(data_dir: str,
                    split: float = 0.1,
                    max_videos = None,
                    query_embeds: list = [],
-                   online: bool = True
+                   online: bool = True,
+                   data_args = None
                    ) -> Tuple[Dataset, Dataset, AgentObjectiveManager]:
     
     videos_json = []
@@ -243,9 +244,9 @@ def create_dataset(data_dir: str,
         objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed]) # Finds completed objectives in current trajectory
 
     if online:
-        dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup)
+        dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup, num_objectives=data_args.num_objectives)
     else:
-        dataset = AgentPretrainingDataset(data_dir, processor=processor, objectives_lookup=objectives_lookup)
+        dataset = AgentPretrainingDataset(data_dir, processor=processor, objectives_lookup=objectives_lookup, num_objectives=data_args.num_objectives)
 
     train_ds, eval_ds = train_val_split(dataset, split=split)
 
@@ -279,7 +280,7 @@ if __name__ == "__main__":
     
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
+    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False, data_args=data_args)
     print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
     if dist.get_rank() == 0:
