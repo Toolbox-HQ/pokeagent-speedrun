@@ -71,7 +71,7 @@ class OnlineAgentDataset(Dataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
                 })
         
         print(f"[AGENT] Data hrs: {total_seconds / 3600}")
@@ -142,7 +142,7 @@ class AgentPretrainingDataset(OnlineAgentDataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": objectives_lookup.lookup(it["video_path"], win_end)
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
                 })
 
 class LabelledWindowDataset(OnlineAgentDataset):
