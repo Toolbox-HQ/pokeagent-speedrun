@@ -12,7 +12,7 @@ source .venv/bin/activate
 export EXPERIMENT_RUN="1"
 export WANDB_MODE="offline"
 export PYTHONPATH=$(pwd)
-export WANDB_DIR="./wandb"
+export WANDB_DIR="./"
 export CUPY_CACHE_DIR="./.cache/pokeagent/cupy"
 
 #export WORK="/scratch/bsch"
