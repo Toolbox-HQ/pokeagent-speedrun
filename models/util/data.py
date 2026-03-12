@@ -254,7 +254,9 @@ class ResampleDataset(Dataset):
             try:
                 return self.dataset[index]
             except Exception as e:
+                import traceback
                 print(f"[ERROR] attempted to get {index} - {str(e)}")
+                traceback.print_exc()
             
             attempts += 1
             index = random.randint(0, len(self.dataset)-1)

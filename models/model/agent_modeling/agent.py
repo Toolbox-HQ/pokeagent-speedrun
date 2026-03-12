@@ -406,7 +406,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
         self.mlp = MLP(self.vision_hidden_dim, self.hidden_dim)
         self.action_embedding = nn.Embedding(self.num_actions, self.hidden_dim)
         self.output_actions = nn.Linear(self.hidden_dim, self.num_actions, bias=False)
-        self.objective_embed = MLP(768, self.hidden_dim)
+        self.separator = nn.Parameter(torch.empty(1, 1, self.hidden_dim).normal_(std=0.02))
 
         self.finish_init()
 
@@ -422,6 +422,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
         self.action_embedding.to(dtype=torch.bfloat16)
         self.output_actions.to(dtype=torch.bfloat16)
         self.mlp.to(dtype=torch.bfloat16)
+        self.separator.data = self.separator.data.to(dtype=torch.bfloat16)
         self.vision_tower.to(dtype=torch.float32)
 
     def train_component(self, vision_tower=False, mlp=False, llm=False):
@@ -473,7 +474,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None, # important
-        objectives: Optional[torch.FloatTensor] = None, # important - B x N x 768
+        objectives: Optional[torch.FloatTensor] = None, # important - B x N x C x H x W
         ground_labels: Optional[torch.LongTensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
@@ -490,43 +491,45 @@ class LMObjectiveAgent(Module, GenerationMixin):
         **kwargs,
     ) -> CausalLMOutputWithPast:
 
-        # TODO All these vars should be re-named
         if labels is not None:
             input_ids = self.idm_labelling_fn(labels).detach()
 
         B, T, C, H, W = pixel_values.shape
+        N = objectives.shape[1]
         device = pixel_values.device
-        pixel_values = einops.rearrange(pixel_values, "b s c h w -> (b s) c h w")
 
-        vision_tokens = self.vision_tower(pixel_values=pixel_values).last_hidden_state
-        vision_tokens = einops.rearrange(vision_tokens, "(b s) c h -> b s c h", b=B, s=T)
-        vision_tokens = self.mlp(vision_tokens)
+        all_pixels = einops.rearrange(torch.cat([objectives, pixel_values], dim=1), "b s c h w -> (b s) c h w")
+        all_vision_tokens = self.vision_tower(pixel_values=all_pixels).last_hidden_state
+        all_vision_tokens = einops.rearrange(all_vision_tokens, "(b s) p h -> b s p h", b=B, s=T+N)
+        all_vision_tokens = self.mlp(all_vision_tokens)
+
+        obj_tokens = all_vision_tokens[:, :N]   # (B, N, S, H)
+        vision_tokens = all_vision_tokens[:, N:]  # (B, T, S, H)
         B, T, S, H = vision_tokens.shape
-        
+
         action_tokens = self.action_embedding(input_ids)
 
         hiddens = torch.zeros((B, S+1, H), dtype=torch.int32, device=device)
-        
         hiddens[:, -1, :] = 1
-        hiddens[:,-2, :] = -1
-        hiddens = hiddens.repeat(1,T,1)
-        
-        state_mask = hiddens < 1 # all visual tokens
-        action_mask = hiddens == 1 # all action tokens
-        last_token_mask = hiddens == -1 # last visual token, used for prediction
+        hiddens[:, -2, :] = -1
+        hiddens = hiddens.repeat(1, T, 1)
+
+        state_mask = hiddens < 1
+        action_mask = hiddens == 1
+        last_token_mask = hiddens == -1
 
         hiddens = hiddens.to(torch.bfloat16)
         hiddens = hiddens.masked_scatter(state_mask, vision_tokens.to(torch.bfloat16))
         hiddens = hiddens.masked_scatter(action_mask, action_tokens)
 
-        objective_embeds = self.objective_embed(objectives)
-        hiddens = torch.cat([objective_embeds.to(hiddens.dtype), hiddens], dim=1)
+        obj_hiddens = einops.rearrange(obj_tokens, "b n s h -> b (n s) h").to(torch.bfloat16)
+        separator = self.separator.expand(B, -1, -1)
+        hiddens = torch.cat([obj_hiddens, separator, hiddens], dim=1)
 
         if not attention_mask:
-            B, S, H = hiddens.shape
-            attention_mask = torch.ones((B, S), dtype=torch.int32, device=device)
+            B, L, H = hiddens.shape
+            attention_mask = torch.ones((B, L), dtype=torch.int32, device=device)
 
-        # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs: BaseModelOutputWithPast = self.text_model(
             input_ids=None,
             attention_mask=attention_mask,
@@ -540,7 +543,7 @@ class LMObjectiveAgent(Module, GenerationMixin):
             **kwargs,
         )
 
-        hidden_states = outputs.last_hidden_state[:, objective_embeds.shape[1]:]
+        hidden_states = outputs.last_hidden_state[:, N * S + 1:]
         action_hiddens = hidden_states[last_token_mask].view(B, T, H)
 
         if labels is not None: # training

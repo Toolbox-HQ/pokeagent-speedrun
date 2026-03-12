@@ -95,7 +95,8 @@ class ObjectivesLookup:
                 # Only add each cluster once per video
                 if cluster_idx > -1 and cluster_idx not in seen_clusters:
                     seen_clusters.add(cluster_idx)
-                    history = history + [data["cluster_embed"]]
+                    current_video_frames = [f for f in data["cluster_frames"] if f["video_path"] == video_path]
+                    history = history + [{"cluster_idx": cluster_idx, "embed": data["cluster_embed"], "frames": current_video_frames}]
 
                 frame_objective_data_list.append({
                     "idx": data["sampled_frame_index"],
@@ -104,7 +105,7 @@ class ObjectivesLookup:
 
             self.lookup_dict[video_path] = frame_objective_data_list
 
-    def lookup(self, video_path, frame_idx) -> List[List[torch.Tensor]]:
+    def lookup(self, video_path, frame_idx) -> List[dict]:
         entries = self.lookup_dict.get(video_path, [])
         if not entries:
             return []
@@ -189,17 +190,23 @@ def mine_objectives(all_videos_json_files):
     per_frame_embed, per_frame_metadata = load_objective_dataset(json)
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
-    # Build mapping from cluster_idx -> list of all embeddings in that cluster
+    # Build mapping from cluster_idx -> list of all embeddings and frames in that cluster
     cluster_to_embeds = {} # K : V - K = cluster id, V is a list of all matching frame embeddings
+    cluster_to_frames = {} # K : V - K = cluster id, V is a list of {"video_path", "frame_idx"} for each matched frame
     for meta_idx, cluster_idx in enumerate(filtered_labels):
         if cluster_idx > -1:
             cluster_to_embeds.setdefault(cluster_idx, []).append(torch.tensor(per_frame_embed[meta_idx]))
+            cluster_to_frames.setdefault(cluster_idx, []).append({
+                "video_path": per_frame_metadata[meta_idx]["video_path"],
+                "frame_idx": round(per_frame_metadata[meta_idx]["sampled_frame_index"]),
+            })
     valid_cluster_idxs = []
     for meta_idx, metadata in enumerate(per_frame_metadata):
         cluster_idx = filtered_labels[meta_idx]
         metadata['cluster_idx'] = cluster_idx
         if cluster_idx > -1:
             metadata['cluster_embed'] = cluster_to_embeds[cluster_idx]
+            metadata['cluster_frames'] = cluster_to_frames[cluster_idx]
             valid_cluster_idxs.append(cluster_idx)
     return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
 

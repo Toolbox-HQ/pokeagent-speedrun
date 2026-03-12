@@ -90,24 +90,28 @@ class OnlineAgentDataset(Dataset):
         s = self.samples[idx]
         idm_frames = decode_idm_rate_frames(s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS, labels=False)
         inputs = None
+
+        obj_refs = [random.choice(cluster["frames"]) for cluster in s["objectives"][-self.num_objectives:]]
+        obj_indices = [ref["frame_idx"] for ref in obj_refs]
+        n_pad = self.num_objectives - len(obj_indices)
+
         if self.processor:
             agent_frames = downsample(idm_frames, 2)
-            inputs = self.processor(
-                images=agent_frames,
-                return_tensors="pt"
-            )
-            # new = self.processor(
-            #     images=s["objectives"],
-            #     return_tensors="pt"
-            # )
-            # inputs["objectives"] = new["input_ids"]
-            
+            inputs = self.processor(images=agent_frames, return_tensors="pt")
             inputs["labels"] = resize(idm_frames, (128, 128))
-            objs = [random.choice(cluster) for cluster in s["objectives"][-self.num_objectives:]]
-            objs_padded = torch.stack(objs + [torch.zeros(768)] * (self.num_objectives - len(objs)))
-            inputs["objectives"] = objs_padded
 
-        return inputs if inputs else idm_frames # (T,C,HW) RGB
+            if obj_indices:
+                obj_frames = VideoDecoder(s["video_path"]).get_frames_at(indices=obj_indices).data
+                obj_pixels = self.processor(images=obj_frames, return_tensors="pt")["pixel_values"]
+                if n_pad > 0:
+                    obj_pixels = torch.cat([obj_pixels, torch.zeros(n_pad, *obj_pixels.shape[1:])], dim=0)
+            else:
+                obj_pixels = self.processor(images=agent_frames[:1], return_tensors="pt")["pixel_values"]
+                obj_pixels = torch.zeros(self.num_objectives, *obj_pixels.shape[1:])
+
+            inputs["objectives"] = obj_pixels
+
+        return inputs if inputs else (idm_frames, VideoDecoder(s["video_path"]).get_frames_at(indices=obj_indices).data) # (T,C,HW) RGB
 
 class AgentPretrainingDataset(OnlineAgentDataset):
 
