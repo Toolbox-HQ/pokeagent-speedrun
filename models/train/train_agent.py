@@ -194,12 +194,13 @@ def mine_objectives(all_videos_json_files):
     for meta_idx, cluster_idx in enumerate(filtered_labels):
         if cluster_idx > -1:
             cluster_to_embeds.setdefault(cluster_idx, []).append(torch.tensor(per_frame_embed[meta_idx]))
+    cluster_means = {cluster_idx: [torch.stack(embeds).mean(dim=0)] for cluster_idx, embeds in cluster_to_embeds.items()}
     valid_cluster_idxs = []
     for meta_idx, metadata in enumerate(per_frame_metadata):
         cluster_idx = filtered_labels[meta_idx]
         metadata['cluster_idx'] = cluster_idx
         if cluster_idx > -1:
-            metadata['cluster_embed'] = cluster_to_embeds[cluster_idx]
+            metadata['cluster_embed'] = cluster_means[cluster_idx]
             valid_cluster_idxs.append(cluster_idx)
     return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
 
