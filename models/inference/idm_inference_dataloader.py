@@ -1,4 +1,5 @@
 import os
+import random
 import torch
 import einops
 import numpy as np
@@ -63,14 +64,14 @@ class OnlineAgentDataset(Dataset):
             for w in range(n_windows):
                 win_start = w * window * stride
                 win_end = win_start + window * stride
-                objs = objectives_lookup.lookup(it["video_path"], win_end)[:num_objectives]
-                objs_padded = objs + [torch.zeros(768)] * (num_objectives - len(objs))
+                # objs = objectives_lookup.lookup(it["video_path"], win_end)[:num_objectives]
+                # objs_padded = objs + [torch.zeros(768)] * (num_objectives - len(objs))
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": torch.stack(objs_padded)
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
                 })
         
         print(f"[AGENT] Data hrs: {total_seconds / 3600}")
@@ -101,9 +102,10 @@ class OnlineAgentDataset(Dataset):
             # )
             # inputs["objectives"] = new["input_ids"]
             
-
             inputs["labels"] = resize(idm_frames, (128, 128))
-            inputs["objectives"] = s["objectives"]
+            objs = [random.choice(cluster) for cluster in s["objectives"][-self.num_objectives:]]
+            objs_padded = torch.stack(objs + [torch.zeros(768)] * (self.num_objectives - len(objs)))
+            inputs["objectives"] = objs_padded
 
         return inputs if inputs else idm_frames # (T,C,HW) RGB
 
@@ -113,6 +115,7 @@ class AgentPretrainingDataset(OnlineAgentDataset):
         
         self.processor = processor
         self.samples = []
+        self.num_objectives = num_objectives
         
         if isinstance(videos_json, str):
             with open(str(videos_json), "r", encoding="utf-8") as f:
@@ -132,14 +135,14 @@ class AgentPretrainingDataset(OnlineAgentDataset):
             for w in range(n_windows):
                 win_start = start + w * window * stride
                 win_end = win_start + window * stride
-                objs = objectives_lookup.lookup(it["video_path"], win_end)[:num_objectives]
-                objs_padded = objs + [torch.zeros(768)] * (num_objectives - len(objs))
+                # objs = objectives_lookup.lookup(it["video_path"], win_end)[:num_objectives]
+                # objs_padded = objs + [torch.zeros(768)] * (num_objectives - len(objs))
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": torch.stack(objs_padded)
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
                 })
 
 class LabelledWindowDataset(OnlineAgentDataset):

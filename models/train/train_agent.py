@@ -75,22 +75,40 @@ class ObjectivesLookup:
 
     def __init__(self, metadata):
         self.lookup_dict = {}
-        for data in metadata:
-            if data["video_path"] in self.lookup_dict:
-                frame_objective_data_list = self.lookup_dict[data["video_path"]]
-                objectives = frame_objective_data_list[len(frame_objective_data_list) - 1]["objective_embeds"].copy()
-                frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : objectives}
-                if "cluster_embed" in data:
-                    frame_objective_data["objective_embeds"].append(torch.tensor(data["cluster_embed"]))
-                frame_objective_data_list.append(frame_objective_data)
-            else:
-                frame_objective_data = {"idx" : data["sampled_frame_index"], "objective_embeds" : []}
-                if "cluster_embed" in data:
-                    frame_objective_data["objective_embeds"].append(torch.tensor(data["cluster_embed"]))
-                self.lookup_dict[data["video_path"]] = [frame_objective_data]
 
-    def lookup(self, video_path, frame_idx) -> List: # Returns a list of torch tensors representing previously completed objectives from oldest to most recent
-        entries = self.lookup_dict[video_path]
+        # Group frames by video first
+        by_video = {}
+        for data in metadata:
+            by_video.setdefault(data["video_path"], []).append(data)
+
+        for video_path, items in by_video.items():
+            # Make bisect safe and deterministic
+            items = sorted(items, key=lambda x: x["sampled_frame_index"])
+
+            seen_clusters = set()
+            history = []
+            frame_objective_data_list = []
+
+            for data in items:
+                cluster_idx = data.get("cluster_idx", -1)
+
+                # Only add each cluster once per video
+                if cluster_idx > -1 and cluster_idx not in seen_clusters:
+                    seen_clusters.add(cluster_idx)
+                    history = history + [data["cluster_embed"]]
+
+                frame_objective_data_list.append({
+                    "idx": data["sampled_frame_index"],
+                    "objective_embeds": history.copy(),
+                })
+
+            self.lookup_dict[video_path] = frame_objective_data_list
+
+    def lookup(self, video_path, frame_idx) -> List[List[torch.Tensor]]:
+        entries = self.lookup_dict.get(video_path, [])
+        if not entries:
+            return []
+
         pos = bisect.bisect_left(entries, frame_idx, key=lambda e: e["idx"])
         if pos == 0:
             return []
@@ -112,7 +130,7 @@ class AgentObjectiveManager:
                     self.achieved_objectives.append(embeds[idx])
 
     def retrieve_last_n_objectives(self, n) -> List[np.ndarray]:
-        return self.achieved_objectives[:n]
+        return self.achieved_objectives[-n:]
 
 def create_clusters(
                     data,
@@ -164,7 +182,7 @@ def load_objective_dataset(videos_json, emb_dir=".cache/pokeagent/dinov2"):
             meta = json.load(f)
         per_frame_embed.append(emb)
         per_frame_metadata.extend(meta)
-    return np.concatenate(per_frame_embed, axis=0), per_frame_metadata
+    return np.concatenate(per_frame_embed, axis=0), per_frame_metadata # N x 768 and list where len(list) == N
 
 def mine_objectives(all_videos_json_files):
     json = get_objective_dataset_json(all_videos_json_files)
@@ -172,11 +190,10 @@ def mine_objectives(all_videos_json_files):
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
     # Build mapping from cluster_idx -> list of all embeddings in that cluster
-    cluster_to_embeds = {}
+    cluster_to_embeds = {} # K : V - K = cluster id, V is a list of all matching frame embeddings
     for meta_idx, cluster_idx in enumerate(filtered_labels):
         if cluster_idx > -1:
-            cluster_to_embeds.setdefault(cluster_idx, []).append(per_frame_embed[meta_idx])
-    cluster_to_embeds = {k: np.mean(v, axis=0) for k, v in cluster_to_embeds.items()}
+            cluster_to_embeds.setdefault(cluster_idx, []).append(torch.tensor(per_frame_embed[meta_idx]))
     valid_cluster_idxs = []
     for meta_idx, metadata in enumerate(per_frame_metadata):
         cluster_idx = filtered_labels[meta_idx]
@@ -192,7 +209,8 @@ def create_dataset(data_dir: str,
                    split: float = 0.1,
                    max_videos = None,
                    query_embeds: list = [],
-                   online: bool = True
+                   online: bool = True,
+                   data_args = None
                    ) -> Tuple[Dataset, Dataset, AgentObjectiveManager]:
     
     videos_json = []
@@ -226,9 +244,9 @@ def create_dataset(data_dir: str,
         objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed]) # Finds completed objectives in current trajectory
 
     if online:
-        dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup)
+        dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup, num_objectives=data_args.num_objectives)
     else:
-        dataset = AgentPretrainingDataset(data_dir, processor=processor, objectives_lookup=objectives_lookup)
+        dataset = AgentPretrainingDataset(data_dir, processor=processor, objectives_lookup=objectives_lookup, num_objectives=data_args.num_objectives)
 
     train_ds, eval_ds = train_val_split(dataset, split=split)
 
@@ -262,7 +280,7 @@ if __name__ == "__main__":
     
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False)
+    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False, data_args=data_args)
     print("created dataset")
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
     if dist.get_rank() == 0:
