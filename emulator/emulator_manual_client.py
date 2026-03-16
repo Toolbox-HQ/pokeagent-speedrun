@@ -38,13 +38,14 @@ curr_action = "none"
 # Button mapping for manual control
 button_map = {
     pygame.K_z: 'a',
-    pygame.K_x: 'b', 
+    pygame.K_x: 'b',
     pygame.K_RETURN: 'start',
     pygame.K_RSHIFT: 'select',
     pygame.K_UP: 'up',
     pygame.K_DOWN: 'down',
     pygame.K_LEFT: 'left',
     pygame.K_RIGHT: 'right',
+    pygame.K_s: 'r',
 }
 
 # Pygame display
