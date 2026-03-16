@@ -5,6 +5,7 @@
 *.gba
 *.pyc
 *.cpython
+*.state
 *.pem
 *.gba
 llm_log_*

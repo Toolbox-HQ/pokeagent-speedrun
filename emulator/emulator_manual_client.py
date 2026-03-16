@@ -341,7 +341,7 @@ def main():
     parser.add_argument("--fps", type=int, help="Emulator fps (uncapped if not set)")
     parser.add_argument("--keys-json-path", type=str, default="./.cache/keys.json", help="Path to JSON file that logs per-frame keys")
     parser.add_argument("--save-s3", type=str, default=None, help="Save to s3 bucket, uses s3cmd credentials.")
-    parser.add_argument("--save-state",type=str, default="./.cache/agent_direct_save.state", help="Save state to start from.")
+    parser.add_argument("--save-state",type=str, default=None, help="Save state to start from.")
     parser.add_argument("--max-steps", type=int, default=3000, help="Maximum number of emulator steps.")
     parser.add_argument("--agent-fps", type=int, default=2, help="FPS the agent operates at when in agent mode.")
     args = parser.parse_args()
