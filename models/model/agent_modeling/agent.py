@@ -31,7 +31,7 @@ from cut_cross_entropy import linear_cross_entropy
 from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
 from torch.nn import Module
-from models.policy import NUM_ACTION_CLASSES
+from emulator.keys import NUM_ACTION_CLASSES
 from models.util.dist import compute_accuracy
 
 

@@ -12,6 +12,19 @@ class RandomAgent:
         key = random.choice(self.key_map)
         return key, num_frames
 
+class OriginalIDMRandomAgent:
+
+    def __init__(self, _, __, key_map):
+        self.min_frames = 150
+        self.max_frames = 300
+        self.key_map = key_map
+    
+    def infer(self):
+        num_frames = random.randint(self.min_frames, self.max_frames)
+        key = random.choice(self.key_map)
+        return key, num_frames
+
+
 class LZRandomAgent:
 
     def __init__(self, min_frames, max_frames, key_map):

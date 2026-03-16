@@ -8,7 +8,7 @@
 
 set -e
 
-CONTAINER_NAME="${CONTAINER_NAME:-run.sif}"
+CONTAINER_NAME="${CONTAINER_NAME:-dev.sif}"
 
 ROM=${1:-.cache/lz/rom/lz_rom.gba}
 OUTPUT_DIR=${2:-.cache/lz/rnd_policy}
@@ -17,7 +17,17 @@ NUM_ROLLOUTS=${4:-1}
 
 apptainer exec \
     --contain \
+    --bind ./config:/app/config \
+    --bind ./dconfig:/app/dconfig \
+    --bind ./emulator:/app/emulator \
+    --bind ./models:/app/models \
+    --bind ./s3_utils:/app/s3_utils \
+    --bind ./script:/app/script \
+    --bind ./.s3cfg:/app/.s3cfg \
+    --bind ./main.py:/app/main.py \
+    --bind ./.git:/app/.git \
     --bind ./.cache:/app/.cache \
+    --env LZ_MODE=1 \
     .cache/pokeagent/containers/${CONTAINER_NAME} \
     bash -c "cd /app && . .venv/bin/activate && \
         bash script/collect_lz_data.sh \

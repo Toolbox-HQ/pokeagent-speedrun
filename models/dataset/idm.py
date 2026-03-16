@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import os
 from models.util.data import load_json, download_s3_folder, list_files_with_extensions, map_json_to_mp4, save_json
-from models.policy import KEY_TO_CLASS
+from emulator.keys import KEY_TO_CLASS
 import torch 
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder

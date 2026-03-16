@@ -53,7 +53,7 @@ def compute_accuracy(logits, labels, prefix: str = "") -> float:
     import torch
     import torch.nn.functional as F
     import torch.distributed as dist
-    from models.policy import CLASS_TO_KEY
+    from emulator.keys import CLASS_TO_KEY
 
     with torch.no_grad():
         predictions = torch.argmax(logits, dim=-1)
