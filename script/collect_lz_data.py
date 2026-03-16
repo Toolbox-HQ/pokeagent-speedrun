@@ -1,10 +1,9 @@
-import random, glob, uuid, os, multiprocessing, sys
-from functools import partial
+import random, glob, uuid, os, sys
 from emulator.emulator_connection import EmulatorConnection
 from models.inference.random_agent import LZRandomAgent
 from emulator.keys import KEY_LIST_FOR_IDM
 
-def run_rollout(rom, output_dir, steps, _=None):
+def run_rollout(rom, output_dir, steps):
     rnd = uuid.uuid4().hex[:8]
     conn = EmulatorConnection(rom)
     states = glob.glob('.cache/lz/state/*.state')
@@ -25,14 +24,7 @@ def run_rollout(rom, output_dir, steps, _=None):
     os.rename(f'{output_dir}/output_{rnd}.json', f'{output_dir}/keys_{rnd}.json')
 
 if __name__ == '__main__':
-    rom, output_dir, steps, n, n_workers = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
-    _rollout = partial(run_rollout, rom, output_dir, steps)
-    procs = []
+    rom, output_dir, steps, n = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
     for i in range(n):
-        p = multiprocessing.Process(target=_rollout)
-        p.start()
-        procs.append(p)
-        if len(procs) >= n_workers:
-            procs.pop(0).join()
-    for p in procs:
-        p.join()
+        run_rollout(rom, output_dir, steps)
+        print(f"{i+1}/{n}", flush=True)
