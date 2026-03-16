@@ -33,7 +33,7 @@ for i in $(seq 1 $N_WORKERS); do
         --bind ./.cache:/app/.cache \
         --env LZ_MODE=1 \
         .cache/pokeagent/containers/${CONTAINER_NAME} \
-        bash -c "cd /app && . .venv/bin/activate && \
+        bash -c "cd /app && . .venv/bin/activate && export PYTHONPATH=/app && \
             python script/collect_lz_data.py \
               \"${ROM}\" \
               \"${OUTPUT_DIR}\" \
