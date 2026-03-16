@@ -17,6 +17,7 @@ NUM_ROLLOUTS=${4:-1}
 
 apptainer exec \
     --contain \
+    --bind ./.cache/pokeagent/tmp:/tmp \
     --bind ./config:/app/config \
     --bind ./dconfig:/app/dconfig \
     --bind ./emulator:/app/emulator \
