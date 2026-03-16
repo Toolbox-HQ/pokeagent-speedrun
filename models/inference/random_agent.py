@@ -20,8 +20,18 @@ class LZRandomAgent:
         self.key_map = key_map
         self.prev_frame = None
     
+    ROLL_REQUIRES = {
+        "up+r": "up",
+        "down+r": "down",
+        "left+r": "left",
+        "right+r": "right",
+    }
+
     def infer(self):
         num_frames = random.randint(self.min_frames, self.max_frames)
-        key = random.choice(self.key_map)
+        available = [k for k in self.key_map
+                     if k not in self.ROLL_REQUIRES
+                     or self.ROLL_REQUIRES[k] == self.prev_frame]
+        key = random.choice(available)
         self.prev_frame = key
         return key, num_frames
