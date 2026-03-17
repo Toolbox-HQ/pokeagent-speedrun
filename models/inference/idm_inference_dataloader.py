@@ -7,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from models.model.IDM.policy import InverseActionPolicy as IDModel
-from emulator.keys import CLASS_TO_KEY, KEY_TO_CLASS
+from emulator.keys import CLASS_TO_KEY, KEY_TO_CLASS, NUM_ACTION_CLASSES
 from typing import List, Dict
 from functools import partial
 import orjson
@@ -21,7 +21,7 @@ AGENT_FPS = 2
 AGENT_WINDOW = 64
 
 def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
-    m = IDModel()
+    m = IDModel(output_classes=NUM_ACTION_CLASSES)
     m.load_state_dict(torch.load(chkpt, map_location="cpu"))
     m.eval()
     return m
@@ -217,8 +217,8 @@ def infer_idm_labels(x, idm):
     logits = idm({"img": f}, labels=None, **dummy).logits  # (1, T, K)
     return torch.argmax(logits, dim=-1).squeeze(0).cpu()   # (T,)
 
-def get_idm_labeller(device):
-    idm = load_model()
+def get_idm_labeller(device, idm_path=".cache/pokeagent/rnd_idm_model.pt"):
+    idm = load_model(idm_path)
     idm.to(device)
     idm.eval()
     return partial(batched_infer_idm_labels, idm=idm), idm

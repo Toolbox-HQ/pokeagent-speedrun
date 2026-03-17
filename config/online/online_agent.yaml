@@ -6,6 +6,7 @@ objective_load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f
 output_dir: ".cache/pokeagent/online"
 num_train_epochs: 3
 per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
 save_strategy: "no"
 learning_rate: 5.0e-5
 weight_decay: 0.00001
