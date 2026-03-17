@@ -4,8 +4,8 @@ idm_fps: 4
 # Data
 idm_batch_size: 2
 idm_image_size: [128, 128]
-idm_dataset_dir: .cache/lz/debug_rnd_policy
-idm_validation_dir: .cache/lz/debug_rnd_policy
+idm_dataset_dir: .cache/lz/rnd_policy_v2
+idm_validation_dir: .cache/lz/rnd_policy_v2_val
 s3_bucket: b4schnei
 
 # Training
