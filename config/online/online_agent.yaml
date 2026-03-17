@@ -1,4 +1,4 @@
-architecture: "state_action_conditioned"
+architecture: "EmbedObjectiveAgent"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f4070dca2a694613975f1033e4c95a969/checkpoint-5500/model.safetensors
@@ -24,7 +24,7 @@ dataloader_num_workers: 8
 eval_on_start: true
 
 # inference
-inference_architecture: state_action_conditioned
+inference_architecture: EmbedObjectiveAgent
 agent_steps: 43200
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature

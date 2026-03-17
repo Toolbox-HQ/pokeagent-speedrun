@@ -67,7 +67,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     dist.barrier()
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
-    from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
+    from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditionedObjective
     from emulator.emulator_connection import EmulatorConnection
     from tqdm import tqdm
     import numpy as np
@@ -90,6 +90,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
         agent = OnlinePokeagentStateOnly(model_args, training_args, data_args, inference_args, idm_args)
     elif inference_args.inference_architecture == "state_action_conditioned":
         agent = OnlinePokeagentStateActionConditioned(model_args, training_args, data_args, inference_args, idm_args)
+    elif inference_args.inference_architecture == "EmbedObjectiveAgent":
+        agent = OnlinePokeagentStateActionConditionedObjective(model_args, training_args, data_args, inference_args, idm_args)
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     

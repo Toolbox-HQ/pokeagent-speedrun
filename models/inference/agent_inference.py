@@ -246,7 +246,7 @@ class OnlinePokeagentStateOnly:
 
         return CLASS_TO_KEY[cls.item()]
 
-class OnlinePokeagentStateActionConditioned:
+class OnlinePokeagentStateActionConditionedObjective:
     def __init__(self,
                 model_args: ModelArguments,
                 training_args: TrainingArguments,
@@ -274,6 +274,7 @@ class OnlinePokeagentStateActionConditioned:
         self.num_objectives = 10
 
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
+        print(f"****************{model_args.load_path}")
         self.model.load_state_dict(load_file(model_args.load_path))
         self.model.to(self.device).eval()
         self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8, device=self.device)
