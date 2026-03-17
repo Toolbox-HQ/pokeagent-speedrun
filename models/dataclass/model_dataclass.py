@@ -8,6 +8,7 @@ class ModelArguments:
     lm_name_or_path: Optional[str] = field(default=None)
     vision_name_or_path: Optional[str] = field(default=None)
     load_path: Optional[str] = field(default=None)
+    objective_load_path: Optional[str] = field(default=None)
 
 @dataclass
 class DataArguments:

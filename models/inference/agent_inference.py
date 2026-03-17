@@ -11,6 +11,7 @@ from models.train.train_agent import create_dataset, init_model, train_with_roll
 from models.train.train_idm import train_idm_best_checkpoint
 from transformers import AutoImageProcessor, AutoModel
 from models.util.misc import local_model_map
+import pickle
     
 class PokeAgentActionConditioned:
     def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, sampling_strategy="default"):
@@ -279,6 +280,9 @@ class OnlinePokeagentStateActionConditioned:
         self.input_ids = torch.zeros(1, self.buffersize, dtype=torch.long)
         self.idx = 0
         self.total_steps = 0
+
+        with open(model_args.objective_load_path, 'rb') as f:
+            self.objective_manager = pickle.load(f)
 
         dino_id = local_model_map("facebook/dinov2-base")
         self.dino_processor = AutoImageProcessor.from_pretrained(dino_id, use_fast=True)
