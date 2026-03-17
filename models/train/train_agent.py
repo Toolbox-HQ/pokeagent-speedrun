@@ -122,15 +122,15 @@ class AgentObjectiveManager:
         self.matched_objectives = {id : False for id in valid_cluster_ids}
         self.achieved_objectives = []
         
-    def mine_and_add_objectives(self, embeds: List[np.ndarray]):
+    def mine_and_add_objectives(self, embeds: List[np.ndarray], images: torch.tensor):
         labels, _ = approximate_predict(self.clusterer, np.stack(embeds))
         for idx, label in enumerate(labels):
             if label in self.matched_objectives:
                 if not self.matched_objectives[label]:
                     self.matched_objectives[label] = True
-                    self.achieved_objectives.append(embeds[idx])
+                    self.achieved_objectives.append(images[idx])
 
-    def retrieve_last_n_objectives(self, n) -> List[np.ndarray]:
+    def retrieve_last_n_objectives(self, n) -> List[torch.tensor]:
         return self.achieved_objectives[-n:]
 
 def create_clusters(
@@ -216,6 +216,7 @@ def create_dataset(data_dir: str,
                    split: float = 0.1,
                    max_videos = None,
                    query_embeds: list = [],
+                   video_frames: list = [],
                    online: bool = True,
                    data_args = None
                    ) -> Tuple[Dataset, Dataset, AgentObjectiveManager]:
@@ -247,8 +248,8 @@ def create_dataset(data_dir: str,
         objects = list(mine_objectives(all_videos_json_files))
     dist.broadcast_object_list(objects, src=0)
     objectives_lookup, objective_manager = objects[0], objects[1]
-    for query_embed in query_embeds:
-        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed]) # Finds completed objectives in current trajectory
+    for idx, query_embed in enumerate(query_embeds):
+        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed], video_frames[idx]) # Finds completed objectives in current trajectory
 
     if online:
         dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup, num_objectives=data_args.num_objectives)
@@ -289,7 +290,8 @@ if __name__ == "__main__":
     print("setup complete")
     train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False, data_args=data_args)
     print("created dataset")
-    train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
     if dist.get_rank() == 0:
+        os.makedirs(training_args.output_dir, exist_ok=True)
         with open(os.path.join(training_args.output_dir, "objective_manager.pkl"), "wb") as f:
             pickle.dump(agent_objective_manager, f)
+    train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
