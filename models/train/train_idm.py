@@ -131,6 +131,9 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
     if cfg.idm_scheduler == "cosine":
         from torch.optim.lr_scheduler import CosineAnnealingLR
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
+    elif cfg.idm_scheduler == "linear":
+        from torch.optim.lr_scheduler import LinearLR
+        scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=total_steps)
     else:
         from torch.optim.lr_scheduler import ConstantLR
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
@@ -306,6 +309,9 @@ def main():
     if cfg.idm_scheduler == "cosine":
         from torch.optim.lr_scheduler import CosineAnnealingLR
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
+    elif cfg.idm_scheduler == "linear":
+        from torch.optim.lr_scheduler import LinearLR
+        scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=total_steps)
     else:
         from torch.optim.lr_scheduler import ConstantLR
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
