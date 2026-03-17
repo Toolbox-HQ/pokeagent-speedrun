@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=192
-#SBATCH --time=08:00:00
+#SBATCH --time=02:00:00
 #SBATCH --job-name=lz_collect
 #SBATCH --output=/scratch/%u/slurm_out/%j_lz_collect_output.txt
 #SBATCH --mail-type=ALL
