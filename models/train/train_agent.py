@@ -34,7 +34,7 @@ def init_model(model_args: ModelArguments, training_args: TrainingArguments):
     device = torch.device(f"cuda:{device}")
     model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
-    model.idm_labelling_fn, idm = get_idm_labeller(device)
+    model.idm_labelling_fn, idm = get_idm_labeller(device, model_args.idm_path)
 
     if training_args.gradient_checkpointing:
         model.text_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs=training_args.gradient_checkpointing_kwargs)
@@ -187,7 +187,13 @@ def load_objective_dataset(videos_json, emb_dir=".cache/pokeagent/dinov2"):
 
 def mine_objectives(all_videos_json_files):
     json = get_objective_dataset_json(all_videos_json_files)
-    per_frame_embed, per_frame_metadata = load_objective_dataset(json)
+
+    if "LZ_MODE" in os.environ:
+        emb_dir = ".cache/lz/dinov2"
+    else:
+        emb_dir = ".cache/pokeagent/dinov2"
+
+    per_frame_embed, per_frame_metadata = load_objective_dataset(json, emb_dir=emb_dir)
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
     # Build mapping from cluster_idx -> list of all embeddings and frames in that cluster
