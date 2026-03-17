@@ -43,8 +43,9 @@ class LZRandomAgent:
     def infer(self):
         num_frames = random.randint(self.min_frames, self.max_frames)
         available = [k for k in self.key_map
-                     if k not in self.ROLL_REQUIRES
-                     or self.ROLL_REQUIRES[k] == self.prev_frame]
+                     if k != "start"
+                     and (k not in self.ROLL_REQUIRES
+                          or self.ROLL_REQUIRES[k] == self.prev_frame)]
         key = random.choice(available)
         self.prev_frame = key
         return key, num_frames
