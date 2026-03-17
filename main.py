@@ -67,7 +67,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     dist.barrier()
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
-    from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditionedObjective
+    from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditionedObjective, OnlinePokeagentStateActionConditioned
     from emulator.emulator_connection import EmulatorConnection
     from tqdm import tqdm
     import numpy as np
