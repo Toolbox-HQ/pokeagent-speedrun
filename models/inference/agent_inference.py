@@ -372,7 +372,7 @@ class OnlinePokeagentStateActionConditionedObjective:
     
 
 class OnlinePokeagentStateActionConditioned:
-        def __init__(self,
+    def __init__(self,
                 model_args: ModelArguments,
                 training_args: TrainingArguments,
                 data_args: DataArguments,
