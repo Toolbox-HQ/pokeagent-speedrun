@@ -85,6 +85,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     with open(inference_args.save_state, 'rb') as f:
         curr_state = f.read()
+
+    print("************************************")
+    print(inference_args.inference_architecture)
     
     if inference_args.inference_architecture == "state_only":
         agent = OnlinePokeagentStateOnly(model_args, training_args, data_args, inference_args, idm_args)
