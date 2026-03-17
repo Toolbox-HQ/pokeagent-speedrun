@@ -371,7 +371,7 @@ class OnlinePokeagentStateActionConditionedObjective:
         return CLASS_TO_KEY[cls.item()]
     
 
-    class OnlinePokeagentStateActionConditioned:
+class OnlinePokeagentStateActionConditioned:
         def __init__(self,
                 model_args: ModelArguments,
                 training_args: TrainingArguments,
