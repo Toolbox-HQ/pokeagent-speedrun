@@ -34,6 +34,7 @@ apptainer exec \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     --env WANDB_MODE="offline" \
+    --env PYTHONUNBUFFERED=1 \
     ${EXTRA_ENV:-} \
     .cache/pokeagent/containers/${CONTAINER_NAME} \
     bash -c "cd /app && . .venv/bin/activate && \
