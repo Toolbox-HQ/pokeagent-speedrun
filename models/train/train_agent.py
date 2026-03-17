@@ -290,7 +290,8 @@ if __name__ == "__main__":
     print("setup complete")
     train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False, data_args=data_args)
     print("created dataset")
-    train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
     if dist.get_rank() == 0:
+        os.makedirs(training_args.output_dir, exist_ok=True)
         with open(os.path.join(training_args.output_dir, "objective_manager.pkl"), "wb") as f:
             pickle.dump(agent_objective_manager, f)
+    train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)
