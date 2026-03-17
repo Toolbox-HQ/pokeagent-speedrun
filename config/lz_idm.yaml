@@ -15,10 +15,10 @@ idm_weight_decay: 0
 idm_max_grad_norm: 1.0
 wandb_project: pokeagent
 idm_gradient_accumulation_steps: 1
-idm_eval_every: 1000
+idm_eval_every: 500
 idm_scheduler: linear
 idm_dataloaders_per_device: 24
 
 # Output
 idm_output_path: lz_idm_model.pt
-idm_save_every: 4000
+idm_save_every: 1000
