@@ -29,14 +29,14 @@ def get_embeddings(model, processor, path: str):
         outputs = model(**inputs)
         image_embeds = outputs.last_hidden_state[:, 0]  # CLS token
         image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
-    return image_embeds
+    return image_embeds, frames
 
 def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base"):
     model_id = local_model_map(model_id)
     processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
     model = AutoModel.from_pretrained(model_id).eval()
-    embeds = get_embeddings(model, processor, video_path)
-    return embeds
+    embeds, frames = get_embeddings(model, processor, video_path)
+    return embeds, frames
 
 def dot_product(db_embeddings, query_embeddings):
     E = db_embeddings
@@ -264,7 +264,7 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
 
-    query_emb = dino_embeddings_every(query_path)
+    query_emb, frames = dino_embeddings_every(query_path)
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
 
     self_sim_matrix = (query_emb @ query_emb.T)
@@ -311,14 +311,14 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
         
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
 
-    return videos, world_idx, query_emb
+    return videos, world_idx, query_emb, frames
 
 
 def get_videos_with_embeddings(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
     print(f"[GPU RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
 
-    query_emb = dino_embeddings_every(query_path)
+    query_emb, frames = dino_embeddings_every(query_path)
     print(f"[GPU RETRIEVAL] Created dino embeddings")
 
     self_sim_matrix = (query_emb @ query_emb.T)

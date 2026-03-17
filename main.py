@@ -112,6 +112,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     futures = []
     query_embeds = []
+    video_frames = []
 
     if training_args.resume_from_checkpoint is not None:
         load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
@@ -135,13 +136,14 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] IDM training completed")
 
-                video_intervals, _, query_emb = get_videos(f"{query_path}.mp4",
-                                                dino_embedding_path,
-                                                inference_args.match_length,
-                                                inference_args.retrieved_videos,
-                                                inference_args.max_vid_len
+                video_intervals, _, query_emb, frames = get_videos(f"{query_path}.mp4",
+                                                    dino_embedding_path,
+                                                    inference_args.match_length,
+                                                    inference_args.retrieved_videos,
+                                                    inference_args.max_vid_len
                                                 )
                 query_embeds.append(query_emb)
+                video_frames.append(frames)
                 print(f"[GPU {rank} LOOP] Finished Retrieval")
                 
                 video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
@@ -153,7 +155,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 dist.barrier()
                 
                 print(f"[GPU {rank} LOOP] Begin agent training")
-                agent.train_agent(agent_data_path, bootstrap_count, query_embeds) # train agent on cumulative agent data
+                agent.train_agent(agent_data_path, bootstrap_count, query_embeds, video_frames) # train agent on cumulative agent data
 
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
                 print(f"[GPU {rank} LOOP] Agent training completed")
