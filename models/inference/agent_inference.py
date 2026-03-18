@@ -282,8 +282,14 @@ class OnlinePokeagentStateActionConditionedObjective:
         self.idx = 0
         self.total_steps = 0
 
+        class _Unpickler(pickle.Unpickler):
+            def find_class(self, module, name):
+                if module == '__main__' and name == 'AgentObjectiveManager':
+                    return AgentObjectiveManager
+                return super().find_class(module, name)
+
         with open(model_args.objective_load_path, 'rb') as f:
-            self.objective_manager = pickle.load(f)
+            self.objective_manager = _Unpickler(f).load()
 
         dino_id = local_model_map("facebook/dinov2-base")
         self.dino_processor = AutoImageProcessor.from_pretrained(dino_id, use_fast=True)
@@ -332,6 +338,7 @@ class OnlinePokeagentStateActionConditionedObjective:
                 [e.cpu().numpy() for e in embeds],
                 images.cpu()
             )
+            print(f"[GPU {dist.get_rank()}] has achieved {len(self.objective_manager.achieved_objectives)} objectives")
 
         inputs = self.processor(images=images, return_tensors="pt")
         pixel_values = inputs["pixel_values"].to(self.device).unsqueeze(0)  # (1, S, C, H, W)
@@ -378,7 +385,6 @@ class OnlinePokeagentStateActionConditioned:
                 data_args: DataArguments,
                 inference_args: InferenceArguments,
                 idm_args: IDMArguments,
-                objective_manager: AgentObjectiveManager
                 ):
         
             self.model_args: ModelArguments = model_args
@@ -386,7 +392,6 @@ class OnlinePokeagentStateActionConditioned:
             self.data_args: DataArguments = data_args
             self.inference_args: InferenceArguments = inference_args
             self.idm_args: IDMArguments = idm_args
-            self.objective_manager = objective_manager
 
             assert inference_args.model_checkpoint is None, "Use model_args.load_path"
             
