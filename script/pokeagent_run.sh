@@ -32,6 +32,7 @@ apptainer exec \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
+    --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     --env WANDB_MODE="offline" \
     --env PYTHONUNBUFFERED=1 \
@@ -46,5 +47,7 @@ apptainer exec \
           --master_port=35332 \
           main.py \
           --config \"$1\" \
-          --uuid \"${RUN_UUID}\""
+          --uuid \"${RUN_UUID}\" \
+          --seed_rng \"false\"
+          "
 

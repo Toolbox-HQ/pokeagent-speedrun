@@ -222,14 +222,16 @@ if __name__ == "__main__":
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Config for model run")
     parser.add_argument("--uuid", type=str, required=False, help="Optional run UUID; if not provided a shared UUID is generated")
+    parser.add_argument("--seed_rng", type=str, required=False, default="true", help="Set to False if you want policies to diverge")
     
     args = parser.parse_args()
     uuid: str = args.uuid if getattr(args, "uuid", None) else get_shared_uuid()
+    seed_rng = True if args.seed_rng == "true" else False
 
     if rank == 0:
         print(f"[RUN UUID]: {uuid}")
 
-    checkpoint_path = repro_init(args.config)
+    checkpoint_path = repro_init(args.config, seed_rng)
 
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments, InferenceArguments, IDMArguments)
