@@ -20,4 +20,4 @@ eval_strategy: "steps"
 eval_steps: 370 # 1/4 epoch
 dataloader_num_workers: 8
 data_path: ".cache/lz/intervals.json"
-idm_path: "./checkpoints/lz_idm/48852faffc52dad6ace54c74bca6cc58399c0742/lz_idm_model.pt"
+idm_path: "./checkpoints/lz_idm/8d247ed41a1b05ac082fc5b61f512eed53565195/lz_idm_model.pt"
