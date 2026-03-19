@@ -1,4 +1,12 @@
+import os
 import random
+
+
+def sampling_agent_map(*args):
+    if "LZ_MODE" in os.environ:
+        return LZRandomAgent(*args)
+    else:
+        return RandomAgent(*args)
 
 class RandomAgent:
 

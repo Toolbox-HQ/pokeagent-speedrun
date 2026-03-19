@@ -1,7 +1,7 @@
 def run_random_agent(conn, steps, video_path):
-    from models.inference.random_agent import RandomAgent
+    from models.inference.random_agent import sampling_agent_map
     from emulator.keys import KEY_LIST_FOR_IDM
-    agent = RandomAgent(30, 180, KEY_LIST_FOR_IDM)
+    agent = sampling_agent_map(30, 180, KEY_LIST_FOR_IDM)
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)
     for _ in range(steps):
