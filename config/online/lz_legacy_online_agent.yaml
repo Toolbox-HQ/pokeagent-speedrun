@@ -42,7 +42,7 @@ retrieved_videos: 100
 train_eval_split: 0.1
 
 # idm
-output_classes: 9
+output_classes: 17
 idm_fps: 4
 idm_batch_size: 2
 idm_image_size: [128, 128]
