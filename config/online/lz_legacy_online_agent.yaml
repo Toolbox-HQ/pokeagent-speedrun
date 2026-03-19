@@ -56,4 +56,4 @@ idm_gradient_accumulation_steps: 1
 idm_eval_every: 0.25
 idm_scheduler: null
 idm_dataloaders_per_device: 4
-idm_path: "./checkpoints/lz_idm/8d247ed41a1b05ac082fc5b61f512eed53565195/lz_idm_model.pt"
+idm_path: "./checkpoints/lz_idm/8d247ed41a1b05ac082fc5b61f512eed53565195/22000/lz_idm_model.pt"
