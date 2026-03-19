@@ -20,8 +20,12 @@ else
     NUM_GPUS=$(nvidia-smi -L | wc -l)
 fi
 
+EXTRA_ENV=""
 if [[ -n "${WANDB_API_KEY}" ]]; then
     EXTRA_ENV="--env WANDB_API_KEY=${WANDB_API_KEY}"
+fi
+if [[ -n "${LZ_MODE}" ]]; then
+    EXTRA_ENV="${EXTRA_ENV} --env LZ_MODE=${LZ_MODE}"
 fi
 
 apptainer exec \

@@ -12,6 +12,7 @@ set -e
 # Parse arguments
 LOCAL_MODE=false
 DRY_BUILD=false
+LZ_MODE=false
 CONFIG_FILE=""
 SBATCH_FLAGS=()
 
@@ -23,6 +24,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-build)
             DRY_BUILD=true
+            shift
+            ;;
+        --lz)
+            LZ_MODE=true
             shift
             ;;
         --)
@@ -44,8 +49,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$CONFIG_FILE" ]]; then
-    echo "Usage: $0 [--local] [--dry-build] <config_file> [-- <sbatch_flags>]"
+    echo "Usage: $0 [--local] [--dry-build] [--lz] <config_file> [-- <sbatch_flags>]"
     echo "Example: $0 config/online/online_agent.yaml"
+    echo "Example: $0 --lz config/online/online_agent.yaml"
     echo "Example: $0 --local config/online/online_agent.yaml"
     echo "Example: $0 --dry-build config/online/online_agent.yaml"
     echo "Example: $0 config/online/online_agent.yaml -- --time=2:00:00 --mem=16G"
@@ -76,16 +82,20 @@ apptainer build --mksquashfs-args "-processors 32" "${CONTAINER_PATH}" ./dconfig
 echo "Container built successfully: ${CONTAINER_PATH}"
 
 if [[ "$DRY_BUILD" == "true" ]]; then
+    LZ_ENV=""
+    [[ "$LZ_MODE" == "true" ]] && LZ_ENV="LZ_MODE=1 "
     echo ""
     echo "Dry-build mode: Skipping execution."
     echo "To run this container, use one of the following commands:"
     echo ""
     if [[ "$LOCAL_MODE" == "true" ]]; then
         echo "  Local mode:"
-        echo "    CONTAINER_NAME=\"${CONTAINER_NAME}\" RUN_UUID=\"${RUN_UUID}\" bash script/pokeagent_run.sh \"${CONFIG_FILE}\""
+        echo "    CONTAINER_NAME=\"${CONTAINER_NAME}\" RUN_UUID=\"${RUN_UUID}\" ${LZ_ENV}bash script/pokeagent_run.sh \"${CONFIG_FILE}\""
     else
         echo "  SLURM mode:"
-        SBATCH_CMD="sbatch --export=CONTAINER_NAME=\"${CONTAINER_NAME}\",RUN_UUID=\"${RUN_UUID}\""
+        DRY_EXPORT="CONTAINER_NAME=${CONTAINER_NAME},RUN_UUID=${RUN_UUID}"
+        [[ "$LZ_MODE" == "true" ]] && DRY_EXPORT="${DRY_EXPORT},LZ_MODE=1"
+        SBATCH_CMD="sbatch --export=${DRY_EXPORT}"
         if [[ ${#SBATCH_FLAGS[@]} -gt 0 ]]; then
             SBATCH_CMD="${SBATCH_CMD} ${SBATCH_FLAGS[*]}"
         fi
@@ -93,19 +103,21 @@ if [[ "$DRY_BUILD" == "true" ]]; then
         echo "    ${SBATCH_CMD}"
         echo ""
         echo "  Local mode:"
-        echo "    CONTAINER_NAME=\"${CONTAINER_NAME}\" RUN_UUID=\"${RUN_UUID}\" bash script/pokeagent_run.sh \"${CONFIG_FILE}\""
+        echo "    CONTAINER_NAME=\"${CONTAINER_NAME}\" RUN_UUID=\"${RUN_UUID}\" ${LZ_ENV}bash script/pokeagent_run.sh \"${CONFIG_FILE}\""
     fi
     echo ""
 elif [[ "$LOCAL_MODE" == "true" ]]; then
     echo "Running locally (not submitting to SLURM)..."
     export CONTAINER_NAME="${CONTAINER_NAME}"
     export RUN_UUID="${RUN_UUID}"
+    [[ "$LZ_MODE" == "true" ]] && export LZ_MODE=1
     bash script/pokeagent_run.sh "${CONFIG_FILE}"
 else
     echo "Submitting job to SLURM..."
-    # Submit to SLURM with the container name as an environment variable
+    EXPORT_VARS="CONTAINER_NAME=${CONTAINER_NAME},RUN_UUID=${RUN_UUID}"
+    [[ "$LZ_MODE" == "true" ]] && EXPORT_VARS="${EXPORT_VARS},LZ_MODE=1"
     sbatch \
-        --export=CONTAINER_NAME="${CONTAINER_NAME}",RUN_UUID="${RUN_UUID}" \
+        --export="${EXPORT_VARS}" \
         "${SBATCH_FLAGS[@]}" \
         script/pokeagent_run.sh "${CONFIG_FILE}"
     echo "Job submitted with container: ${CONTAINER_NAME}"
