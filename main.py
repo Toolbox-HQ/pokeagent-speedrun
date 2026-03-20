@@ -113,7 +113,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     idm_data_path = f'{output_dir}/idm_data'
     query_path_template = f'{output_dir}/query_video/query_gpu{rank}_bootstrap'
     idm_data_path_template = f'{idm_data_path}/bootstrap_'
-    dino_embedding_path = '.cache/pokeagent/db_embeddings'
+    if os.environ.get('LZ_MODE'):
+        dino_embedding_path = '.cache/lz/db_embeddings'
+    else:
+        dino_embedding_path = '.cache/pokeagent/db_embeddings'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
     checkpoint_path =  f'{output_dir}/checkpoints'
     query_path = query_path_template + str(bootstrap_count)
