@@ -191,7 +191,7 @@ class OnlinePokeagentStateOnly:
         self.idx = 0
         print("[AGENT] Initialized agent")
     
-    def train_agent(self, intervals: str, bootstrap: int, query_embeds: list, video_frames: list):
+    def train_agent(self, intervals: str, bootstrap: int, query_embeds: list[torch.Tensor], video_frames: list):
         train_ds, eval_ds, objective_manager = create_dataset(intervals, self.processor, bootstrap, split = self.inference_args.train_eval_split, query_embeds=query_embeds, video_frames=video_frames, data_args=self.data_args)
         self.model.train()
         train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)

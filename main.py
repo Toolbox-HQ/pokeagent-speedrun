@@ -85,7 +85,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
-    from models.util.misc import finalize_wandb
+    from models.util.misc import finalize_wandb, print_gpu_memory
     import os
     import pickle
 
@@ -148,11 +148,11 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 conn.close()
 
                 dist.barrier()
-                print(f"[GPU {rank} LOOP] Begin IDM training")
+                print(f"[GPU {rank} LOOP] Begin IDM training"); print_gpu_memory("pre-idm-train", rank)
 
                 agent.train_idm(f"{idm_data_path}/bootstrap_{bootstrap_count}")
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
-                print(f"[GPU {rank} LOOP] IDM training completed")
+                print(f"[GPU {rank} LOOP] IDM training completed"); print_gpu_memory("post-idm-train", rank)
 
                 video_intervals, _, query_emb, frames = get_videos(f"{query_path}.mp4",
                                                     dino_embedding_path,
@@ -162,8 +162,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                                                 )
                 query_embeds.append(query_emb)
                 video_frames.append(frames)
-                print(f"[GPU {rank} LOOP] Finished Retrieval")
-                
+                print(f"[GPU {rank} LOOP] Finished Retrieval"); print_gpu_memory("post-retrieval", rank)
+
                 video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
                 os.makedirs(os.path.dirname(video_intervals_path), exist_ok=True)
                 with open(video_intervals_path, "w") as f:
@@ -171,12 +171,12 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
                 print(f"[GPU {rank} LOOP] Saved intervals")
                 dist.barrier()
-                
-                print(f"[GPU {rank} LOOP] Begin agent training")
+
+                print(f"[GPU {rank} LOOP] Begin agent training"); print_gpu_memory("pre-agent-train", rank)
                 agent.train_agent(agent_data_path, bootstrap_count, query_embeds, video_frames) # train agent on cumulative agent data
 
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
-                print(f"[GPU {rank} LOOP] Agent training completed")
+                print(f"[GPU {rank} LOOP] Agent training completed"); print_gpu_memory("post-agent-train", rank)
 
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)

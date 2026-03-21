@@ -17,6 +17,7 @@ from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import OnlineAgentDataset, AgentPretrainingDataset, get_idm_labeller
 import os
 from models.util.data import train_val_split, list_files_with_extensions, ResampleDataset
+from models.util.misc import print_gpu_memory
 import torch.distributed as dist
 from cuml.cluster import HDBSCAN
 from cuml.cluster.hdbscan import approximate_predict
@@ -193,7 +194,12 @@ def mine_objectives(all_videos_json_files):
     else:
         emb_dir = ".cache/pokeagent/dinov2"
 
+    import torch.distributed as dist
+    rank = dist.get_rank() if dist.is_initialized() else 0
     per_frame_embed, per_frame_metadata = load_objective_dataset(json, emb_dir=emb_dir)
+    print_gpu_memory("pre-cluster-cache-clear", rank)
+    torch.cuda.empty_cache()
+    print_gpu_memory("post-cluster-cache-clear", rank)
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
     # Build mapping from cluster_idx -> list of all embeddings and frames in that cluster
@@ -214,6 +220,7 @@ def mine_objectives(all_videos_json_files):
             metadata['cluster_embed'] = cluster_to_embeds[cluster_idx]
             metadata['cluster_frames'] = cluster_to_frames[cluster_idx]
             valid_cluster_idxs.append(cluster_idx)
+    print_gpu_memory("post-mine-objectives", rank)
     return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
 
 def create_dataset(data_dir: str,
