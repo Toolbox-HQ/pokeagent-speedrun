@@ -429,7 +429,7 @@ class OnlinePokeagentStateActionConditioned:
         train_idm_best_checkpoint(self.idm, self.idm_args, data_dir, split = self.inference_args.train_eval_split)
         self.idm.eval()
 
-    def clear_memory():
+    def clear_memory(self):
         pass
 
     def broadcast_agent_state(self, src=1):
