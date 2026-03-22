@@ -198,8 +198,6 @@ def mine_objectives(all_videos_json_files):
     rank = dist.get_rank() if dist.is_initialized() else 0
     per_frame_embed, per_frame_metadata = load_objective_dataset(json, emb_dir=emb_dir)
     print_gpu_memory("pre-cluster-cache-clear", rank)
-    torch.cuda.empty_cache()
-    print_gpu_memory("post-cluster-cache-clear", rank)
     clusterer = create_clusters(per_frame_embed)
     filtered_labels = filter_clusters(clusterer.labels_, per_frame_metadata)
     # Build mapping from cluster_idx -> list of all embeddings and frames in that cluster
@@ -256,6 +254,8 @@ def create_dataset(data_dir: str,
 
     # objective mining (rank 0 only, then broadcast)
     objects = [None, None]
+    torch.cuda.empty_cache()
+    dist.barrier()
     if dist.get_rank() == 0:
         print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(videos_json_files)} files")
         objects = list(mine_objectives(all_videos_json_files))

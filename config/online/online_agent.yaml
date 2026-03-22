@@ -5,6 +5,7 @@ load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f4070dca2a6
 objective_load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f4070dca2a694613975f1033e4c95a969/objective_manager.pkl
 output_dir: ".cache/pokeagent/online"
 num_train_epochs: 3
+num_objectives: 10
 per_device_train_batch_size: 4
 per_device_eval_batch_size: 4
 save_strategy: "no"

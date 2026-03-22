@@ -148,6 +148,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 conn.close()
 
                 dist.barrier()
+                agent.clear_memory()
+
                 print(f"[GPU {rank} LOOP] Begin IDM training"); print_gpu_memory("pre-idm-train", rank)
 
                 agent.train_idm(f"{idm_data_path}/bootstrap_{bootstrap_count}")

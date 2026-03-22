@@ -271,7 +271,7 @@ class OnlinePokeagentStateActionConditionedObjective:
         self.stride = self.actions_per_second // self.model_fps
         self.temperature = inference_args.temperature
 
-        self.num_objectives = 10
+        self.num_objectives = self.data_args.num_objectives
 
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
         print(f"****************{model_args.load_path}")
@@ -291,7 +291,7 @@ class OnlinePokeagentStateActionConditionedObjective:
         with open(model_args.objective_load_path, 'rb') as f:
             self.objective_manager = _Unpickler(f).load()
 
-        dino_id = local_model_map("facebook/dinov2-base")
+        dino_id: str = local_model_map("facebook/dinov2-base")
         self.dino_processor = AutoImageProcessor.from_pretrained(dino_id, use_fast=True)
         self.dino_model = AutoModel.from_pretrained(dino_id).eval().to(self.device)
         print("[AGENT] Initialized agent")
@@ -314,6 +314,12 @@ class OnlinePokeagentStateActionConditionedObjective:
             input_ids_device = self.input_ids.to(self.device)
             dist.broadcast(input_ids_device, src=src)
             self.input_ids = input_ids_device.to('cpu')
+
+    def clear_memory(self):
+        import gc
+        self.objective_manager = None
+        gc.collect()
+        dist.barrier()
 
     @torch.no_grad()
     def infer_action(self, frame: torch.Tensor): # (C, H, W)
@@ -422,6 +428,9 @@ class OnlinePokeagentStateActionConditioned:
         self.idm.train()
         train_idm_best_checkpoint(self.idm, self.idm_args, data_dir, split = self.inference_args.train_eval_split)
         self.idm.eval()
+
+    def clear_memory():
+        pass
 
     def broadcast_agent_state(self, src=1):
         if dist.is_initialized():
