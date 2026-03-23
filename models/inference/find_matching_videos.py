@@ -1,15 +1,17 @@
 import os
+os.environ["OPENBLAS_NUM_THREADS"] = "64"
 import torch
 import numpy as np
 from transformers import AutoImageProcessor, AutoModel
 import json
 import glob
+from pathlib import Path
 from torchcodec.decoders import VideoDecoder
-import cv2
 import math
 import torch.nn.functional as F
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
+from sklearn.cluster import DBSCAN
 from models.util.misc import local_model_map
 import torch.distributed as dist
 
@@ -27,14 +29,14 @@ def get_embeddings(model, processor, path: str):
         outputs = model(**inputs)
         image_embeds = outputs.last_hidden_state[:, 0]  # CLS token
         image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
-    return image_embeds
+    return image_embeds, frames
 
 def dino_embeddings_every(video_path: str, model_id: str = "facebook/dinov2-base"):
     model_id = local_model_map(model_id)
-    processor = AutoImageProcessor.from_pretrained(model_id)
+    processor = AutoImageProcessor.from_pretrained(model_id, use_fast=True)
     model = AutoModel.from_pretrained(model_id).eval()
-    embeds = get_embeddings(model, processor, video_path)
-    return embeds
+    embeds, frames = get_embeddings(model, processor, video_path)
+    return embeds, frames
 
 def dot_product(db_embeddings, query_embeddings):
     E = db_embeddings
@@ -191,7 +193,7 @@ def cosine_search(query_embed, emb_dir: str):
     similarity_scores = np.array([])
     while i < num_files:
         metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f'{emb_dir}/{i}')
-        print(f"[RETRIEVAL] Loaded embeddings {i} from disk")
+        print(f"[GPU {dist.get_rank()} RETRIEVAL] Loaded embeddings {i} from disk")
         similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
         del db_embed_chunk
         metadata.extend(metadata_chunk)
@@ -200,11 +202,69 @@ def cosine_search(query_embed, emb_dir: str):
         i += 1
     return similarity_scores, similiarity_idxs, metadata
 
+
+def cosine_search_with_embeddings(query_embed, emb_dir: str):
+    """
+    Like cosine_search, but also returns a single concatenated tensor of all
+    database embeddings in the same global index order as the returned metadata.
+    This avoids re-reading the massive embedding shards from disk when we need
+    per-video embeddings. Uses a pre-allocated buffer and in-place copies to
+    avoid a full 100GB+ copy from torch.cat.
+    Only rank 0 allocates the full embedding tensor; other ranks use a placeholder.
+    query_embed is gathered and concatenated across all ranks before search.
+    """
+    gather_list = [None for _ in range(dist.get_world_size())]
+    dist.all_gather_object(gather_list, query_embed)
+    query_embed = torch.cat([t for t in gather_list], dim=0)
+
+    rank = dist.get_rank()
+    num_files = sum(1 for entry in os.scandir(emb_dir) if entry.is_file()) // 2
+    total_rows = 0
+    for i in range(num_files):
+        with open(f"{emb_dir}/{i}.json", "r") as f:
+            total_rows += len(json.load(f))
+
+    metadata = []
+    similarity_scores_list = []
+    similarity_idxs_list = []
+    offset = 0
+    all_embeddings = None
+
+    for i in range(num_files):
+        metadata_chunk, db_embed_chunk = load_embedding_metadata_pair(f"{emb_dir}/{i}")
+        print(f"[GPU {dist.get_rank()} RETRIEVAL] Loaded embeddings {i} from disk")
+
+        if rank == 0:
+            if all_embeddings is None and total_rows > 0:
+                embed_dim = db_embed_chunk.shape[1]
+                all_embeddings = torch.empty(total_rows, embed_dim, dtype=torch.float32)
+        else:
+            if all_embeddings is None:
+                all_embeddings = torch.empty(0)
+
+        similarity_scores_chunk, similarity_idxs_chunk = dot_product(db_embed_chunk, query_embed)
+        metadata.extend(metadata_chunk)
+        similarity_scores_list.append(similarity_scores_chunk)
+        similarity_idxs_list.append(similarity_idxs_chunk)
+        n = db_embed_chunk.shape[0]
+        if rank == 0 and all_embeddings.numel() > 0:
+            all_embeddings[offset:offset + n].copy_(db_embed_chunk.float())
+        offset += n
+        del db_embed_chunk
+
+    if all_embeddings is None:
+        all_embeddings = torch.empty(0)
+
+    similarity_scores = np.concatenate(similarity_scores_list) if similarity_scores_list else np.array([])
+    similarity_idxs = np.concatenate(similarity_idxs_list) if similarity_idxs_list else np.array([])
+
+    return similarity_scores, similarity_idxs, metadata, all_embeddings
+
 def get_videos(query_path: str, emb_dir: str, interval_length: int, num_intervals: int, max_vid_len: float = None):
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Begin retrieval process")
     num_embeds_per_sample = interval_length // 2
 
-    query_emb = dino_embeddings_every(query_path)
+    query_emb, frames = dino_embeddings_every(query_path)
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Created dino embeddings")
 
     self_sim_matrix = (query_emb @ query_emb.T)
@@ -251,13 +311,4 @@ def get_videos(query_path: str, emb_dir: str, interval_length: int, num_interval
         
     print(f"[GPU {dist.get_rank()} RETRIEVAL] Hrs: {total_seconds / 3600}")
 
-    return videos, world_idx
-
-def main():
-    videos, _ = get_videos(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
-    for i, video in enumerate(videos):
-        if i > 390:
-            print(video["video_path"])
-            
-if __name__ == "__main__":
-    main()
+    return videos, world_idx, query_emb, frames

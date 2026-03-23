@@ -1,6 +1,7 @@
 import os
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "96")
 import torch
 import numpy as np
 from transformers import AutoImageProcessor, AutoModel
@@ -197,7 +198,7 @@ def save_clip_between(s_idx: int, e_idx, path, rank):
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        out_path = f".cache/pokeagent/dino_vid_matches_temp/seq_{rank:02d}.mp4"
+        out_path = f"./tmp/intervals/seq_{rank:02d}.mp4"
 
         # Use mp4v for broad compatibility (no external ffmpeg call)
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -284,10 +285,14 @@ def get_intervals(query_path: str, emb_prefix: str, interval_length: int, num_in
     return results
 
 def main():
-    intervals = get_intervals(".cache/pokeagent/online/query_video/query0.mp4", ".cache/pokeagent/db_embeddings", interval_length=540, num_intervals=400)
-    for i, interval in enumerate(intervals):
-        if i > 390:
-            save_clip_between(interval["start"], interval["end"], interval['video_path'], i)
+    intervals = get_intervals(".cache/lz/lz_ret.mp4", ".cache/lz/db_embeddings", interval_length=540, num_intervals=400)
+    with open(".cache/lz/intervals.json", "w") as f:
+        json.dump(intervals, f)
+    
+    # ---- Interval visualization ----
+    # for i, interval in enumerate(intervals):
+    #     if i > 390:
+    #         save_clip_between(interval["start"], interval["end"], interval['video_path'], i)
 
 if __name__ == "__main__":
     main()

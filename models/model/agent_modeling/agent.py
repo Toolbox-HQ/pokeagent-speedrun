@@ -31,7 +31,7 @@ from cut_cross_entropy import linear_cross_entropy
 from transformers.models.qwen3 import Qwen3Model
 from transformers import AutoConfig, AutoProcessor
 from torch.nn import Module
-from models.policy import NUM_ACTION_CLASSES
+from emulator.keys import NUM_ACTION_CLASSES
 from models.util.dist import compute_accuracy
 
 
@@ -381,6 +381,185 @@ class LMStateAgent(Module, GenerationMixin):
 
         return out
 
+class LMObjectiveAgent(Module, GenerationMixin):
+    _tied_weights_keys = ["lm_head.weight"]
+    _tp_plan = {"lm_head": "colwise_rep"}
+    _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
+    main_input_name = "pixel_values"
+    
+    def __init__(self, config):
+        super().__init__()
+
+        self.config = config
+        self.tconfig = config["text_config"]
+        self.vconfig = config["vision_config"].vision_config if hasattr(config["vision_config"], "vision_config") else config["vision_config"]
+        self.num_actions = config["num_actions"]
+        self.idm_labelling_fn = None
+
+        with ContextManagers(PreTrainedModel.get_init_context(False, False)):
+            self.text_model = Qwen3Model(self.tconfig)
+            self.vision_tower = SiglipVisionModel(self.vconfig)
+
+        self.hidden_dim: int = self.tconfig.hidden_size
+        self.vocab_size: int = self.tconfig.vocab_size
+        self.vision_hidden_dim: int = self.vision_tower.config.hidden_size
+        self.mlp = MLP(self.vision_hidden_dim, self.hidden_dim)
+        self.action_embedding = nn.Embedding(self.num_actions, self.hidden_dim)
+        self.output_actions = nn.Linear(self.hidden_dim, self.num_actions, bias=False)
+        self.separator = nn.Parameter(torch.empty(1, 1, self.hidden_dim).normal_(std=0.02))
+
+        self.finish_init()
+
+    def get_processor(self):
+        return None
+
+    def finish_init(self):
+        delattr(self.text_model, "embed_tokens")
+        self.cast_mixed_precision()
+
+    def cast_mixed_precision(self):
+        self.text_model.to(dtype=torch.bfloat16)
+        self.action_embedding.to(dtype=torch.bfloat16)
+        self.output_actions.to(dtype=torch.bfloat16)
+        self.mlp.to(dtype=torch.bfloat16)
+        self.separator.data = self.separator.data.to(dtype=torch.bfloat16)
+        self.vision_tower.to(dtype=torch.float32)
+
+    def train_component(self, vision_tower=False, mlp=False, llm=False):
+        for param in self.parameters():
+            param.requires_grad = False
+
+        param_groups = []
+
+        if vision_tower:
+            vt_params = list(
+                set(self.vision_tower.vision_model.parameters()).difference(
+                    set(self.vision_tower.vision_model.head.parameters())
+                )
+            )
+
+            param_groups.append(vt_params)
+            for param in vt_params:
+                param.requires_grad = True
+
+        if mlp:
+            param_groups.append(self.mlp.parameters())
+            for param in self.mlp.parameters():
+                param.requires_grad = True
+
+        if llm:
+            param_groups.append(self.text_model.parameters())
+            for param in self.text_model.parameters():
+                param.requires_grad = True
+        return param_groups
+
+    def get_input_embeddings(self):
+        return self.text_model.model.embed_tokens
+
+    def set_input_embeddings(self, value):
+        self.text_model.model.embed_tokens = value
+
+    def get_output_embeddings(self):
+        return self.text_model.lm_head
+
+    def set_output_embeddings(self, new_embeddings):
+        self.lm_head = new_embeddings
+
+    def set_decoder(self, decoder):
+        self.model = decoder
+
+    def get_decoder(self):
+        return self.model
+
+    def forward(
+        self,
+        input_ids: Optional[torch.LongTensor] = None, # important
+        objectives: Optional[torch.FloatTensor] = None, # important - B x N x C x H x W
+        ground_labels: Optional[torch.LongTensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        pixel_values: Optional[torch.FloatTensor] = None, # important
+        past_key_values: Optional[Cache] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None, # important
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        logits_to_keep: Union[int, torch.Tensor] = 0,
+        pixel_mask: Optional[torch.LongTensor] = None,
+        **kwargs,
+    ) -> CausalLMOutputWithPast:
+
+        if labels is not None:
+            input_ids = self.idm_labelling_fn(labels).detach()
+
+        B, T, C, H, W = pixel_values.shape
+        N = objectives.shape[1]
+        device = pixel_values.device
+
+        all_pixels = einops.rearrange(torch.cat([objectives, pixel_values], dim=1), "b s c h w -> (b s) c h w")
+        all_vision_tokens = self.vision_tower(pixel_values=all_pixels).last_hidden_state
+        all_vision_tokens = einops.rearrange(all_vision_tokens, "(b s) p h -> b s p h", b=B, s=T+N)
+        all_vision_tokens = self.mlp(all_vision_tokens)
+
+        obj_tokens = all_vision_tokens[:, :N]   # (B, N, S, H)
+        vision_tokens = all_vision_tokens[:, N:]  # (B, T, S, H)
+        B, T, S, H = vision_tokens.shape
+
+        action_tokens = self.action_embedding(input_ids)
+
+        hiddens = torch.zeros((B, S+1, H), dtype=torch.int32, device=device)
+        hiddens[:, -1, :] = 1
+        hiddens[:, -2, :] = -1
+        hiddens = hiddens.repeat(1, T, 1)
+
+        state_mask = hiddens < 1
+        action_mask = hiddens == 1
+        last_token_mask = hiddens == -1
+
+        hiddens = hiddens.to(torch.bfloat16)
+        hiddens = hiddens.masked_scatter(state_mask, vision_tokens.to(torch.bfloat16))
+        hiddens = hiddens.masked_scatter(action_mask, action_tokens)
+
+        obj_hiddens = einops.rearrange(obj_tokens, "b n s h -> b (n s) h").to(torch.bfloat16)
+        separator = self.separator.expand(B, -1, -1)
+        hiddens = torch.cat([obj_hiddens, separator, hiddens], dim=1)
+
+        if not attention_mask:
+            B, L, H = hiddens.shape
+            attention_mask = torch.ones((B, L), dtype=torch.int32, device=device)
+
+        outputs: BaseModelOutputWithPast = self.text_model(
+            input_ids=None,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=hiddens,
+            use_cache=use_cache,
+            output_attentions=False,
+            output_hidden_states=True,
+            cache_position=cache_position,
+            **kwargs,
+        )
+
+        hidden_states = outputs.last_hidden_state[:, N * S + 1:]
+        action_hiddens = hidden_states[last_token_mask].view(B, T, H)
+
+        if labels is not None: # training
+            out = {"loss": linear_cross_entropy(action_hiddens.contiguous(), self.output_actions.weight, input_ids)}
+            with torch.no_grad():
+                out |= compute_accuracy(self.output_actions(action_hiddens), input_ids)
+        else: # inference
+            with torch.no_grad():
+                out = {"logits": self.output_actions(action_hiddens)}
+
+        if ground_labels is not None:
+            out |= compute_accuracy(self.output_actions(action_hiddens), ground_labels.to(device=action_hiddens.device), prefix="ground_")
+
+        return out
+
+
 def init_vision_prcoessor(vision: str = None, use_cache: bool = True):
     from models.util.misc import local_model_map
     if use_cache:
@@ -406,8 +585,8 @@ def init_lm_agent(arch: str = "default", lm: str = None, vision: str = None, use
     }
     if arch == "default" or arch == "state_action_conditioned":
         model = LMAgent(config)
-    elif arch == "state_only":
-        model = LMStateAgent(config)
+    elif arch == "EmbedObjectiveAgent":
+        model = LMObjectiveAgent(config)
     else:
         raise Exception("NotImplementedError")
 

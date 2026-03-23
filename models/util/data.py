@@ -81,7 +81,7 @@ class ValueInterval():
 
         return (start_idx, self.curr_idx-1), item
 
-def list_files_with_extentions(dir: str, ext: str):
+def list_files_with_extensions(dir: str, ext: str):
     matches = []
     for root, _, files in os.walk(dir):
         for name in files:
@@ -254,7 +254,9 @@ class ResampleDataset(Dataset):
             try:
                 return self.dataset[index]
             except Exception as e:
+                import traceback
                 print(f"[ERROR] attempted to get {index} - {str(e)}")
+                traceback.print_exc()
             
             attempts += 1
             index = random.randint(0, len(self.dataset)-1)

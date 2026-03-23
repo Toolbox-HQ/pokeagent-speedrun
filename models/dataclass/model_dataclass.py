@@ -8,6 +8,8 @@ class ModelArguments:
     lm_name_or_path: Optional[str] = field(default=None)
     vision_name_or_path: Optional[str] = field(default=None)
     load_path: Optional[str] = field(default=None)
+    objective_load_path: Optional[str] = field(default=None)
+    idm_path: str = field(default=".cache/pokeagent/rnd_idm_model.pt")
 
 @dataclass
 class DataArguments:
@@ -23,6 +25,10 @@ class DataArguments:
 
     eval_data_path: str | None = field(
         default=None, metadata={"help": "Path to the evaluation data."}
+    )
+
+    num_objectives: int = field(
+        default=10, metadata={"help": "Number of objectives to use."}
     )
 
 @dataclass

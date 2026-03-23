@@ -1,7 +1,7 @@
 def run_random_agent(conn, steps, video_path):
-    from models.inference.random_agent import RandomAgent
+    from models.inference.random_agent import sampling_agent_map
     from emulator.keys import KEY_LIST_FOR_IDM
-    agent = RandomAgent(30, 180, KEY_LIST_FOR_IDM)
+    agent = sampling_agent_map(30, 180, KEY_LIST_FOR_IDM)
     conn.create_video_writer(video_path)
     conn.start_video_writer(video_path)
     for _ in range(steps):
@@ -21,10 +21,13 @@ def checkpoint(output_dir: str, step: int, agent, state: bytes):
     rank = dist.get_rank()
 
     if rank == 0:
+        import pickle
         os.makedirs(save_path, exist_ok=True)
         print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
+        with open(os.path.join(save_path, "objective_manager.pkl"), "wb") as f:
+            pickle.dump(agent.objective_manager, f)
     
     dist.barrier()
     with open(os.path.join(save_path, f"game_rank{rank}.state"), "wb") as f:
@@ -38,6 +41,8 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     import torch
     import torch.distributed as dist
     from safetensors.torch import load_file
+    import pickle
+    from models.train.train_agent import AgentObjectiveManager
     
     agent_model: torch.nn.Module = agent.model
     agent_idm: torch.nn.Module = agent.idm
@@ -49,6 +54,15 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
     rank_state = os.path.join(checkpoint_dir, f"game_rank{rank}.state")
     single_state = os.path.join(checkpoint_dir, f"game.state")
+
+    class _Unpickler(pickle.Unpickler):
+            def find_class(self, module, name):
+                if module == '__main__' and name == 'AgentObjectiveManager':
+                    return AgentObjectiveManager
+                return super().find_class(module, name)
+
+    with open(model_args.objective_load_path, 'rb') as f:
+        agent.objective_manager = _Unpickler(f).load()
     
     if os.path.exists(rank_state):
         emulator.load_state_from_file(rank_state)
@@ -61,7 +75,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
     dist.barrier()
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
-    from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditioned
+    from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditionedObjective, OnlinePokeagentStateActionConditioned
     from emulator.emulator_connection import EmulatorConnection
     from tqdm import tqdm
     import numpy as np
@@ -71,18 +85,24 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     from models.inference.find_matching_videos import get_videos
     import json
     import torch.distributed as dist
-    from models.util.misc import finalize_wandb
+    from models.util.misc import finalize_wandb, print_gpu_memory
     import os
+    import pickle
 
     rank = dist.get_rank()
 
     with open(inference_args.save_state, 'rb') as f:
         curr_state = f.read()
+
+    print("************************************")
+    print(inference_args.inference_architecture)
     
     if inference_args.inference_architecture == "state_only":
         agent = OnlinePokeagentStateOnly(model_args, training_args, data_args, inference_args, idm_args)
     elif inference_args.inference_architecture == "state_action_conditioned":
         agent = OnlinePokeagentStateActionConditioned(model_args, training_args, data_args, inference_args, idm_args)
+    elif inference_args.inference_architecture == "EmbedObjectiveAgent":
+        agent = OnlinePokeagentStateActionConditionedObjective(model_args, training_args, data_args, inference_args, idm_args)
     else:
         raise Exception(f"{inference_args.inference_architecture} is not supported")
     
@@ -93,10 +113,15 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     idm_data_path = f'{output_dir}/idm_data'
     query_path_template = f'{output_dir}/query_video/query_gpu{rank}_bootstrap'
     idm_data_path_template = f'{idm_data_path}/bootstrap_'
-    dino_embedding_path = '.cache/pokeagent/db_embeddings'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
     checkpoint_path =  f'{output_dir}/checkpoints'
     query_path = query_path_template + str(bootstrap_count)
+
+    # retrieve from data of the correct game
+    if os.environ.get('LZ_MODE'):
+        dino_embedding_path = '.cache/lz/db_embeddings'
+    else:
+        dino_embedding_path = '.cache/pokeagent/db_embeddings'
 
     conn = EmulatorConnection(inference_args.rom_path)
     conn.load_state(curr_state)
@@ -104,6 +129,8 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     conn.start_video_writer(query_path)
 
     futures = []
+    query_embeds = []
+    video_frames = []
 
     if training_args.resume_from_checkpoint is not None:
         load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
@@ -121,20 +148,24 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 conn.close()
 
                 dist.barrier()
-                print(f"[GPU {rank} LOOP] Begin IDM training")
+                agent.clear_memory()
+
+                print(f"[GPU {rank} LOOP] Begin IDM training"); print_gpu_memory("pre-idm-train", rank)
 
                 agent.train_idm(f"{idm_data_path}/bootstrap_{bootstrap_count}")
                 finalize_wandb(tags = [run_uuid, "idm", f"bootstrap_{bootstrap_count}"])
-                print(f"[GPU {rank} LOOP] IDM training completed")
+                print(f"[GPU {rank} LOOP] IDM training completed"); print_gpu_memory("post-idm-train", rank)
 
-                video_intervals, _ = get_videos(f"{query_path}.mp4",
-                                                dino_embedding_path,
-                                                inference_args.match_length,
-                                                inference_args.retrieved_videos,
-                                                inference_args.max_vid_len
+                video_intervals, _, query_emb, frames = get_videos(f"{query_path}.mp4",
+                                                    dino_embedding_path,
+                                                    inference_args.match_length,
+                                                    inference_args.retrieved_videos,
+                                                    inference_args.max_vid_len
                                                 )
-                print(f"[GPU {rank} LOOP] Finished Retrieval")
-                
+                query_embeds.append(query_emb)
+                video_frames.append(frames)
+                print(f"[GPU {rank} LOOP] Finished Retrieval"); print_gpu_memory("post-retrieval", rank)
+
                 video_intervals_path = agent_path_template + f"{bootstrap_count}.json"
                 os.makedirs(os.path.dirname(video_intervals_path), exist_ok=True)
                 with open(video_intervals_path, "w") as f:
@@ -142,11 +173,12 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
                 print(f"[GPU {rank} LOOP] Saved intervals")
                 dist.barrier()
-                
-                print(f"[GPU {rank} LOOP] Begin agent training")
-                agent.train_agent(agent_data_path, bootstrap_count) # train agent on cumulative agent data
+
+                print(f"[GPU {rank} LOOP] Begin agent training"); print_gpu_memory("pre-agent-train", rank)
+                agent.train_agent(agent_data_path, bootstrap_count, query_embeds, video_frames) # train agent on cumulative agent data
+
                 finalize_wandb(tags = [run_uuid, "agent", f"bootstrap_{bootstrap_count}"])
-                print(f"[GPU {rank} LOOP] Agent training completed")
+                print(f"[GPU {rank} LOOP] Agent training completed"); print_gpu_memory("post-agent-train", rank)
 
                 bootstrap_count += 1
                 query_path = query_path_template + str(bootstrap_count)
@@ -178,6 +210,7 @@ def main(model_args, data_args, training_args, inference_args, idm_args, output_
     print(f"Run {uuid} completed ")
 
 if __name__ == "__main__":
+
     import torch.distributed as dist
     import os
     from argparse import ArgumentParser
@@ -196,14 +229,16 @@ if __name__ == "__main__":
     parser: ArgumentParser = ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Config for model run")
     parser.add_argument("--uuid", type=str, required=False, help="Optional run UUID; if not provided a shared UUID is generated")
+    parser.add_argument("--seed_rng", type=str, required=False, default="true", help="Set to False if you want policies to diverge")
     
     args = parser.parse_args()
     uuid: str = args.uuid if getattr(args, "uuid", None) else get_shared_uuid()
+    seed_rng = True if args.seed_rng == "true" else False
 
     if rank == 0:
         print(f"[RUN UUID]: {uuid}")
 
-    checkpoint_path = repro_init(args.config)
+    checkpoint_path = repro_init(args.config, seed_rng)
 
     parser = transformers.HfArgumentParser(
         (ModelArguments, DataArguments, TrainingArguments, InferenceArguments, IDMArguments)

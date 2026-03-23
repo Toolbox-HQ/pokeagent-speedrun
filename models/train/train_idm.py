@@ -69,7 +69,7 @@ def validate(model, val_loader, device, rank):
 
 def save(model, save_path, cfg):
     if dist.get_rank() == 0:
-        path = os.path.join(save_path, cfg.output_path)
+        path = os.path.join(save_path, cfg.idm_output_path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save(model.module.state_dict(), path)
         print(f"Model saved to {path}")
@@ -131,6 +131,9 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
     if cfg.idm_scheduler == "cosine":
         from torch.optim.lr_scheduler import CosineAnnealingLR
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
+    elif cfg.idm_scheduler == "linear":
+        from torch.optim.lr_scheduler import LinearLR
+        scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=total_steps)
     else:
         from torch.optim.lr_scheduler import ConstantLR
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)
@@ -300,12 +303,15 @@ def main():
     avg_loss = 0
     avg_acc = 0
     global_step = 1
-    total_steps = cfg.epochs * len(loader)
+    total_steps = cfg.idm_epochs * len(loader)
     scheduler = None
 
     if cfg.idm_scheduler == "cosine":
         from torch.optim.lr_scheduler import CosineAnnealingLR
         scheduler = CosineAnnealingLR(optimizer, T_max=total_steps)
+    elif cfg.idm_scheduler == "linear":
+        from torch.optim.lr_scheduler import LinearLR
+        scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=total_steps)
     else:
         from torch.optim.lr_scheduler import ConstantLR
         scheduler = ConstantLR(optimizer, factor=1, total_iters=total_steps)

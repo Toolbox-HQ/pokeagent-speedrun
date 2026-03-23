@@ -4,10 +4,11 @@ import re
 import warnings
 
 
-def repro_init(cfg: str, seed: int = 1234):
+def repro_init(cfg: str, seed: int = 1234, seed_rng: bool = False):
     config_file = get_config_file(cfg)
     git_hash = enforce_versioning()
-    seed_rng(seed=seed)
+    if (seed_rng):
+        seed_rng(seed=seed)
     return os.path.join("checkpoints", config_file, git_hash)
 
 

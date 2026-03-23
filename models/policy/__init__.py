@@ -1,20 +1,14 @@
 from .random_policy import RandomPolicy, RandomMovementPolicy
 from .policy import Policy
 from emulator.keys import MGBA_KEY_LIST, CLASS_TO_KEY, KEY_TO_CLASS, NUM_ACTION_CLASSES
-from models.dataclass import parse_dataclass, PolicyConfig
 
-def policy_map(x: str):
-
-    cfg = parse_dataclass(x, PolicyConfig)
-    policy_name = cfg.name
-
-    if policy_name == "random_policy":
-        return RandomPolicy(cfg)
-    elif policy_name == "random_movement_policy":
-        return RandomMovementPolicy(cfg)
+def policy_map(name: str, exclude=None):
+    if name == "random_policy":
+        return RandomPolicy(exclude=exclude)
+    elif name == "random_movement_policy":
+        return RandomMovementPolicy(exclude=exclude)
     else:
-        raise Exception("NotImplementedError")
-    
+        raise ValueError(f"Unknown policy: {name}")
 
 __all__ = [
     "policy_map",
@@ -22,5 +16,5 @@ __all__ = [
     "MGBA_KEY_LIST",
     "CLASS_TO_KEY",
     "KEY_TO_CLASS",
-    "NUM_ACTION_CLASSES"
-    ]
+    "NUM_ACTION_CLASSES",
+]

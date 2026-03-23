@@ -1,49 +1,34 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=24:00:00
+#SBATCH --time=20:00:00
 #SBATCH --gpus-per-node=1
-#SBATCH --job-name=agent_job
-#SBATCH --output=/scratch/bsch/slurm_out/%j_agent_job_output.txt
+#SBATCH --job-name=pretrain_agent_job
+#SBATCH --output=/scratch/%u/slurm_out/%j_agent_job_output.txt
 #SBATCH --mail-type=ALL
 
-cd /scratch/bsch/pokeagent-speedrun
 source .venv/bin/activate
 
 # Environment variables
 export EXPERIMENT_RUN="1"
 export WANDB_MODE="offline"
 export PYTHONPATH=$(pwd)
-export WANDB_DIR="./wandb"
+export WANDB_DIR="./"
+export CUPY_CACHE_DIR="./.cache/pokeagent/cupy"
 
-export WORK="/scratch/bsch"
-export CUDA_HOME="$WORK/anaconda3/envs/cuda"
-export HF_HOME="$WORK/hf_cache"
-export APPTAINER_CACHEDIR="$WORK/.apptainer"
-export TRITON_CACHE_DIR="$WORK/.triton"
+#export WORK="/scratch/bsch"
+#export CUDA_HOME="$WORK/anaconda3/envs/cuda"
+#export APPTAINER_CACHEDIR="$WORK/.apptainer"
+export TRITON_CACHE_DIR="./.triton"
 
 # Automatically detect all available GPUs
 NUM_GPUS=$(nvidia-smi -L | wc -l)
-
-LOW=6600
-HIGH=8600
-
-while true; do
-    # Pick a random port in range
-    p=$((RANDOM % (HIGH - LOW + 1) + LOW))
-
-    # Check availability
-    if ! lsof -iTCP:$p -sTCP:LISTEN >/dev/null 2>&1; then
-        MASTER_PORT=$p
-        break
-    fi
-done
 
 # Run torchrun using all GPUs on this node
 ./.venv/bin/torchrun \
   --nproc_per_node=$NUM_GPUS \
   --nnodes=1 \
   --node_rank=0 \
+  --master_port=30999 \
   --master_addr=localhost \
-  --master_port=$MASTER_PORT \
   ./models/train/train_agent.py \
   --config $1

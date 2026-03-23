@@ -11,7 +11,7 @@ import os
 from models.util.data import save_json
 from models.util.misc import local_model_map
 from pathlib import Path
-
+# ./script/dino_embed.sh .cache/pokeagent/lz_internet_data .cache/lz/dinov2
 MODEL_PATH = local_model_map("facebook/dinov2-base")
 OUTPUT_DIR = ".cache/pokeagent/dinov2"
 INPUT_DIR = ".cache/pokeagent/internet_data"
@@ -31,7 +31,9 @@ def in_cache(path):
 class EmbeddingDataset(Dataset):
     
     def __init__(self, path=INPUT_DIR):
+        import random
         self.video_list = list(filter(lambda x: not in_cache(x), Path(path).iterdir()))
+        random.shuffle(self.video_list)
         self.interval_second = 2
         self.batch_size = 32
 
@@ -77,9 +79,24 @@ def prcoess_batch(model, processor, path: str, batch: List[List]):
 
 
 def main():
+
+    global INPUT_DIR
+    global OUTPUT_DIR
+
+    import sys
+    if len(sys.argv) == 3:
+        INPUT_DIR = sys.argv[1]
+        OUTPUT_DIR = sys.argv[2]
+
+    
+    print(f"Creating embeddings from {INPUT_DIR}")
+    print(f"Saving embeddings to {OUTPUT_DIR}")
+
+    
+
     model = AutoModel.from_pretrained(MODEL_PATH)
     processor = AutoImageProcessor.from_pretrained(MODEL_PATH, use_fast=True)
-    ds = EmbeddingDataset()
+    ds = EmbeddingDataset(INPUT_DIR)
 
     for i in tqdm(range(len(ds))): #path, batches, vr in tqdm(ds):
         try:
@@ -93,7 +110,7 @@ def main():
             if all(Path(p).exists() for p in [meta_filename, pt_filename]):
                 print(f"{filename} skipped")
                 continue
-            results = Parallel(n_jobs=64, backend="threading")(
+            results = Parallel(n_jobs=192, backend="threading")(
                 delayed(prcoess_batch)(model, processor, path, batch) for batch in batches
             )
             results = torch.cat(results)

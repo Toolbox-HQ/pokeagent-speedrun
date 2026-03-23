@@ -42,6 +42,7 @@ apptainer exec \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
+    --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     --env WANDB_MODE="offline" \
     ${EXTRA_ENV:-} \

@@ -1,0 +1,24 @@
+output_classes: 17
+idm_fps: 4
+
+# Data
+idm_batch_size: 2
+idm_image_size: [128, 128]
+idm_dataset_dir: .cache/lz/rnd_policy_v3
+idm_validation_dir: .cache/lz/rnd_policy_v3_val
+s3_bucket: b4schnei
+
+# Training
+idm_epochs: 1
+idm_lr: 5.0e-5
+idm_weight_decay: 0
+idm_max_grad_norm: 1.0
+wandb_project: pokeagent
+idm_gradient_accumulation_steps: 1
+idm_eval_every: 500
+idm_scheduler: linear
+idm_dataloaders_per_device: 24
+
+# Output
+idm_output_path: lz_idm_model.pt
+idm_save_every: 1000

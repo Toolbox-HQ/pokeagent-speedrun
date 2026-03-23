@@ -84,7 +84,8 @@ def sync_folder(local: str, remote: str, bucket: str, dry_run: bool = True, excl
     s3 = init_boto3_client()
 
     local_paths = [os.path.join(dp, f) for dp, dn, filenames in os.walk(local) for f in filenames]
-    local_paths = list(filter(lambda x: not (exclude in x), local_paths))
+    excludes = [exclude] if isinstance(exclude, str) else (exclude or [])
+    local_paths = list(filter(lambda x: not any(e in x for e in excludes), local_paths))
 
     keys = [p.replace(local.rstrip('/'), remote.rstrip('/'), 1) for p in local_paths]    
     upload_paths = [f"s3://{bucket}/{p}" for p in keys]
@@ -129,9 +130,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exclude",
         type=str,
+        action="append",
         required=False,
         default=None,
-        help="exclude anything that matches this in local path",
+        help="exclude anything that matches this in local path (can be specified multiple times)",
     )
 
     parser.add_argument(

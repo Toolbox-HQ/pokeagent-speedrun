@@ -44,6 +44,7 @@ From: ubuntu:24.04
 %files
     pyproject.toml /app/
     .python-version /app/
+    uv.lock /app/
 
 %post
     cd /app

@@ -4,8 +4,8 @@ idm_fps: 4
 # Data
 idm_batch_size: 2
 idm_image_size: [128, 128]
-idm_dataset_dir: pokeagent/rnd_policy_v2
-idm_validation_dir: pokeagent/val
+idm_dataset_dir: .cache/pokeagent/rnd_policy_v2
+idm_validation_dir: .cache/pokeagent/val
 s3_bucket: b4schnei
 
 # Training
@@ -17,7 +17,8 @@ wandb_project: pokeagent
 idm_gradient_accumulation_steps: 1
 idm_eval_every: 100
 idm_scheduler: null
+idm_dataloaders_per_device: 16
 
 # Output
 idm_output_path: rnd_idm_model.pt
-idm_save_every: 100
+idm_save_every: 1000

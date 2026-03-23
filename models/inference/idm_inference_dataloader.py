@@ -1,4 +1,5 @@
 import os
+import random
 import torch
 import einops
 import numpy as np
@@ -6,7 +7,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms.functional import resize
 from torchcodec.decoders import VideoDecoder
 from models.model.IDM.policy import InverseActionPolicy as IDModel
-from emulator.keys import CLASS_TO_KEY, KEY_TO_CLASS
+from emulator.keys import CLASS_TO_KEY, KEY_TO_CLASS, NUM_ACTION_CLASSES
 from typing import List, Dict
 from functools import partial
 import orjson
@@ -20,7 +21,7 @@ AGENT_FPS = 2
 AGENT_WINDOW = 64
 
 def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
-    m = IDModel()
+    m = IDModel(output_classes=NUM_ACTION_CLASSES)
     m.load_state_dict(torch.load(chkpt, map_location="cpu"))
     m.eval()
     return m
@@ -36,12 +37,13 @@ def decode_idm_rate_frames(video_path, start: int, end: int, video_fps, idm_fps:
     frames: torch.Tensor = VideoDecoder(video_path).get_frames_at(indices=idxs).data         # (T,C,H,W) RGB                       # spatial size for IDM
     return (frames, actions) if labels else frames
 
-class IDMWindowDataset(Dataset):
-    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None):
+class OnlineAgentDataset(Dataset):
+    def __init__(self, videos_json: Dict | str , idm_fps=IDM_FPS, window=WINDOW, processor = None, disable_progress=True, max_videos=None, objectives_lookup = None, num_objectives=10):
         
         self.processor = processor
         self.samples = []
         total_seconds = 0
+        self.num_objectives = num_objectives
         
         if isinstance(videos_json, str):
             with open(videos_json, "rb") as f:
@@ -57,16 +59,16 @@ class IDMWindowDataset(Dataset):
             stride = max(1, int(round(fps / idm_fps)))
             n_raw = decoder.metadata.num_frames
             n_idm = n_raw // stride
-            n_full = (n_idm // window) * window
-            n_windows = n_full // window
+            n_windows = max(0, (n_idm - 3 * window // 2) // window + 1) if n_idm >= 3 * window // 2 else 0
             for w in range(n_windows):
                 win_start = w * window * stride
-                win_end = win_start + window * stride
+                win_end = win_start + 3 * window // 2 * stride
                 self.samples.append({
                     "video_path": it["video_path"],
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
                 })
         
         print(f"[AGENT] Data hrs: {total_seconds / 3600}")
@@ -85,17 +87,69 @@ class IDMWindowDataset(Dataset):
         s = self.samples[idx]
         idm_frames = decode_idm_rate_frames(s["video_path"], s["start"], s["end"], s["video_fps"], IDM_FPS, labels=False)
         inputs = None
+
+        obj_refs = [random.choice(cluster["frames"]) for cluster in s["objectives"][-self.num_objectives:]]
+        obj_indices = [ref["frame_idx"] for ref in obj_refs]
+        n_pad = self.num_objectives - len(obj_indices)
+
         if self.processor:
-            agent_frames = downsample(idm_frames, 2)
+
+            middle_frames = idm_frames[idm_frames.shape[0] // 6 : 5 * idm_frames.shape[0] // 6]
+            agent_frames = downsample(middle_frames, 2)
             inputs = self.processor(
             images=agent_frames,
             return_tensors="pt"
             )
+
             inputs["labels"] = resize(idm_frames, (128, 128))
 
-        return inputs if inputs else idm_frames # (T,C,HW) RGB
+            if obj_indices:
+                obj_frames = VideoDecoder(s["video_path"]).get_frames_at(indices=obj_indices).data
+                obj_pixels = self.processor(images=obj_frames, return_tensors="pt")["pixel_values"]
+                if n_pad > 0:
+                    obj_pixels = torch.cat([obj_pixels, torch.zeros(n_pad, *obj_pixels.shape[1:])], dim=0)
+            else:
+                obj_pixels = self.processor(images=agent_frames[:1], return_tensors="pt")["pixel_values"]
+                obj_pixels = torch.zeros(self.num_objectives, *obj_pixels.shape[1:])
 
-class LabelledWindowDataset(IDMWindowDataset):
+            inputs["objectives"] = obj_pixels
+
+        return inputs if inputs else (idm_frames, VideoDecoder(s["video_path"]).get_frames_at(indices=obj_indices).data) # (T,C,HW) RGB
+
+class AgentPretrainingDataset(OnlineAgentDataset):
+
+    def __init__(self, videos_json: str | List , idm_fps=IDM_FPS, window=WINDOW, processor = None, objectives_lookup = None, num_objectives=10, **kwargs):
+        
+        self.processor = processor
+        self.samples = []
+        self.num_objectives = num_objectives
+        
+        if isinstance(videos_json, str):
+            with open(str(videos_json), "r", encoding="utf-8") as f:
+                items = json.load(f)
+        else:
+            items = videos_json
+
+        for it in items:
+            start = int(it["start"])
+            end = int(it["end"])
+            fps = float(it["video_fps"])
+            stride = max(1, int(round(fps / idm_fps)))
+            n_raw = max(0, end - start)
+            n_idm = n_raw // stride
+            n_windows = max(0, (n_idm - 3 * window // 2) // window + 1) if n_idm >= 3 * window // 2 else 0
+            for w in range(n_windows):
+                win_start = start + w * window * stride
+                win_end = win_start + 3 * window // 2 * stride
+                self.samples.append({
+                    "video_path": it["video_path"],
+                    "start": win_start,
+                    "end": win_end,
+                    "video_fps": fps,
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
+                })
+
+class LabelledWindowDataset(OnlineAgentDataset):
 
     def __getitem__(self, idx):
         s = self.samples[idx]
@@ -105,7 +159,8 @@ class LabelledWindowDataset(IDMWindowDataset):
 
         inputs = None
         if self.processor:
-            agent_frames = downsample(idm_frames, 2)
+            middle_frames = idm_frames[idm_frames.shape[0] // 6 : 5 * idm_frames.shape[0] // 6]
+            agent_frames = downsample(middle_frames, 2)
             inputs = self.processor(
             images=agent_frames,
             return_tensors="pt"
@@ -162,8 +217,8 @@ def infer_idm_labels(x, idm):
     logits = idm({"img": f}, labels=None, **dummy).logits  # (1, T, K)
     return torch.argmax(logits, dim=-1).squeeze(0).cpu()   # (T,)
 
-def get_idm_labeller(device):
-    idm = load_model()
+def get_idm_labeller(device, idm_path=".cache/pokeagent/rnd_idm_model.pt"):
+    idm = load_model(idm_path)
     idm.to(device)
     idm.eval()
     return partial(batched_infer_idm_labels, idm=idm), idm
@@ -171,8 +226,10 @@ def get_idm_labeller(device):
 def batched_infer_idm_labels(x, idm=None):
     with torch.no_grad():
         (B, S, C, H, W) = x.shape
-        assert (S, C, H, W) == (128, 3, 128, 128)
-
+        assert (S, C, H, W) == (192, 3, 128, 128), f"shape was {(S, C, H, W)}"
+        offset = 64
+        x = torch.cat((x[:, :-offset], x[:, offset:]))
+        assert x.shape == (B*2,128,3,128,128), f"shape was {x.shape}"
         frames_bthwc = einops.rearrange(x, "b t c h w -> b t h w c") # (128, 128, 128, 3)
 
         dummy = {
@@ -182,13 +239,16 @@ def batched_infer_idm_labels(x, idm=None):
 
         logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
         labels = torch.argmax(logits, dim=-1)
+        labels = torch.stack((labels[:B], labels[B:]))
+        labels = torch.cat((labels[0,:, offset // 2 : -offset // 2], labels[1,:, offset // 2 : -offset // 2]), dim = 1)
         labels = labels[:,1::2] # strided downsampling, offset by 1
+        assert labels.shape == (B, 64), f"shape was {labels.shape}"
     return labels
 
 
 
 def get_dataloader(path, batch_size=1, num_workers=0, shuffle=False):
-    ds = IDMWindowDataset(path, IDM_FPS, WINDOW)
+    ds = OnlineAgentDataset(path, IDM_FPS, WINDOW)
     return DataLoader(ds, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle)
 
 def downsample(x, stride, offset=0):

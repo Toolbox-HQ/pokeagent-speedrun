@@ -73,5 +73,22 @@ def inject_traceback():
     
     traceback.print_exc = _filtered_print_exc
 
+def print_gpu_memory(label: str = "", rank: int = None):
+    import torch
+    import torch.distributed as dist
+    import pynvml
+    if rank is None:
+        rank = dist.get_rank() if dist.is_initialized() else 0
+    local_rank = int(os.environ.get("LOCAL_RANK", torch.cuda.current_device()))
+    allocated = torch.cuda.memory_allocated(local_rank) / 1024**3
+    reserved = torch.cuda.memory_reserved(local_rank) / 1024**3
+    pynvml.nvmlInit()
+    handle = pynvml.nvmlDeviceGetHandleByIndex(local_rank)
+    info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+    driver_used = info.used / 1024**3
+    driver_total = info.total / 1024**3
+    prefix = f"[MEM rank{rank}{' ' + label if label else ''}]"
+    print(f"{prefix} torch allocated: {allocated:.2f} GB | torch reserved: {reserved:.2f} GB | nvidia driver used: {driver_used:.2f} / {driver_total:.2f} GB")
+
 if __name__ == "__main__":
     download_models()

@@ -20,8 +20,12 @@ else
     NUM_GPUS=$(nvidia-smi -L | wc -l)
 fi
 
+EXTRA_ENV=""
 if [[ -n "${WANDB_API_KEY}" ]]; then
     EXTRA_ENV="--env WANDB_API_KEY=${WANDB_API_KEY}"
+fi
+if [[ -n "${LZ_MODE}" ]]; then
+    EXTRA_ENV="${EXTRA_ENV} --env LZ_MODE=${LZ_MODE}"
 fi
 
 apptainer exec \
@@ -29,11 +33,14 @@ apptainer exec \
     --nv \
     --bind ./.cache/pokeagent/tmp:/tmp \
     --bind ./.cache:/app/.cache \
+    --bind ./checkpoints:/app/checkpoints \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
+    --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     --env WANDB_MODE="offline" \
+    --env PYTHONUNBUFFERED=1 \
     ${EXTRA_ENV:-} \
     .cache/pokeagent/containers/${CONTAINER_NAME} \
     bash -c "cd /app && . .venv/bin/activate && \
@@ -45,5 +52,7 @@ apptainer exec \
           --master_port=35332 \
           main.py \
           --config \"$1\" \
-          --uuid \"${RUN_UUID}\""
+          --uuid \"${RUN_UUID}\" \
+          --seed_rng \"false\"
+          "
 
