@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-SRC="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$(cd "$(dirname "$0")/../.." && pwd)"
 DST="${1:?Usage: $0 <host>:/path}"
 
 if [[ "$DST" != *:* ]]; then
