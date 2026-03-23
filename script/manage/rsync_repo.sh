@@ -2,7 +2,12 @@
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
-DST="${1:?Usage: $0 <destination>}"
+DST="${1:?Usage: $0 <host>:/path}"
+
+if [[ "$DST" != *:* ]]; then
+    echo "Error: destination must be a remote path in the form <host>:/path (got: $DST)" >&2
+    exit 1
+fi
 
 EXCLUDES=(
     .cache
