@@ -10,12 +10,10 @@ if [[ "$DST" != *:* ]]; then
 fi
 
 EXCLUDES=(
-    .cache
     .venv
     .triton
     wandb
     tmp
-    checkpoints
 )
 
 SKIP_ONLY=(
