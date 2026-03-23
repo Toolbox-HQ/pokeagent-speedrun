@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 DATE="$(date +%Y-%m-%d)"
 BACKUP_ROOT="$(dirname "$REPO")/backup/$DATE"
 
