@@ -14,6 +14,8 @@ EXCLUDES=(
     .triton
     wandb
     tmp
+    .cache/pokeagent/tmp
+    .cache/pokeagent/cupy
 )
 
 SKIP_ONLY=(
