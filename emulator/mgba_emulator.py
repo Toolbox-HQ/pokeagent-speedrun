@@ -128,8 +128,11 @@ class MGBAEmulator:
         return data
 
     def load_state_bytes(self, state_bytes):
+        print(f"load_state_bytes: calling load_raw_state ({len(state_bytes)} bytes)", flush=True)
         self.core.load_raw_state(state_bytes)
+        print("load_state_bytes: load_raw_state done, calling run_frame", flush=True)
         self.core.run_frame()
+        print("load_state_bytes: done", flush=True)
 
     def save_state(self, path: str):
         """Save current emulator state to file or return as bytes"""

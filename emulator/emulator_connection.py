@@ -10,6 +10,7 @@ class EmulatorConnection:
         self._child = ctx.Process(target=self._start_subprocess, args=(rom_path, child_conn))
         self._child.start()
         child_conn.close()
+        print(f"Emulator subprocess PID: {self._child.pid}")
 
     @staticmethod
     def _start_subprocess(rom_path, conn):
