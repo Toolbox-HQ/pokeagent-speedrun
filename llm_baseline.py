@@ -66,7 +66,7 @@ def main():
     from emulator.keys import KEY_LIST_FOR_TRAINING
 
     parser = argparse.ArgumentParser(description="vLLM QwenVL baseline for Pokémon Emerald")
-    parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
+    parser.add_argument("--model", default="Qwen/Qwen3.5-9B"")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
     parser.add_argument("--steps", type=int, default=1000)
