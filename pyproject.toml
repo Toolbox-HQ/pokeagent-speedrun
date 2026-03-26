@@ -5,15 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-    "boto3>=1.40.36",
     "fastapi>=0.104.0",
     "mgba==0.10.2",
-    "numpy==1.26.4",
-    "opencv-python==4.9.0.80",
+    "opencv-python>=4.13.0.92",
     "orjson>=3.11.3",
     "pillow>=10.2.0",
     "pygame==2.6.1",
-    "tqdm>=4.0.0",
-    "uvicorn[standard]>=0.24.0",
-    "vllm>=0.8.0",
+    "vllm==0.18.0",
 ]

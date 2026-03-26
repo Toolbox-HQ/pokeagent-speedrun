@@ -1,8 +1,9 @@
 import argparse
 import base64
-import os
 from collections import deque
 from io import BytesIO
+from emulator.keys import KEY_LIST_FOR_TRAINING
+import os 
 
 SYSTEM_PROMPT = """\
 You are playing Pokémon Emerald on a Game Boy Advance emulator.
@@ -63,10 +64,9 @@ def main():
     from models.util.misc import local_model_map
     from vllm import LLM, SamplingParams
     from emulator.emulator_connection import EmulatorConnection
-    from emulator.keys import KEY_LIST_FOR_TRAINING
 
     parser = argparse.ArgumentParser(description="vLLM QwenVL baseline for Pokémon Emerald")
-    parser.add_argument("--model", default="Qwen/Qwen3.5-9B"")
+    parser.add_argument("--model", default="Qwen/Qwen3.5-9B")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
     parser.add_argument("--steps", type=int, default=1000)
