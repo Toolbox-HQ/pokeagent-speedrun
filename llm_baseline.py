@@ -84,18 +84,20 @@ def main():
 
     print(f"Connecting to emulator: {args.rom}")
     conn = EmulatorConnection(args.rom)
-    #conn.load_state_from_file(args.save_state)
+    
 
     print(f"Loading model: {args.model}")
     llm = LLM(
-        model=local_model_map(args.model),
+        model=args.model,
         limit_mm_per_prompt={"image": 1},
         gpu_memory_utilization=args.gpu_memory_utilization,
     )
     sampling_params = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens)
 
-
-    if args.video_out:
+    print("main: loading state")
+    conn.load_state_from_file(args.save_state)
+    print("main: finished loading state")
+    if args.video_out: 
         os.makedirs(os.path.dirname(args.video_out) or ".", exist_ok=True)
         conn.create_video_writer(args.video_out)
         conn.start_video_writer(args.video_out)
