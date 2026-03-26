@@ -3,11 +3,6 @@ import base64
 import os
 from collections import deque
 from io import BytesIO
-from models.util.misc import local_model_map
-from vllm import LLM, SamplingParams
-
-from emulator.emulator_connection import EmulatorConnection
-from emulator.keys import KEY_LIST_FOR_TRAINING
 
 SYSTEM_PROMPT = """\
 You are playing Pokémon Emerald on a Game Boy Advance emulator.
@@ -64,6 +59,12 @@ def parse_action(text: str) -> str:
 
 
 def main():
+
+    from models.util.misc import local_model_map
+    from vllm import LLM, SamplingParams
+    from emulator.emulator_connection import EmulatorConnection
+    from emulator.keys import KEY_LIST_FOR_TRAINING
+
     parser = argparse.ArgumentParser(description="vLLM QwenVL baseline for Pokémon Emerald")
     parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
@@ -80,11 +81,11 @@ def main():
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Required file not found: {path}")
 
-    os.environ.setdefault("VLLM_CACHE_ROOT", ".cache/pokeagent/vllm")
+    os.environ.setdefault("VLLM_CACHE_ROOT", "./tmp/vllm")
 
     print(f"Connecting to emulator: {args.rom}")
     conn = EmulatorConnection(args.rom)
-    
+    conn.load_state_from_file(args.save_state)
 
     print(f"Loading model: {args.model}")
     llm = LLM(
@@ -93,10 +94,6 @@ def main():
         gpu_memory_utilization=args.gpu_memory_utilization,
     )
     sampling_params = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens)
-
-    print("main: loading state")
-    conn.load_state_from_file(args.save_state)
-    print("main: finished loading state")
     if args.video_out: 
         os.makedirs(os.path.dirname(args.video_out) or ".", exist_ok=True)
         conn.create_video_writer(args.video_out)
