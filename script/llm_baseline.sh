@@ -9,6 +9,8 @@
 set -e
 CONTAINER_NAME="${CONTAINER_NAME:-llm_baseline.sif}"
 
+mkdir -p ./tmp
+
 EXTRA_ENV=""
 if [[ -n "${WANDB_API_KEY}" ]]; then
     EXTRA_ENV="--env WANDB_API_KEY=${WANDB_API_KEY}"
@@ -18,10 +20,13 @@ apptainer exec \
     --contain \
     --nv \
     --bind ./.cache:/app/.cache \
+    --bind ./tmp:/app/tmp \
+    --bind ./tmp:/tmp \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
+    --env TORCHINDUCTOR_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env PYTHONUNBUFFERED=1 \
     ${EXTRA_ENV:-} \

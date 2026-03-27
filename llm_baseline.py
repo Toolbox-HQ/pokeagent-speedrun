@@ -127,7 +127,6 @@ def parse_output(output) -> tuple[str, str]:
 def main():
 
     os.environ.setdefault("VLLM_CACHE_ROOT", "./tmp/vllm")
-    import torch
     from vllm import LLM, SamplingParams
     from emulator.emulator_connection import EmulatorConnection
     from models.util.misc import local_model_map
@@ -136,11 +135,10 @@ def main():
     parser.add_argument("--model", default="Qwen/Qwen3.5-9B")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
-    parser.add_argument("--steps", type=int, default=100)
-    parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument("--steps", type=int, default=10_000)
+    parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Path prefix for output video (omit extension)")
-    parser.add_argument("--log-out", default="./log.json", help="Path for JSON step log")
     args = parser.parse_args()
 
     for path in [args.rom, args.save_state]:
@@ -156,7 +154,7 @@ def main():
         model=local_model_map(args.model),
         limit_mm_per_prompt={"image": 1},
         gpu_memory_utilization=args.gpu_memory_utilization,
-        max_model_len=2048,
+        max_model_len=args.max_tokens,
     )
     sampling_params = SamplingParams(
         temperature=1.0,
@@ -173,15 +171,11 @@ def main():
         conn.start_video_writer(args.video_out)
 
     memory: str = ""
-    log: list = []
-
-    os.makedirs(os.path.dirname(args.log_out) or ".", exist_ok=True)
 
     print(f"Running for {args.steps} steps")
     for step in range(args.steps):
         print("[GET FRAME FROM EMULATOR]")
         frame = conn.get_current_frame()
-        frame_b64 = frame_to_b64(frame)
         messages = build_messages(frame, memory)
         print("[DO CHAT]")
         outputs = llm.chat(
@@ -194,33 +188,6 @@ def main():
         print(f"[RAW CHAT] text={repr(output.text)} tool_calls={getattr(output, 'tool_calls', None)}")
         action, memory = parse_output(output)
 
-        tool_calls_log = None
-        raw_tool_calls = getattr(output, "tool_calls", None)
-        if raw_tool_calls:
-            tool_calls_log = [
-                {"name": tc.function.name, "arguments": tc.function.arguments}
-                for tc in raw_tool_calls
-            ]
-
-        log.append({
-            "step": step,
-            "messages": [
-                {k: v for k, v in m.items() if k != "content"}
-                | {"content": [
-                    ({"type": c["type"], "image_b64": "<omitted>"} if c.get("type") == "image_url" else c)
-                    for c in m["content"]
-                ] if isinstance(m["content"], list) else m["content"]}
-                for m in messages
-            ],
-            "frame_b64": frame_b64,
-            "raw_text": output.text,
-            "tool_calls": tool_calls_log,
-            "action": action,
-            "memory": memory,
-            "finish_reason": output.finish_reason,
-        })
-        with open(args.log_out, "w") as f:
-            json.dump(log, f, indent=2)
 
         print("[SET KEY]")
         conn.set_key(action)
