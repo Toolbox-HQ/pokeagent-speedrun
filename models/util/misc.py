@@ -13,9 +13,8 @@ def local_model_map(model_name: str):
         "Qwen/Qwen3-1.7B": f"{hf_dir}/hub/models--Qwen--Qwen3-1.7B/snapshots/70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
         "facebook/dinov2-base" : f"{hf_dir}/hub/models--facebook--dinov2-base/snapshots/f9e44c814b77203eaa57a6bdbbd535f21ede1415",
         "Toolbox-HQ/NitroSigLIP": f"{hf_dir}/hub/models--Toolbox-HQ--NitroSigLIP/snapshots/cc66f54289033d7ad08f7c4f93a40f7c5b7610c9",
-        "Qwen/Qwen3.5-9B": f"{hf_dir}/hub/-----------``",
+        "Qwen/Qwen3.5-9B": f"{hf_dir}/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a",
     }[model_name]
-
 def download_models():
     from transformers import AutoModel, AutoProcessor
     AutoModel.from_pretrained("google/siglip-base-patch16-224")

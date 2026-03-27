@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --time=24:00:00
-#SBATCH --gpus-per-node=h100:1
+#SBATCH --gpus-per-node=h100
 #SBATCH --job-name=llm_baseline
 #SBATCH --output=/scratch/%u/slurm_out/%j_llm_baseline_output.txt
 #SBATCH --mail-type=ALL
@@ -19,10 +19,12 @@ apptainer exec \
     --bind ./.cache:/app/.cache \
     --bind "${HF_HOME:-$HOME/.cache/huggingface}":/hf_cache \
     --bind ./tmp:/output \
+    --bind /cvmfs:/cvmfs \
     --env HF_HOME=/hf_cache \
     --env VLLM_CACHE_ROOT=/app/.cache/pokeagent/vllm \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
+    --env FLASHINFER_CACHE_DIR="/output/flashinfer" \
     --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env PYTHONUNBUFFERED=1 \
     .cache/pokeagent/containers/${CONTAINER_NAME} \
@@ -31,4 +33,5 @@ apptainer exec \
           --rom /app/.cache/pokeagent/rom/rom.gba \
           --save-state /app/.cache/pokeagent/save_state/truck_start.state \
           --video-out /output/llm_baseline_out \
+          --log-out /output/log.json \
           $*"
