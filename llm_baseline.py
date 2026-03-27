@@ -4,6 +4,7 @@ from io import BytesIO
 from emulator.keys import KEY_LIST_FOR_TRAINING
 import json
 import os
+import re
 
 SYSTEM_PROMPT = """\
 You are playing Pokémon Emerald on a Game Boy Advance emulator.
@@ -97,6 +98,44 @@ def build_messages(frame, memory: str) -> list:
     ]
 
 
+def _parse_xml_tool_calls(text: str) -> dict[str, str]:
+    """Parse XML-style tool calls emitted by some models as plain text.
+
+    Handles two formats:
+    1. <tool_call>{"name": "...", "arguments": {...}}</tool_call>
+    2. <tool_call><function=name><parameter=key>value</parameter></function></tool_call>
+    """
+    result: dict[str, str] = {}
+    for block in re.findall(r"<tool_call>(.*?)</tool_call>", text, re.DOTALL):
+        block = block.strip()
+        # Format 1: JSON body
+        try:
+            obj = json.loads(block)
+            name = obj.get("name", "")
+            args = obj.get("arguments", obj.get("parameters", {}))
+            if name == "press_button":
+                result["press_button"] = args.get("button", "none")
+            elif name == "update_memory":
+                result["update_memory"] = args.get("memory", "")
+            continue
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        # Format 2: <function=name><parameter=key>value</parameter></function>
+        fn_match = re.search(r"<function=(\w+)>(.*?)</function>", block, re.DOTALL)
+        if fn_match:
+            fn_name = fn_match.group(1)
+            fn_body = fn_match.group(2)
+            params = {
+                k: v.strip()
+                for k, v in re.findall(r"<parameter=(\w+)>(.*?)</parameter>", fn_body, re.DOTALL)
+            }
+            if fn_name == "press_button":
+                result["press_button"] = params.get("button", "none")
+            elif fn_name == "update_memory":
+                result["update_memory"] = params.get("memory", "")
+    return result
+
+
 def parse_output(output) -> tuple[str, str]:
     """Returns (action, memory) parsed from tool calls."""
     action = "none"
@@ -114,8 +153,17 @@ def parse_output(output) -> tuple[str, str]:
                     action = button
             elif call.function.name == "update_memory":
                 memory = args.get("memory", "")
+    if action == "none" or memory is None:
+        # Fallback: parse XML-style tool calls from raw text
+        parsed = _parse_xml_tool_calls(output.text or "")
+        if action == "none":
+            button = parsed.get("press_button", "none").strip().lower()
+            if button in KEY_LIST_FOR_TRAINING:
+                action = button
+        if memory is None:
+            memory = parsed.get("update_memory")
     if action == "none":
-        # Fallback: scan raw text
+        # Last-resort: scan raw text for any button name
         text = (output.text or "").strip().lower()
         for key in KEY_LIST_FOR_TRAINING:
             if key in text:
@@ -135,7 +183,7 @@ def main():
     parser.add_argument("--model", default="Qwen/Qwen3.5-9B")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
-    parser.add_argument("--steps", type=int, default=10_000)
+    parser.add_argument("--steps", type=int, default=5_000)
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Path prefix for output video (omit extension)")
