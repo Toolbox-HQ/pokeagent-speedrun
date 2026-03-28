@@ -20,7 +20,10 @@ From: ubuntu:24.04
             uuid-runtime \
             build-essential \
             vim \
-            liblua5.4-0 && \
+            liblua5.4-0 \
+            libibverbs1 \
+            ibverbs-providers \
+            librdmacm1 && \
         apt-get clean && \
         rm -rf /var/lib/apt/lists/*
 

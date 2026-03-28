@@ -21,7 +21,7 @@ def setup_distributed():
     if not dist.is_initialized():
         dist.init_process_group(backend="nccl")
 
-    local_rank = int(os.environ["RANK"])
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
     torch.cuda.set_device(local_rank)
     world_size = dist.get_world_size()
     return local_rank, world_size
@@ -119,7 +119,7 @@ def train_idm_best_checkpoint(model: torch.nn.Module, cfg: IDMArguments, dataset
         collate_fn=IDMDataset.collate
     )
 
-    wrapped_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
+    wrapped_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(os.environ.get("LOCAL_RANK", 0))])
     optimizer = torch.optim.Adam(wrapped_model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
 
     avg_loss = 0
@@ -297,7 +297,7 @@ def main():
         collate_fn=IDMDataset.collate
     )
 
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[int(os.environ.get("LOCAL_RANK", 0))])
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.idm_lr, weight_decay=cfg.idm_weight_decay)
 
     avg_loss = 0
