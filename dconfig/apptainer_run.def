@@ -51,7 +51,6 @@ From: ubuntu:24.04
     models /app/
     s3_utils /app/
     script /app/
-    .s3cfg /app/
     main.py /app/
     .git /app/
 
