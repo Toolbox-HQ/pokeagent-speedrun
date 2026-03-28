@@ -61,7 +61,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
                     return AgentObjectiveManager
                 return super().find_class(module, name)
 
-    with open(model_args.objective_load_path, 'rb') as f:
+    with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
         agent.objective_manager = _Unpickler(f).load()
     
     if os.path.exists(rank_state):
