@@ -20,14 +20,10 @@ def download_models():
     AutoModel.from_pretrained("google/siglip-base-patch16-224")
     AutoModel.from_pretrained("Qwen/Qwen3-1.7B")
     AutoModel.from_pretrained("facebook/dinov2-base")
-    AutoModel.from_pretrained("Toolbox-HQ/NitroSigLIP")
-    AutoModel.from_pretrained("")
 
     AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
     AutoProcessor.from_pretrained("Qwen/Qwen3-1.7B")
     AutoProcessor.from_pretrained("facebook/dinov2-base")
-    AutoProcessor.from_pretrained("Toolbox-HQ/NitroSigLIP")
-    AutoProcessor.from_pretrained("Qwen/Qwen3.5-9B")
 
 def collect_query_files(output_dir: str, bootstrap_count: int) -> List[str]:
     import torch.distributed as dist
