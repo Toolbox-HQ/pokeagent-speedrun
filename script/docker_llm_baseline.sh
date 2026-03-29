@@ -11,13 +11,13 @@ set -e
 
 IMAGE_NAME="llm_baseline"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GPU_ID="all"
+CUDA_VISIBLE_DEVICES=""
 
 PASS_ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --gpu)
-            GPU_ID="device=$2"
+            CUDA_VISIBLE_DEVICES="$2"
             shift 2
             ;;
         *)
@@ -41,10 +41,14 @@ EXTRA_ENV=()
 if [[ -n "${WANDB_API_KEY}" ]]; then
     EXTRA_ENV+=(-e "WANDB_API_KEY=${WANDB_API_KEY}")
 fi
+if [[ -n "${CUDA_VISIBLE_DEVICES}" ]]; then
+    EXTRA_ENV+=(-e "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}")
+fi
 
 echo "Launching container..."
 docker run --rm \
-    --gpus "${GPU_ID}" \
+    --gpus all \
+    --ipc=host \
     -v "${REPO_ROOT}/.cache:/app/.cache" \
     -v "${REPO_ROOT}/tmp:/app/tmp" \
     -v "/tmp:/tmp" \
