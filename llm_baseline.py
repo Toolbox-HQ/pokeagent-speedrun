@@ -1,5 +1,6 @@
 import argparse
 import base64
+from datetime import datetime
 from io import BytesIO
 from emulator.keys import KEY_LIST_FOR_TRAINING
 import json
@@ -181,7 +182,7 @@ def main():
     parser.add_argument("--steps", type=int, default=5_000)
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
-    parser.add_argument("--video-out", default="./tmp/out", help="Path prefix for output video (omit extension)")
+    parser.add_argument("--video-out", default="./tmp/out", help="Base directory for run output; files go in a timestamped subdirectory")
     parser.add_argument("--save-interval", type=int, default=1000, help="Save emulator state every N steps (0 to disable)")
     parser.add_argument(
         "--local",
@@ -193,6 +194,11 @@ def main():
     for path in [args.rom, args.save_state]:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Required file not found: {path}")
+
+    run_dir = os.path.join(args.video_out, datetime.now().strftime("%Y%m%d_%H%M%S"))
+    os.makedirs(run_dir, exist_ok=True)
+    video_path = os.path.join(run_dir, "video")
+    print(f"Run output directory: {run_dir}")
 
     print(f"Connecting to emulator: {args.rom}")
     conn = EmulatorConnection(args.rom)
@@ -219,9 +225,8 @@ def main():
         max_tokens=args.max_tokens,
     )
     if args.video_out:
-        os.makedirs(os.path.dirname(args.video_out) or ".", exist_ok=True)
-        conn.create_video_writer(args.video_out)
-        conn.start_video_writer(args.video_out)
+        conn.create_video_writer(video_path)
+        conn.start_video_writer(video_path)
 
     memory: str = ""
 
@@ -249,12 +254,12 @@ def main():
         print(f"Step {step}/{args.steps} | action={action} | memory={repr(memory)}")
 
         if args.save_interval and step > 0 and step % args.save_interval == 0:
-            save_path = os.path.join(os.path.dirname(args.video_out) or ".", f"step{step}.state")
+            save_path = os.path.join(run_dir, f"step{step}.state")
             conn.save_state(save_path)
             print(f"Saved state: {save_path}")
 
     if args.video_out:
-        conn.release_video_writer(args.video_out)
+        conn.release_video_writer(video_path)
     conn.close()
 
 

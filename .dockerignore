@@ -5,3 +5,4 @@ docker_build
 checkpoints
 /wandb
 .cache
+tmp
