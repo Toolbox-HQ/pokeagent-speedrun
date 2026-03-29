@@ -179,7 +179,7 @@ def main():
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
     parser.add_argument("--steps", type=int, default=5_000)
-    parser.add_argument("--max-tokens", type=int, default=4096)
+    parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Path prefix for output video (omit extension)")
     parser.add_argument("--save-interval", type=int, default=1000, help="Save emulator state every N steps (0 to disable)")
