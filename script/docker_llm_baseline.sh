@@ -1,18 +1,18 @@
-#!/bin/bash
-# Build and run the LLM baseline in a Docker container.
-# Video output is written to ./tmp/llm_baseline_out on the host (owned by current user).
+#!/usr/bin/env bash
+# Builds the Docker image for llm_baseline and runs it locally.
+# Rebuild is fast when nothing has changed (Docker layer cache).
 #
-# Usage: bash script/docker_llm_baseline.sh [--gpu <id>] [llm_baseline.py args]
-# Example: bash script/docker_llm_baseline.sh --steps 200
-# Example: bash script/docker_llm_baseline.sh --gpu 1 --steps 200
+# Usage: ./script/docker_llm_baseline.sh [--gpu <id|all>] [llm_baseline.py args]
+# Example: ./script/docker_llm_baseline.sh --steps 1000
+# Example: ./script/docker_llm_baseline.sh --gpu 0 --steps 1000
+# Example: ./script/docker_llm_baseline.sh --gpu 0,1 --steps 1000
 
 set -e
 
 IMAGE_NAME="llm_baseline"
-OUTPUT_DIR="$(pwd)/tmp"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GPU_ID="all"
 
-# Parse --gpu flag before passing remaining args to llm_baseline.py
 PASS_ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -26,27 +26,35 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+set -- "${PASS_ARGS[@]}"
 
-mkdir -p "${OUTPUT_DIR}"
+mkdir -p "${REPO_ROOT}/tmp"
 
 echo "Building Docker image: ${IMAGE_NAME}"
-docker build -f dconfig/Dockerfile.llm_baseline -t "${IMAGE_NAME}" .
+docker build \
+    -f "${REPO_ROOT}/dconfig/Dockerfile.llm_baseline" \
+    -t "${IMAGE_NAME}" \
+    "${REPO_ROOT}"
+echo "Build complete."
 
-echo "Running LLM baseline on GPU=${GPU_ID} (output -> ${OUTPUT_DIR})"
+EXTRA_ENV=()
+if [[ -n "${WANDB_API_KEY}" ]]; then
+    EXTRA_ENV+=(-e "WANDB_API_KEY=${WANDB_API_KEY}")
+fi
+
+echo "Launching container..."
 docker run --rm \
     --gpus "${GPU_ID}" \
-    -v "$(pwd)/.cache:/app/.cache" \
+    -v "${REPO_ROOT}/.cache:/app/.cache" \
+    -v "${REPO_ROOT}/tmp:/app/tmp" \
+    -v "/tmp:/tmp" \
     -v "${HF_HOME:-$HOME/.cache/huggingface}:/hf_cache" \
-    -v "${OUTPUT_DIR}:/output" \
     -e HF_HOME=/hf_cache \
-    -e VLLM_CACHE_ROOT=/app/.cache/pokeagent/vllm \
-    -e TRITON_HOME=/app/.cache/pokeagent/tmp \
-    -e TRITON_CACHE_DIR=/app/.cache/pokeagent/tmp \
+    -e TRITON_HOME="/app/.cache/pokeagent/tmp" \
+    -e TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
+    -e TORCHINDUCTOR_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     -e PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     -e PYTHONUNBUFFERED=1 \
+    "${EXTRA_ENV[@]}" \
     "${IMAGE_NAME}" \
-    bash -c ".venv/bin/python llm_baseline.py \
-        --rom /app/.cache/pokeagent/rom/rom.gba \
-        --save-state /app/.cache/pokeagent/save_state/truck_start.state \
-        --video-out /output/llm_baseline_out \
-        ${PASS_ARGS[*]} && chown -R $(id -u):$(id -g) /output"
+    .venv/bin/python llm_baseline.py "$@"

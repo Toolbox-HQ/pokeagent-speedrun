@@ -13,6 +13,7 @@ dependencies = [
     { name = "orjson" },
     { name = "pillow" },
     { name = "pygame" },
+    { name = "tqdm" },
     { name = "vllm" },
 ]
 
@@ -24,6 +25,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.11.3" },
     { name = "pillow", specifier = ">=10.2.0" },
     { name = "pygame", specifier = "==2.6.1" },
+    { name = "tqdm", specifier = ">=4.67.3" },
     { name = "vllm", specifier = "==0.18.0" },
 ]
 

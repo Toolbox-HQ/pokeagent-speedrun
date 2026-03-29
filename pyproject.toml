@@ -11,5 +11,6 @@ dependencies = [
     "orjson>=3.11.3",
     "pillow>=10.2.0",
     "pygame==2.6.1",
+    "tqdm>=4.67.3",
     "vllm==0.18.0",
 ]

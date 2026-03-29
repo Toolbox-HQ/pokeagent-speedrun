@@ -9,7 +9,7 @@ import re
 SYSTEM_PROMPT = """\
 You are playing Pokémon Emerald on a Game Boy Advance emulator.
 You will be shown the current game screen and must choose the single best action to make progress in the game.
-You MUST call both tools every step: press_button AND update_memory.
+You must call one tool every step: press_button or update_memory.
 
 Button reference:
 - up / down / left / right: Move the character on the overworld; navigate cursor in menus and battle.
@@ -162,13 +162,6 @@ def parse_output(output) -> tuple[str, str]:
                 action = button
         if memory is None:
             memory = parsed.get("update_memory")
-    if action == "none":
-        # Last-resort: scan raw text for any button name
-        text = (output.text or "").strip().lower()
-        for key in KEY_LIST_FOR_TRAINING:
-            if key in text:
-                action = key
-                break
     return action, memory or ""
 
 
@@ -178,15 +171,23 @@ def main():
     from vllm import LLM, SamplingParams
     from emulator.emulator_connection import EmulatorConnection
     from models.util.misc import local_model_map
+    import tqdm
+    import torch
 
     parser = argparse.ArgumentParser(description="vLLM QwenVL baseline for Pokémon Emerald")
-    parser.add_argument("--model", default="Qwen/Qwen3.5-9B")
+    parser.add_argument("--model", default="Qwen/Qwen3.5-35B-A3B-FP8")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
     parser.add_argument("--steps", type=int, default=5_000)
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Path prefix for output video (omit extension)")
+    parser.add_argument("--save-interval", type=int, default=1000, help="Save emulator state every N steps (0 to disable)")
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Write output locally",
+    )
     args = parser.parse_args()
 
     for path in [args.rom, args.save_state]:
@@ -197,12 +198,16 @@ def main():
     conn = EmulatorConnection(args.rom)
     conn.load_state_from_file(args.save_state)
 
-    print(f"Loading model: {args.model}")
+    model_path = local_model_map(args.model) if args.local else args.model
+
+    tensor_parallel_size = torch.cuda.device_count()
+    print(f"Loading model: {args.model} (tensor_parallel_size={tensor_parallel_size})")
     llm = LLM(
-        model=local_model_map(args.model),
+        model=model_path,
         limit_mm_per_prompt={"image": 1},
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_tokens,
+        tensor_parallel_size=tensor_parallel_size,
     )
     sampling_params = SamplingParams(
         temperature=1.0,
@@ -221,7 +226,7 @@ def main():
     memory: str = ""
 
     print(f"Running for {args.steps} steps")
-    for step in range(args.steps):
+    for step in tqdm(range(args.steps)):
         print("[GET FRAME FROM EMULATOR]")
         frame = conn.get_current_frame()
         messages = build_messages(frame, memory)
@@ -233,21 +238,24 @@ def main():
             chat_template_kwargs={"tool_choice": "required"},
         )
         output = outputs[0].outputs[0]
-        print(f"[RAW CHAT] text={repr(output.text)} tool_calls={getattr(output, 'tool_calls', None)}")
+        print(f"[RAW CHAT] text={repr(output.text)}")
         action, memory = parse_output(output)
 
-
-        print("[SET KEY]")
         conn.set_key(action)
-        print("[RUN FRAMES]")
-        conn.run_frames(15)
+        conn.run_frames(1)
+        conn.set_key("none")
+        conn.run_frames(59)
 
         print(f"Step {step}/{args.steps} | action={action} | memory={repr(memory)}")
+
+        if args.save_interval and step > 0 and step % args.save_interval == 0:
+            save_path = os.path.join(os.path.dirname(args.video_out) or ".", f"step{step}.state")
+            conn.save_state(save_path)
+            print(f"Saved state: {save_path}")
 
     if args.video_out:
         conn.release_video_writer(args.video_out)
     conn.close()
-    print("Done.")
 
 
 if __name__ == "__main__":
