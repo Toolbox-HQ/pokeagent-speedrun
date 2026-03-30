@@ -172,7 +172,7 @@ def main():
     from vllm import LLM, SamplingParams
     from emulator.emulator_connection import EmulatorConnection
     from models.util.misc import local_model_map
-    import tqdm
+    from tqdm import tqdm
     import torch
 
     parser = argparse.ArgumentParser(description="vLLM QwenVL baseline for Pokémon Emerald")
@@ -214,6 +214,7 @@ def main():
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_tokens,
         tensor_parallel_size=tensor_parallel_size,
+        disable_custom_all_reduce=True,
     )
     sampling_params = SamplingParams(
         temperature=1.0,
@@ -229,29 +230,29 @@ def main():
         conn.start_video_writer(video_path)
 
     memory: str = ""
+    log_path = os.path.join(run_dir, "steps.jsonl")
 
     print(f"Running for {args.steps} steps")
-    for step in tqdm(range(args.steps)):
-        print("[GET FRAME FROM EMULATOR]")
-        frame = conn.get_current_frame()
-        messages = build_messages(frame, memory)
-        print("[DO CHAT]")
-        outputs = llm.chat(
-            messages,
-            sampling_params=sampling_params,
-            tools=TOOLS,
-            chat_template_kwargs={"tool_choice": "required"},
-        )
-        output = outputs[0].outputs[0]
-        print(f"[RAW CHAT] text={repr(output.text)}")
-        action, memory = parse_output(output)
+    with open(log_path, "w") as log_f:
+        for step in tqdm(range(args.steps)):
+            frame = conn.get_current_frame()
+            messages = build_messages(frame, memory)
+            outputs = llm.chat(
+                messages,
+                sampling_params=sampling_params,
+                tools=TOOLS,
+                chat_template_kwargs={"tool_choice": "required"},
+            )
+            output = outputs[0].outputs[0]
+            action, memory = parse_output(output)
 
-        conn.set_key(action)
-        conn.run_frames(1)
-        conn.set_key("none")
-        conn.run_frames(59)
+            conn.set_key(action)
+            conn.run_frames(1)
+            conn.set_key("none")
+            conn.run_frames(59)
 
-        print(f"Step {step}/{args.steps} | action={action} | memory={repr(memory)}")
+            log_f.write(json.dumps({"step": step, "action": action, "memory": memory, "raw": output.text}) + "\n")
+            log_f.flush()
 
         if args.save_interval and step > 0 and step % args.save_interval == 0:
             save_path = os.path.join(run_dir, f"step{step}.state")
