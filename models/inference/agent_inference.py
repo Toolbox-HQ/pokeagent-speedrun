@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
+from models.model.agent_modeling.vpt_agent import init_vpt_agent
 from emulator.keys import CLASS_TO_KEY
 from safetensors.torch import load_file
+from torchvision.transforms.functional import resize
 import math
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments, IDMArguments
 from pprint import pprint
@@ -472,6 +474,93 @@ class OnlinePokeagentStateActionConditioned:
             self.input_ids = torch.cat((self.input_ids[:, 1:], cls.view(1, 1).to('cpu')), dim=1)
         else:
             self.input_ids[0, self.idx] = cls.to('cpu')
+
+        if self.idx < self.buffersize - 1:
+            self.idx += 1
+
+        return CLASS_TO_KEY[cls.item()]
+
+class VPTOnlineAgent:
+    """VPT-style online agent for deployment in the emulator loop."""
+
+    def __init__(self,
+                 model_args: ModelArguments,
+                 training_args: TrainingArguments,
+                 data_args: DataArguments,
+                 inference_args: InferenceArguments,
+                 idm_args: IDMArguments,
+                 ):
+        self.model_args = model_args
+        self.training_args = training_args
+        self.data_args = data_args
+        self.inference_args = inference_args
+        self.idm_args = idm_args
+
+        self.sampling_strategy = inference_args.sampling_strategy
+        self.context_len = inference_args.context_length
+        self.actions_per_second = inference_args.actions_per_second
+        self.model_fps = inference_args.agent_fps
+        self.buffersize = self.context_len // self.model_fps * self.actions_per_second
+        self.stride = self.actions_per_second // self.model_fps
+        self.temperature = inference_args.temperature
+
+        self.model, self.idm, _, self.device = init_model(self.model_args, self.training_args)
+        if model_args.load_path:
+            self.model.load_state_dict(load_file(model_args.load_path))
+        self.model.to(self.device).eval()
+
+        # Buffer stores 128x128 frames (VPT native resolution, no processor needed)
+        self.agent_frames = torch.zeros(self.buffersize, 3, 128, 128, dtype=torch.uint8, device=self.device)
+        self.idx = 0
+        print("[VPT AGENT] Initialized")
+
+    def train_agent(self, data_dir: str, bootstrap: int, query_embeds=None, video_frames=None, *args):
+        query_embeds = query_embeds or []
+        video_frames = video_frames or []
+        train_ds, eval_ds, objective_manager = create_dataset(
+            data_dir, None, bootstrap,
+            split=self.inference_args.train_eval_split,
+            query_embeds=query_embeds,
+            video_frames=video_frames,
+            data_args=self.data_args,
+        )
+        self.model.train()
+        train_with_rollback(self.model, self.training_args, train_ds=train_ds, eval_ds=eval_ds)
+        self.model.eval()
+        self.objective_manager = objective_manager
+
+    def train_idm(self, data_dir: str):
+        self.idm.train()
+        train_idm_best_checkpoint(self.idm, self.idm_args, data_dir, split=self.inference_args.train_eval_split)
+        self.idm.eval()
+
+    def clear_memory(self):
+        pass
+
+    def broadcast_agent_state(self, src=1):
+        if dist.is_initialized():
+            dist.broadcast(self.agent_frames, src=src)
+
+    @torch.no_grad()
+    def infer_action(self, frame: torch.Tensor):  # (C, H, W) uint8
+        frame_128 = resize(frame, (128, 128)).to(self.device)
+
+        if self.idx == self.buffersize - 1:
+            self.agent_frames = torch.cat((self.agent_frames[1:], frame_128.unsqueeze(0)), dim=0)
+        else:
+            self.agent_frames[self.idx] = frame_128
+
+        images = self.agent_frames[self.idx % self.stride::self.stride]  # (T, C, 128, 128)
+        pixel_values = images.unsqueeze(0)  # (1, T, C, 128, 128)
+
+        output = self.model(pixel_values=pixel_values)
+        logits = output["logits"][0, math.floor(self.idx / self.stride)]  # (num_classes,)
+
+        if self.sampling_strategy == "default":
+            cls = torch.argmax(logits, dim=-1)
+        elif self.sampling_strategy == "temperature":
+            probs = torch.softmax(logits / self.temperature, dim=-1)
+            cls = torch.multinomial(probs, num_samples=1).squeeze(-1)
 
         if self.idx < self.buffersize - 1:
             self.idx += 1

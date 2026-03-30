@@ -12,6 +12,7 @@ from models.dataclass import TrainingArguments, DataArguments, ModelArguments
 from models.util.trainer import Trainer
 from torch.utils.data import Dataset
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
+from models.model.agent_modeling.vpt_agent import init_vpt_agent
 from models.util.repro import repro_init
 from models.util.dist import init_distributed
 from models.inference.idm_inference_dataloader import OnlineAgentDataset, AgentPretrainingDataset, get_idm_labeller
@@ -33,6 +34,13 @@ def init_model(model_args: ModelArguments, training_args: TrainingArguments):
 
     device = int(os.environ.get("LOCAL_RANK", 0))
     device = torch.device(f"cuda:{device}")
+
+    if model_args.architecture == "vpt":
+        model = init_vpt_agent()
+        model.to(device)
+        model.idm_labelling_fn, idm = get_idm_labeller(device, model_args.idm_path)
+        return model, idm, None, device
+
     model = init_lm_agent(arch=model_args.architecture, lm=model_args.lm_name_or_path, vision=model_args.vision_name_or_path)
     processor = init_vision_prcoessor(vision=model_args.vision_name_or_path)
     model.idm_labelling_fn, idm = get_idm_labeller(device, model_args.idm_path)
@@ -41,7 +49,7 @@ def init_model(model_args: ModelArguments, training_args: TrainingArguments):
         model.text_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs=training_args.gradient_checkpointing_kwargs)
         model.vision_tower.gradient_checkpointing_enable(gradient_checkpointing_kwargs=training_args.gradient_checkpointing_kwargs)
         training_args.gradient_checkpointing = False
-    
+
     return model, idm, processor, device
 
 def setup_training() -> Tuple[nn.Module, Callable, DataArguments, TrainingArguments]:

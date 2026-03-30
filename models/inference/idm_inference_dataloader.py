@@ -114,7 +114,17 @@ class OnlineAgentDataset(Dataset):
 
             inputs["objectives"] = obj_pixels
 
-        return inputs if inputs else (idm_frames, VideoDecoder(s["video_path"]).get_frames_at(indices=obj_indices).data) # (T,C,HW) RGB
+        if inputs:
+            return inputs
+
+        # VPT mode (no processor): return 128x128 frames directly
+        idm_frames_128 = resize(idm_frames, (128, 128))
+        middle_frames = idm_frames_128[idm_frames_128.shape[0] // 6 : 5 * idm_frames_128.shape[0] // 6]
+        agent_frames = downsample(middle_frames, 2)  # (64, C, 128, 128)
+        return {
+            "pixel_values": agent_frames,
+            "labels": idm_frames_128,
+        }
 
 class AgentPretrainingDataset(OnlineAgentDataset):
 
