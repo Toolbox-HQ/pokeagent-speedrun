@@ -36,7 +36,7 @@ def checkpoint(output_dir: str, step: int, agent, state: bytes):
     print(f"[GPU {rank} LOOP] saved emulator state at step {step} to {save_path}/game_rank{rank}.state")
     dist.barrier()
 
-def load_checkpoint(checkpoint_dir: str, agent, emulator):
+def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture: str):
     import os
     import torch
     import torch.distributed as dist
@@ -61,8 +61,9 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
                     return AgentObjectiveManager
                 return super().find_class(module, name)
 
-    with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
-        agent.objective_manager = _Unpickler(f).load()
+    if inference_architecture == "EmbedObjectiveAgent":
+        with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
+            agent.objective_manager = _Unpickler(f).load()
     
     if os.path.exists(rank_state):
         emulator.load_state_from_file(rank_state)
@@ -133,7 +134,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     video_frames = []
 
     if training_args.resume_from_checkpoint is not None:
-        load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
+        load_checkpoint(training_args.resume_from_checkpoint, agent, conn, inference_args.inference_architecture)
         training_args.resume_from_checkpoint = None
 
     steps_since_last_objective = 0
