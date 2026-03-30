@@ -232,20 +232,21 @@ def batched_infer_idm_labels(x, idm=None):
         assert x.shape == (B*2,128,3,128,128), f"shape was {x.shape}"
         frames_bthwc = einops.rearrange(x, "b t c h w -> b t h w c") # (128, 128, 128, 3)
 
-        dummy = {
-            "first": torch.zeros((frames_bthwc.shape[0], 1)).to(frames_bthwc.device),
-            "state_in": idm.initial_state(frames_bthwc.shape[0])
-        }
+        all_labels = []
+        for i in range(2): # slice the forward pass into 2 => lower peak GPU memory (OOM danger)
+            chunk = frames_bthwc[i*B:(i+1)*B]
+            dummy = {
+                "first": torch.zeros((chunk.shape[0], 1)).to(chunk.device),
+                "state_in": idm.initial_state(chunk.shape[0])
+            }
+            logits = idm({"img": chunk}, labels=None, **dummy).logits
+            all_labels.append(torch.argmax(logits, dim=-1))
 
-        logits = idm({"img": frames_bthwc}, labels=None, **dummy).logits  # (1, T, K)
-        labels = torch.argmax(logits, dim=-1)
-        labels = torch.stack((labels[:B], labels[B:]))
+        labels = torch.stack((all_labels[0], all_labels[1]))
         labels = torch.cat((labels[0,:, offset // 2 : -offset // 2], labels[1,:, offset // 2 : -offset // 2]), dim = 1)
         labels = labels[:,1::2] # strided downsampling, offset by 1
         assert labels.shape == (B, 64), f"shape was {labels.shape}"
     return labels
-
-
 
 def get_dataloader(path, batch_size=1, num_workers=0, shuffle=False):
     ds = OnlineAgentDataset(path, IDM_FPS, WINDOW)
