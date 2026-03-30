@@ -306,13 +306,22 @@ def train_with_rollback(model: nn.Module, training_args: TrainingArguments, trai
 if __name__ == "__main__":
 
     init_distributed()
-    
+
     model, processor, data_args, training_args = setup_training()
     print("setup complete")
-    train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False, data_args=data_args)
+
+    from models.model.agent_modeling.vpt_agent import VPTAgent
+    if isinstance(model, VPTAgent):
+        dataset = AgentPretrainingDataset(data_args.data_path, objectives_lookup=None)
+        train_ds, eval_ds = train_val_split(dataset, split=0.05)
+        train_ds = ResampleDataset(train_ds)
+        eval_ds = ResampleDataset(eval_ds)
+    else:
+        train_ds, eval_ds, agent_objective_manager = create_dataset(data_args.data_path, processor, None, split=0.05, online=False, data_args=data_args)
+        if dist.get_rank() == 0:
+            os.makedirs(training_args.output_dir, exist_ok=True)
+            with open(os.path.join(training_args.output_dir, "objective_manager.pkl"), "wb") as f:
+                pickle.dump(agent_objective_manager, f)
+
     print("created dataset")
-    if dist.get_rank() == 0:
-        os.makedirs(training_args.output_dir, exist_ok=True)
-        with open(os.path.join(training_args.output_dir, "objective_manager.pkl"), "wb") as f:
-            pickle.dump(agent_objective_manager, f)
     train(model, training_args, train_ds=train_ds, eval_ds=eval_ds)

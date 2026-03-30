@@ -7,11 +7,11 @@ from emulator.keys import NUM_ACTION_CLASSES
 from models.model.IDM.policy import PokePolicy
 from models.util.dist import compute_accuracy
 
-# memory_size == timesteps so maxlen=0 (causal attn within window only, no cross-batch KV state)
+# maxlen = memory_size - timesteps = 128 - 64 = 64 (KV cache for relative attention)
 VPT_POLICY_KWARGS = {
     'attention_heads': 16,
     'attention_mask_style': 'clipped_causal',
-    'attention_memory_size': 64,
+    'attention_memory_size': 128,
     'hidsize': 1024,
     'img_shape': [128, 128, 3],
     'impala_kwargs': {'post_pool_groups': 1},
@@ -55,8 +55,8 @@ class VPTAgent(nn.Module):
 
         # PokePolicy expects (B, T, H, W, C) float
         frames = einops.rearrange(pixel_values, "b t c h w -> b t h w c").float()
-        first = torch.zeros((B, 1), device=device)
-        state_in = self.net.initial_state(B)  # empty KV state (maxlen=0)
+        first = torch.zeros((B, T), dtype=torch.bool, device=device)  # (B, T): t drives mask row count in masked_attention
+        state_in = self.net.initial_state(B)
 
         latent, _ = self.net({"img": frames}, state_in=state_in, context={"first": first})
         logits = self.out_head(latent)  # (B, T, num_actions)

@@ -156,7 +156,7 @@ class AgentPretrainingDataset(OnlineAgentDataset):
                     "start": win_start,
                     "end": win_end,
                     "video_fps": fps,
-                    "objectives": objectives_lookup.lookup(it["video_path"], win_start)
+                    "objectives": objectives_lookup.lookup(it["video_path"], win_start) if objectives_lookup is not None else []
                 })
 
 class LabelledWindowDataset(OnlineAgentDataset):

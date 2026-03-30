@@ -566,3 +566,58 @@ class VPTOnlineAgent:
             self.idx += 1
 
         return CLASS_TO_KEY[cls.item()]
+
+
+class VPTPokeAgent:
+    """VPT-style agent for online rollouts.
+
+    Maintains a rolling 64-frame buffer at agent_fps (default 2fps).
+    Called at actions_per_second (default 4Hz); adds a frame every
+    stride = actions_per_second / agent_fps calls.
+    """
+
+    def __init__(
+        self,
+        model_path: str | None,
+        device: str,
+        context_len: int = 64,
+        actions_per_second: int = 4,
+        agent_fps: int = 2,
+        sampling_strategy: str = "default",
+        temperature: float = 1.0,
+    ):
+        self.device = torch.device(device)
+        self.context_len = context_len
+        self.stride = actions_per_second // agent_fps
+        self.sampling_strategy = sampling_strategy
+        self.temperature = temperature
+
+        self.model = init_vpt_agent()
+        if model_path is not None:
+            self.model.load_state_dict(load_file(model_path))
+        self.model.to(self.device).eval()
+
+        self.buffer = torch.zeros(context_len, 3, 128, 128, dtype=torch.uint8)
+        self.call_idx = 0
+
+    @torch.no_grad()
+    def infer_action(self, frame: torch.Tensor) -> str:  # frame: (C, H, W) uint8
+        frame_128 = resize(frame, (128, 128))
+
+        if self.call_idx % self.stride == 0:
+            self.buffer = torch.roll(self.buffer, -1, dims=0)
+            self.buffer[-1] = frame_128
+
+        self.call_idx += 1
+
+        pixel_values = self.buffer.unsqueeze(0).to(self.device)  # (1, T, C, H, W)
+        output = self.model(pixel_values=pixel_values)
+        logits = output["logits"][0, -1]  # last timestep: (num_actions,)
+
+        if self.sampling_strategy == "temperature":
+            probs = torch.softmax(logits / self.temperature, dim=-1)
+            cls = torch.multinomial(probs, num_samples=1).squeeze(-1)
+        else:
+            cls = torch.argmax(logits, dim=-1)
+
+        return CLASS_TO_KEY[cls.item()]

@@ -75,7 +75,51 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
         raise Exception(f"[GPU {rank} LOOP] WARNING: No emulator state file found in {checkpoint_dir}")
     dist.barrier()
 
-def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
+def run_vpt_agent(model_args, inference_args, output_dir, run_uuid: str):
+    from models.inference.agent_inference import VPTPokeAgent
+    from emulator.emulator_connection import EmulatorConnection
+    from tqdm import tqdm
+    import numpy as np
+    import torch
+    import torch.distributed as dist
+    import os
+
+    rank = dist.get_rank()
+    device = f"cuda:{rank}"
+
+    agent = VPTPokeAgent(
+        model_path=model_args.load_path,
+        device=device,
+        context_len=inference_args.context_length or 64,
+        actions_per_second=inference_args.actions_per_second or 4,
+        agent_fps=inference_args.agent_fps or 2,
+        sampling_strategy=inference_args.sampling_strategy or "default",
+        temperature=inference_args.temperature or 1.0,
+    )
+
+    with open(inference_args.save_state, 'rb') as f:
+        curr_state = f.read()
+
+    video_path = os.path.join(output_dir, f"vpt_rollout_gpu{rank}")
+    os.makedirs(output_dir, exist_ok=True)
+
+    conn = EmulatorConnection(inference_args.rom_path)
+    conn.load_state(curr_state)
+    conn.create_video_writer(video_path)
+    conn.start_video_writer(video_path)
+
+    for step in tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} VPT Rollout"):
+        frame = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1)  # (C, H, W) uint8
+        key = agent.infer_action(frame)
+        conn.run_frames(7)
+        conn.set_key(key)
+        conn.run_frames(8)
+
+    conn.release_video_writer(video_path)
+    conn.close()
+
+
+def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str):
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditionedObjective, OnlinePokeagentStateActionConditioned
     from emulator.emulator_connection import EmulatorConnection
     from tqdm import tqdm
@@ -230,7 +274,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
 def main(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid):
     assert inference_args.online, "online must be set"
-    run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid)
+    if model_args.architecture == "vpt":
+        run_vpt_agent(model_args, inference_args, output_dir, uuid)
+    else:
+        run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, uuid)
     print(f"Run {uuid} completed ")
 
 if __name__ == "__main__":
