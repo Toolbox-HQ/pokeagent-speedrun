@@ -183,7 +183,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Base directory for run output; files go in a timestamped subdirectory")
-    parser.add_argument("--save-interval", type=int, default=1000, help="Save emulator state every N steps (0 to disable)")
+    parser.add_argument("--save-interval", type=int, default=200, help="Save emulator state every N steps (0 to disable)")
     parser.add_argument(
         "--local",
         action="store_true",
@@ -225,6 +225,8 @@ def main():
         repetition_penalty=1.0,
         max_tokens=args.max_tokens,
     )
+    video_segment = 0
+    video_path = os.path.join(run_dir, f"video_seg{video_segment:04d}")
     if args.video_out:
         conn.create_video_writer(video_path)
         conn.start_video_writer(video_path)
@@ -254,10 +256,24 @@ def main():
             log_f.write(json.dumps({"step": step, "action": action, "memory": memory, "raw": output.text}) + "\n")
             log_f.flush()
 
-        if args.save_interval and step > 0 and step % args.save_interval == 0:
-            save_path = os.path.join(run_dir, f"step{step}.state")
-            conn.save_state(save_path)
-            print(f"Saved state: {save_path}")
+            if args.save_interval and (step + 1) % args.save_interval == 0:
+                state_path = os.path.join(run_dir, f"step{step + 1}.state")
+                conn.save_state(state_path)
+                print(f"Saved state: {state_path}")
+
+                if args.video_out:
+                    conn.release_video_writer(video_path)
+
+                conn.close()
+                conn = EmulatorConnection(args.rom)
+                conn.load_state_from_file(state_path)
+
+                video_segment += 1
+                video_path = os.path.join(run_dir, f"video_seg{video_segment:04d}")
+                if args.video_out:
+                    conn.create_video_writer(video_path)
+                    conn.start_video_writer(video_path)
+                print(f"Restarted emulator; new video segment: {video_path}")
 
     if args.video_out:
         conn.release_video_writer(video_path)
