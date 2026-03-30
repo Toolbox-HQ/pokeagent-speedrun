@@ -61,7 +61,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator):
                     return AgentObjectiveManager
                 return super().find_class(module, name)
 
-    with open(model_args.objective_load_path, 'rb') as f:
+    with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
         agent.objective_manager = _Unpickler(f).load()
     
     if os.path.exists(rank_state):
@@ -136,10 +136,20 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
         load_checkpoint(training_args.resume_from_checkpoint, agent, conn)
         training_args.resume_from_checkpoint = None
 
+    steps_since_last_objective = 0
+    trigger_early_bootstrap = False
+
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in (pbar := tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration")):
-            if step != 0 and step % inference_args.bootstrap_interval == 0:
+            should_bootstrap = step != 0 and (step % inference_args.bootstrap_interval == 0 or trigger_early_bootstrap)
+            if trigger_early_bootstrap:
+                print(f"[GPU {rank} LOOP] EARLY BOOTSTRAP TRIGGERED")
+            else:
+                print(f"[GPU {rank} LOOP] MAX BOOTSTRAP INTERVAL EXCEEDED")
+            if should_bootstrap:
                 pbar.disable = True
+                trigger_early_bootstrap = False
+                steps_since_last_objective = 0
                 wait(futures)
                 futures.clear()
                 
@@ -196,11 +206,24 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                 new_conn.load_state(conn.get_state())
                 futures.append(executor.submit(run_random_agent, new_conn, inference_args.idm_data_sample_steps, idm_data_path_template + f"{bootstrap_count}/gpu{rank}/{id}"))
 
+            prev_objective_count = len(agent.objective_manager.achieved_objectives) if getattr(agent, 'objective_manager', None) else 0
+
             tensor = torch.from_numpy(np.array(conn.get_current_frame())).permute(2, 0, 1) # CHW, uint8
             key = agent.infer_action(tensor)
             conn.run_frames(7)
             conn.set_key(key)
             conn.run_frames(8)
+
+            if inference_args.inference_architecture == "EmbedObjectiveAgent":
+                curr_objective_count = len(agent.objective_manager.achieved_objectives)
+                if curr_objective_count > prev_objective_count:
+                    steps_since_last_objective = 0
+                else:
+                    steps_since_last_objective += 1
+                t = torch.tensor([steps_since_last_objective], dtype=torch.long, device='cuda')
+                dist.all_reduce(t, op=dist.ReduceOp.MIN)
+                if t.item() >= inference_args.max_objective_interval:
+                    trigger_early_bootstrap = True
     conn.release_video_writer(query_path)
     conn.close()
 

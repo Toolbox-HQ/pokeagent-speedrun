@@ -37,6 +37,7 @@ online: True
 idm_data_sample_interval: 20
 idm_data_sample_steps: 100
 bootstrap_interval: 7200
+max_objective_interval: 2000
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
