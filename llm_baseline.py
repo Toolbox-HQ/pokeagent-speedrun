@@ -183,7 +183,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Base directory for run output; files go in a timestamped subdirectory")
-    parser.add_argument("--save-interval", type=int, default=200, help="Save emulator state every N steps (0 to disable)")
+    parser.add_argument("--save-interval", type=int, default=250, help="Save emulator state every N steps (0 to disable)")
     parser.add_argument(
         "--local",
         action="store_true",
@@ -243,7 +243,7 @@ def main():
                 messages,
                 sampling_params=sampling_params,
                 tools=TOOLS,
-                chat_template_kwargs={"tool_choice": "required"},
+                chat_template_kwargs={"tool_choice": "required", "enable_thinking": False},
             )
             output = outputs[0].outputs[0]
             action, memory = parse_output(output)
