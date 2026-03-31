@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=20:00:00
-#SBATCH --gpus-per-node=1
+#SBATCH --time=24:00:00
+#SBATCH --gpus-per-node=4
 #SBATCH --job-name=pretrain_agent_job
 #SBATCH --output=/scratch/%u/slurm_out/%j_agent_job_output.txt
 #SBATCH --mail-type=ALL
