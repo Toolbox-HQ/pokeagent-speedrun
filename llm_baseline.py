@@ -183,7 +183,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Base directory for run output; files go in a timestamped subdirectory")
-    parser.add_argument("--save-interval", type=int, default=250, help="Save emulator state every N steps (0 to disable)")
+    parser.add_argument("--save-interval", type=int, default=2000, help="Save emulator state every N steps (0 to disable)")
     parser.add_argument(
         "--local",
         action="store_true",
@@ -249,9 +249,9 @@ def main():
             action, memory = parse_output(output)
 
             conn.set_key(action)
-            conn.run_frames(1)
+            conn.run_frames(10)
             conn.set_key("none")
-            conn.run_frames(59)
+            conn.run_frames(50)
 
             log_f.write(json.dumps({"step": step, "action": action, "memory": memory, "raw": output.text}) + "\n")
             log_f.flush()
