@@ -36,8 +36,8 @@ rom_path: .cache/pokeagent/rom/rom.gba
 online: True
 idm_data_sample_interval: 20
 idm_data_sample_steps: 100
-bootstrap_interval: 7200
-max_objective_interval: 2000
+bootstrap_interval: 4800
+max_objective_interval: 4800
 context_length: 64
 actions_per_second: 4
 agent_fps: 2

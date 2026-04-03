@@ -138,22 +138,21 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
         training_args.resume_from_checkpoint = None
 
     steps_since_last_objective = 0
-    trigger_late_bootstrap = False
-    steps_in_phase = 0
+    dynamic_bootstrap = False
+    bootstrap_steps = 0
 
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in (pbar := tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration")):
-            bootstrap_interval_exceeded = steps_in_phase >= inference_args.bootstrap_interval
-            should_bootstrap = bootstrap_interval_exceeded and (steps_in_phase % inference_args.bootstrap_interval == 0 or trigger_late_bootstrap)
-            if should_bootstrap:
-                if trigger_late_bootstrap:
-                    print(f"[GPU {rank} LOOP] LATE BOOTSTRAP TRIGGERED")
-                else:
-                    print(f"[GPU {rank} LOOP] MAX BOOTSTRAP INTERVAL EXCEEDED")
+            bootstrap = False
+            if inference_args.inference_architecture == "EmbedObjectiveAgent":
+                bootstrap = dynamic_bootstrap
+            else:
+                bootstrap = bootstrap_steps >= inference_args.bootstrap_interval
+            if bootstrap:
                 pbar.disable = True
-                trigger_late_bootstrap = False
+                dynamic_bootstrap = False
                 steps_since_last_objective = 0
-                steps_in_phase = 0
+                bootstrap_steps = 0
                 wait(futures)
                 futures.clear()
                 
@@ -218,19 +217,21 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
             conn.set_key(key)
             conn.run_frames(8)
 
-            steps_in_phase += 1
+            bootstrap_steps += 1
 
             if inference_args.inference_architecture == "EmbedObjectiveAgent":
                 curr_objective_count = len(agent.objective_manager.achieved_objectives)
+
                 if curr_objective_count > prev_objective_count:
                     steps_since_last_objective = 0
                 else:
                     steps_since_last_objective += 1
-                if steps_in_phase >= inference_args.bootstrap_interval:
-                    t = torch.tensor([steps_since_last_objective], dtype=torch.long, device='cuda')
-                    dist.all_reduce(t, op=dist.ReduceOp.MIN)
-                    if t.item() >= inference_args.max_objective_interval:
-                        trigger_late_bootstrap = True
+
+                t = torch.tensor([steps_since_last_objective], dtype=torch.long, device='cuda')
+                dist.all_reduce(t, op=dist.ReduceOp.MIN)
+                if t.item() >= inference_args.max_objective_interval:
+                    dynamic_bootstrap = True
+
     conn.release_video_writer(query_path)
     conn.close()
 
