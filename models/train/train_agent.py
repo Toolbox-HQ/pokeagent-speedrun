@@ -124,12 +124,13 @@ class AgentObjectiveManager:
         self.achieved_objectives = []
         
     def mine_and_add_objectives(self, embeds: List[np.ndarray], images: torch.tensor):
-        labels, _ = approximate_predict(self.clusterer, np.stack(embeds))
-        for idx, label in enumerate(labels):
-            if label in self.matched_objectives:
-                if not self.matched_objectives[label]:
-                    self.matched_objectives[label] = True
-                    self.achieved_objectives.append(images[idx])
+        if self.clusterer != None:
+            labels, _ = approximate_predict(self.clusterer, np.stack(embeds))
+            for idx, label in enumerate(labels):
+                if label in self.matched_objectives:
+                    if not self.matched_objectives[label]:
+                        self.matched_objectives[label] = True
+                        self.achieved_objectives.append(images[idx])
 
     def retrieve_last_n_objectives(self, n) -> List[torch.tensor]:
         return self.achieved_objectives[-n:]

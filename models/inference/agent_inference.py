@@ -290,8 +290,11 @@ class OnlinePokeagentStateActionConditionedObjective:
                     return AgentObjectiveManager
                 return super().find_class(module, name)
 
-        with open(model_args.objective_load_path, 'rb') as f:
-            self.objective_manager = _Unpickler(f).load()
+        if model_args.objective_load_path != None:
+            with open(model_args.objective_load_path, 'rb') as f:
+                self.objective_manager = _Unpickler(f).load()
+        else:
+            self.objective_manager = AgentObjectiveManager(None, [])
 
         dino_id: str = local_model_map("facebook/dinov2-base")
         self.dino_processor = AutoImageProcessor.from_pretrained(dino_id, use_fast=True)
