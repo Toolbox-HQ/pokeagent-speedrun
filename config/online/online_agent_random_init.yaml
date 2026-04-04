@@ -25,7 +25,7 @@ eval_on_start: true
 
 # inference
 inference_architecture: EmbedObjectiveAgent
-agent_steps: 43200
+agent_steps: 100000000
 save_state: .cache/pokeagent/save_state/truck_start.state
 sampling_strategy: temperature
 temperature: 1
