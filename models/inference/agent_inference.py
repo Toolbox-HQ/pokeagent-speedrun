@@ -185,7 +185,8 @@ class OnlinePokeagentStateOnly:
         self.temperature = inference_args.temperature
 
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
-        self.model.load_state_dict(load_file(model_args.load_path))
+        if model_args.load_path is not None:
+            self.model.load_state_dict(load_file(model_args.load_path))
         self.model.to(self.device).eval()
         self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8, device=self.device)  
         self.idx = 0
@@ -275,7 +276,8 @@ class OnlinePokeagentStateActionConditionedObjective:
 
         self.model, self.idm, self.processor, self.device = init_model(self.model_args, self.training_args)
         print(f"****************{model_args.load_path}")
-        self.model.load_state_dict(load_file(model_args.load_path))
+        if model_args.load_path is not None:
+            self.model.load_state_dict(load_file(model_args.load_path))
         self.model.to(self.device).eval()
         self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8, device=self.device)
         self.input_ids = torch.zeros(1, self.buffersize, dtype=torch.long)

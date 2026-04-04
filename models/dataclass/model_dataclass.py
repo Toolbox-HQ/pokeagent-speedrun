@@ -9,7 +9,7 @@ class ModelArguments:
     vision_name_or_path: Optional[str] = field(default=None)
     load_path: Optional[str] = field(default=None)
     objective_load_path: Optional[str] = field(default=None)
-    idm_path: str = field(default=".cache/pokeagent/rnd_idm_model.pt")
+    idm_path: str = field(default= None)
 
 @dataclass
 class DataArguments:

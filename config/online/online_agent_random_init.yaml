@@ -1,7 +1,6 @@
 architecture: "EmbedObjectiveAgent"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
-load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f4070dca2a694613975f1033e4c95a969/checkpoint-5500/model.safetensors
 objective_load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f4070dca2a694613975f1033e4c95a969/objective_manager.pkl
 output_dir: ".cache/pokeagent/online"
 num_train_epochs: 3
@@ -61,4 +60,3 @@ idm_eval_every: 0.25
 idm_scheduler: null
 idm_output_path: rnd_idm_model.pt
 idm_dataloaders_per_device: 4
-idm_path: ".cache/pokeagent/rnd_idm_model.pt"
