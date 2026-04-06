@@ -45,5 +45,7 @@ class InferenceArguments:
 
     max_vid_len: float = field(default=None)
 
+    dynamic_bootstrapping: bool = field(default=True)
+
     def __iter__(self):
         return iter(vars(self).values())
