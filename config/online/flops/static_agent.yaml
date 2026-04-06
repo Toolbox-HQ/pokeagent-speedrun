@@ -44,7 +44,7 @@ agent_fps: 2
 match_length: 540
 retrieved_videos: 100
 train_eval_split: 0.1
-dynamic_bootstrapping: False
+dynamic_bootstrap: False
 
 # idm
 output_classes: 9

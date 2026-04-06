@@ -143,11 +143,12 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     with ThreadPoolExecutor(max_workers=100) as executor:
         for step in (pbar := tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration")):
-            bootstrap = False
-            if inference_args.inference_architecture == "EmbedObjectiveAgent":
+
+            if inference_args.dynamic_bootstrap:
                 bootstrap = dynamic_bootstrap
             else:
                 bootstrap = bootstrap_steps >= inference_args.bootstrap_interval
+
             if bootstrap:
                 pbar.disable = True
                 dynamic_bootstrap = False
@@ -219,7 +220,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
             bootstrap_steps += 1
 
-            if inference_args.inference_architecture == "EmbedObjectiveAgent":
+            if inference_args.dynamic_bootstrap:
                 curr_objective_count = len(agent.objective_manager.achieved_objectives)
 
                 if curr_objective_count > prev_objective_count:

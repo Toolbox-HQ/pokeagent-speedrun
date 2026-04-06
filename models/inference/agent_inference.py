@@ -417,6 +417,16 @@ class OnlinePokeagentStateActionConditioned:
             self.agent_frames = torch.zeros(self.buffersize, 3, 160, 240, dtype=torch.uint8, device=self.device) 
             self.input_ids = torch.zeros(1, self.buffersize, dtype=torch.long) 
             self.idx = 0
+
+            class _Unpickler(pickle.Unpickler):
+                def find_class(self, module, name):
+                    if module == '__main__' and name == 'AgentObjectiveManager':
+                        return AgentObjectiveManager
+                    return super().find_class(module, name)
+
+            with open(model_args.objective_load_path, 'rb') as f:
+                self.objective_manager = _Unpickler(f).load()
+
             print("[AGENT] Initialized agent")
      
     def train_agent(self, data_dir: str, bootstrap: int, *args):
@@ -432,8 +442,11 @@ class OnlinePokeagentStateActionConditioned:
         self.idm.eval()
 
     def clear_memory(self):
-        pass
-
+        import gc
+        self.objective_manager = None
+        gc.collect()
+        dist.barrier()
+        
     def broadcast_agent_state(self, src=1):
         if dist.is_initialized():
             dist.broadcast(self.agent_frames, src=src)
