@@ -228,7 +228,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
                     steps_since_last_objective += 1
 
                 t = torch.tensor([steps_since_last_objective], dtype=torch.long, device='cuda')
-                dist.all_reduce(t, op=dist.ReduceOp.MIN)
+                dist.all_reduce(t, op=dist.ReduceOp.MAX)
                 if t.item() >= inference_args.max_objective_interval:
                     dynamic_bootstrap = True
 
