@@ -14,13 +14,12 @@ INDIVIDUAL_BINDS=" \
     --bind ./models:/app/models \
     --bind ./s3_utils:/app/s3_utils \
     --bind ./script:/app/script \
-    --bind ./.s3cfg:/app/.s3cfg \
     --bind ./main.py:/app/main.py \
     --bind ./.git:/app/.git
 "
 
-# Combine all binds
-BIND_MOUNTS="$BIND_MOUNTS $INDIVIDUAL_BINDS"
+# Run UUID (defaults to random uuid if not set)
+RUN_UUID="${RUN_UUID:-$(uuidgen)}"
 
 # Determine number of GPUs
 if [[ -n "$CUDA_VISIBLE_DEVICES" ]]; then
@@ -29,8 +28,12 @@ else
     NUM_GPUS=$(nvidia-smi -L | wc -l)
 fi
 
+EXTRA_ENV=""
 if [[ -n "${WANDB_API_KEY}" ]]; then
     EXTRA_ENV="--env WANDB_API_KEY=${WANDB_API_KEY}"
+fi
+if [[ -n "${LZ_MODE}" ]]; then
+    EXTRA_ENV="${EXTRA_ENV} --env LZ_MODE=${LZ_MODE}"
 fi
 
 apptainer exec \
@@ -45,6 +48,7 @@ apptainer exec \
     --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
     --env WANDB_MODE="offline" \
+    --env PYTHONUNBUFFERED=1 \
     ${EXTRA_ENV:-} \
     .cache/pokeagent/containers/dev.sif \
     bash -c "cd /app && . .venv/bin/activate && \
@@ -55,4 +59,7 @@ apptainer exec \
           --master_addr=localhost \
           --master_port=35332 \
           main.py \
-          --config \"$1\""
+          --config \"$1\" \
+          --uuid \"${RUN_UUID}\" \
+          --seed_rng \"false\"
+          "
