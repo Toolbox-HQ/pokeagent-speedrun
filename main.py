@@ -61,10 +61,12 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
                     return AgentObjectiveManager
                 return super().find_class(module, name)
 
+    print(f"[GPU {rank} LOOP] load objective manager from {os.path.join(checkpoint_dir, 'objective_manager.pkl')}")
     if agent.inference_args.inference_architecture == "EmbedObjectiveAgent":
         with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
             agent.objective_manager = _Unpickler(f).load()
     
+    print(f"[GPU {rank} LOOP] loading emulator state")
     if os.path.exists(rank_state):
         emulator.load_state_from_file(rank_state)
         print(f"[GPU {rank} LOOP] loaded rank-specific emulator state from {rank_state}")
