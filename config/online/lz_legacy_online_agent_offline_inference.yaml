@@ -1,11 +1,12 @@
 architecture: "state_action_conditioned"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
-load_path: .cache/pokeagent/checkpoints/agent/f457370742b493b7d6c5aa8a741bea35d62dc0d9/checkpoint-5500/model.safetensors
-objective_load_path: .cache/pokeagent/checkpoints/embed_objective_agent/4ae8e18f4070dca2a694613975f1033e4c95a969/objective_manager.pkl
+load_path: checkpoints/lz_agent/840ba2947656f034e6b4d5d7bc8702dc4097fdbd/checkpoint-6000/model.safetensors
+objective_load_path: ./checkpoints/lz_objective_agent/c37de09855847daf3af6e55d3cd8054662bda437/objective_manager.pkl 
 output_dir: ".cache/pokeagent/online"
 num_train_epochs: 3
 per_device_train_batch_size: 4
+per_device_eval_batch_size: 4
 save_strategy: "no"
 learning_rate: 5.0e-5
 weight_decay: 0.00001
@@ -25,26 +26,24 @@ eval_on_start: true
 
 # inference
 inference_architecture: state_action_conditioned
-agent_steps: 1000000000
-save_state: .cache/pokeagent/save_state/truck_start.state
+agent_steps: 21600
+save_state: .cache/lz/state/0.state
 sampling_strategy: temperature
 temperature: 1
-inference_save_path: .cache/pokeagent/runs
-rom_path: .cache/pokeagent/rom/rom.gba
+rom_path: .cache/lz/rom/lz_rom.gba
 online: True
 idm_data_sample_interval: 20
-idm_data_sample_steps: 100
-bootstrap_interval: 4800
+idm_data_sample_steps: 100000000
+bootstrap_interval: 1000000000
 context_length: 64
 actions_per_second: 4
 agent_fps: 2
 match_length: 540
 retrieved_videos: 100
 train_eval_split: 0.1
-dynamic_bootstrap: True
 
 # idm
-output_classes: 9
+output_classes: 17
 idm_fps: 4
 idm_batch_size: 2
 idm_image_size: [128, 128]
@@ -57,5 +56,5 @@ wandb_project: pokeagent
 idm_gradient_accumulation_steps: 1
 idm_eval_every: 0.25
 idm_scheduler: null
-idm_output_path: rnd_idm_model.pt
 idm_dataloaders_per_device: 4
+idm_path: "./checkpoints/lz_idm/8d247ed41a1b05ac082fc5b61f512eed53565195/22000/lz_idm_model.pt"

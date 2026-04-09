@@ -61,7 +61,7 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
                     return AgentObjectiveManager
                 return super().find_class(module, name)
 
-    if inference_architecture == "EmbedObjectiveAgent":
+    if agent.inference_args.inference_architecture == "EmbedObjectiveAgent":
         with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
             agent.objective_manager = _Unpickler(f).load()
     
