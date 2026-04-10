@@ -2,7 +2,7 @@ architecture: "EmbedObjectiveAgent"
 lm_name_or_path: "Qwen/Qwen3-1.7B"
 vision_name_or_path: "google/siglip-base-patch16-224"
 load_path: ./checkpoints/lz_objective_agent/c37de09855847daf3af6e55d3cd8054662bda437/checkpoint-7690/model.safetensors
-objective_load_path: ./checkpoints/lz_objective_agent/c37de09855847daf3af6e55d3cd8054662bda437/checkpoint-7690/objective_manager.pkl
+objective_load_path: ./checkpoints/lz_objective_agent/c37de09855847daf3af6e55d3cd8054662bda437/objective_manager.pkl
 output_dir: ".cache/pokeagent/online"
 num_train_epochs: 3
 num_objectives: 10
