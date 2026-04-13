@@ -12,6 +12,7 @@ from models.train.train_idm import train_idm_best_checkpoint
 from transformers import AutoImageProcessor, AutoModel
 from models.util.misc import local_model_map
 import pickle
+import os
     
 class PokeAgentActionConditioned:
     def __init__(self, model_path: str, device: str, temperature = 0.01, actions_per_second = 60, model_fps = 2, context_len = 64, sampling_strategy="default"):
@@ -306,7 +307,12 @@ class OnlinePokeagentStateActionConditionedObjective:
         if self.idx < self.buffersize - 1:
             self.idx += 1
 
-        return CLASS_TO_KEY[cls.item()]
+        key = CLASS_TO_KEY[cls.item()]
+    
+        if "LZ_MODE" in os.environ and key == "start":
+            key = "none"
+
+        return key 
     
 
 class OnlinePokeagentStateActionConditioned:
