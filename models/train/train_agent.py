@@ -221,6 +221,20 @@ def mine_objectives(all_videos_json_files):
     print_gpu_memory("post-mine-objectives", rank)
     return ObjectivesLookup(per_frame_metadata), AgentObjectiveManager(clusterer, valid_cluster_idxs)
 
+def mine_objectives(bootstrap, all_videos_json_files, query_embeds, video_frames):
+    # objective mining (rank 0 only, then broadcast)
+    objects = [None, None]
+    torch.cuda.empty_cache()
+    dist.barrier()
+    if dist.get_rank() == 0:
+        print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(all_videos_json_files)} files")
+        objects = list(mine_objectives(all_videos_json_files))
+    dist.broadcast_object_list(objects, src=0)
+    objectives_lookup, objective_manager = objects[0], objects[1]
+    for idx, query_embed in enumerate(query_embeds):
+        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed], video_frames[idx]) # Finds completed objectives in current trajectory
+    return objective_manager, objectives_lookup
+
 def create_dataset(data_dir: str,
                    processor: Callable,
                    bootstrap: None | int,
@@ -252,17 +266,7 @@ def create_dataset(data_dir: str,
                 if not any(vid["video_path"] == item["video_path"] for vid in videos_json):
                     videos_json.append({"video_path": item["video_path"]})
 
-    # objective mining (rank 0 only, then broadcast)
-    objects = [None, None]
-    torch.cuda.empty_cache()
-    dist.barrier()
-    if dist.get_rank() == 0:
-        print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(videos_json_files)} files")
-        objects = list(mine_objectives(all_videos_json_files))
-    dist.broadcast_object_list(objects, src=0)
-    objectives_lookup, objective_manager = objects[0], objects[1]
-    for idx, query_embed in enumerate(query_embeds):
-        objective_manager.mine_and_add_objectives([t.cpu().numpy() for t in query_embed], video_frames[idx]) # Finds completed objectives in current trajectory
+    objective_manager, objectives_lookup = mine_objectives(bootstrap, all_videos_json_files, query_embeds, video_frames)
 
     if online:
         dataset = OnlineAgentDataset(videos_json, processor=processor, objectives_lookup=objectives_lookup, num_objectives=data_args.num_objectives)

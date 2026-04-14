@@ -21,13 +21,10 @@ def checkpoint(output_dir: str, step: int, agent, state: bytes):
     rank = dist.get_rank()
 
     if rank == 0:
-        import pickle
         os.makedirs(save_path, exist_ok=True)
         print(f"[GPU {rank} LOOP] save checkpoint at step {step} to {save_path}")
         save_file(agent_idm.state_dict(), os.path.join(save_path, f"idm_model.safetensors"))
         save_file(agent_model.state_dict(), os.path.join(save_path, f"agent.safetensors"))
-        with open(os.path.join(save_path, "objective_manager.pkl"), "wb") as f:
-            pickle.dump(agent.objective_manager, f)
     
     dist.barrier()
     with open(os.path.join(save_path, f"game_rank{rank}.state"), "wb") as f:
@@ -36,36 +33,75 @@ def checkpoint(output_dir: str, step: int, agent, state: bytes):
     print(f"[GPU {rank} LOOP] saved emulator state at step {step} to {save_path}/game_rank{rank}.state")
     dist.barrier()
 
-def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture: str):
+def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture: str, output_dir, query_path_template):
+    
     import os
+    import re
+    import shutil
     import torch
     import torch.distributed as dist
     from safetensors.torch import load_file
     import pickle
-    from models.train.train_agent import AgentObjectiveManager
-    
+    from models.train.train_agent import AgentObjectiveManager, mine_objectives
+    from models.util.data import list_files_with_extensions
+    from models.inference.find_matching_videos import dino_embeddings_every
+
     agent_model: torch.nn.Module = agent.model
     agent_idm: torch.nn.Module = agent.idm
     rank = dist.get_rank()
-    
+
     print(f"[GPU {rank} LOOP] load checkpoint from {checkpoint_dir}")
+
+    # Parse steps from checkpoint dir name (e.g. checkpoint-14400 -> 14400)
+    checkpoint_name = os.path.basename(checkpoint_dir)
+    steps = int(checkpoint_name.split("-")[-1])
+
+    # The run directory is two levels up: .../run_dir/checkpoints/checkpoint-N
+    run_dir = os.path.dirname(os.path.dirname(checkpoint_dir))
+
+    # Count checkpoints with steps <= target to compute bootstrap_count
+    checkpoints_dir = os.path.dirname(checkpoint_dir)
+    bootstrap_count = -1
+    for entry in os.listdir(checkpoints_dir):
+        match = re.match(r"checkpoint-(\d+)$", entry)
+        if match and int(match.group(1)) <= steps:
+            bootstrap_count += 1
+
+    print(f"[GPU {rank} LOOP] resuming from step {steps}, bootstrap_count {bootstrap_count}")
+
+    # Copy everything from run_dir to output_dir, excluding idm_data
+    if rank == 0:
+        for item in os.listdir(run_dir):
+            if item == "idm_data":
+                continue
+            src = os.path.join(run_dir, item)
+            dst = os.path.join(output_dir, item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+        print(f"[GPU {rank} LOOP] copied run directory {run_dir} to {output_dir} (excluding idm_data)")
+
+    dist.barrier()
 
     agent_model.load_state_dict(load_file(os.path.join(checkpoint_dir, f"agent.safetensors")))
     agent_idm.load_state_dict(load_file(os.path.join(checkpoint_dir, f"idm_model.safetensors")))
     rank_state = os.path.join(checkpoint_dir, f"game_rank{rank}.state")
     single_state = os.path.join(checkpoint_dir, f"game.state")
 
-    class _Unpickler(pickle.Unpickler):
-            def find_class(self, module, name):
-                if module == '__main__' and name == 'AgentObjectiveManager':
-                    return AgentObjectiveManager
-                return super().find_class(module, name)
+    all_videos_json_files = list_files_with_extensions(f"{output_dir}/agent_data'", ".json")
 
-    print(f"[GPU {rank} LOOP] load objective manager from {os.path.join(checkpoint_dir, 'objective_manager.pkl')}")
-    if agent.inference_args.inference_architecture == "EmbedObjectiveAgent":
-        with open(os.path.join(checkpoint_dir, "objective_manager.pkl"), 'rb') as f:
-            agent.objective_manager = _Unpickler(f).load()
-    
+    query_embeds = []
+    video_frames = []
+    for idx in range(bootstrap_count):
+        query_emb, frames = dino_embeddings_every(query_path_template + f"{idx}")
+        query_embeds.append(query_emb)
+        video_frames.append(frames)
+
+    objective_manager, objectives_lookup = mine_objectives(bootstrap_count, all_videos_json_files, query_embeds, video_frames)
+    agent.objective_manager = objective_manager
+
     print(f"[GPU {rank} LOOP] loading emulator state")
     if os.path.exists(rank_state):
         emulator.load_state_from_file(rank_state)
@@ -76,6 +112,8 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
     else:
         raise Exception(f"[GPU {rank} LOOP] WARNING: No emulator state file found in {checkpoint_dir}")
     dist.barrier()
+
+    return steps, bootstrap_count
 
 def run_online_agent(model_args, data_args, training_args, inference_args, idm_args, output_dir, run_uuid: str): 
     from models.inference.agent_inference import OnlinePokeagentStateOnly, OnlinePokeagentStateActionConditionedObjective, OnlinePokeagentStateActionConditioned
@@ -135,8 +173,9 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     query_embeds = []
     video_frames = []
 
+    step = 0
     if training_args.resume_from_checkpoint is not None:
-        load_checkpoint(training_args.resume_from_checkpoint, agent, conn, inference_args.inference_architecture)
+        step, bootstrap_count, query_embeds, video_frames = load_checkpoint(training_args.resume_from_checkpoint, agent, conn, inference_args.inference_architecture, output_dir, query_path_template)
         training_args.resume_from_checkpoint = None
 
     steps_since_last_objective = 0
@@ -144,7 +183,7 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     bootstrap_steps = 0
 
     with ThreadPoolExecutor(max_workers=100) as executor:
-        for step in (pbar := tqdm(range(inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration")):
+        for step in (pbar := tqdm(range(step, inference_args.agent_steps), desc=f"GPU {rank} Agent Exploration", initial=step)):
 
             if inference_args.dynamic_bootstrap:
                 bootstrap = dynamic_bootstrap
