@@ -186,7 +186,7 @@ def load_objective_dataset(videos_json, emb_dir=".cache/pokeagent/dinov2"):
         per_frame_metadata.extend(meta)
     return np.concatenate(per_frame_embed, axis=0), per_frame_metadata # N x 768 and list where len(list) == N
 
-def mine_objectives(all_videos_json_files):
+def _mine_objectives_from_files(all_videos_json_files):
     json = get_objective_dataset_json(all_videos_json_files)
 
     if "LZ_MODE" in os.environ:
@@ -228,7 +228,7 @@ def mine_objectives(bootstrap, all_videos_json_files, query_embeds, video_frames
     dist.barrier()
     if dist.get_rank() == 0:
         print(f"[AGENT] Mining objectives for bootstrap {bootstrap} with {len(all_videos_json_files)} files")
-        objects = list(mine_objectives(all_videos_json_files))
+        objects = list(_mine_objectives_from_files(all_videos_json_files))
     dist.broadcast_object_list(objects, src=0)
     objectives_lookup, objective_manager = objects[0], objects[1]
     for idx, query_embed in enumerate(query_embeds):

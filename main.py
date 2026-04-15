@@ -50,18 +50,20 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
     agent_idm: torch.nn.Module = agent.idm
     rank = dist.get_rank()
 
-    print(f"[GPU {rank} LOOP] load checkpoint from {checkpoint_dir}")
-
     # Parse steps from checkpoint dir name (e.g. checkpoint-14400 -> 14400)
     checkpoint_name = os.path.basename(checkpoint_dir)
     steps = int(checkpoint_name.split("-")[-1])
 
     # The run directory is two levels up: .../run_dir/checkpoints/checkpoint-N
     run_dir = os.path.dirname(os.path.dirname(checkpoint_dir))
+    origin_run_id = os.path.basename(run_dir)
+    new_run_id = os.path.basename(output_dir)
+
+    print(f"[GPU {rank} LOOP] loading checkpoint {checkpoint_name} from run {origin_run_id}, resuming as run {new_run_id}")
 
     # Count checkpoints with steps <= target to compute bootstrap_count
     checkpoints_dir = os.path.dirname(checkpoint_dir)
-    bootstrap_count = -1
+    bootstrap_count = 0
     for entry in os.listdir(checkpoints_dir):
         match = re.match(r"checkpoint-(\d+)$", entry)
         if match and int(match.group(1)) <= steps:
@@ -69,7 +71,19 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
 
     print(f"[GPU {rank} LOOP] resuming from step {steps}, bootstrap_count {bootstrap_count}")
 
-    # Copy everything from run_dir to output_dir, excluding idm_data
+    # Copy everything from run_dir to output_dir, but for bootstrap-tagged
+    # directories (agent_data, query_video) only copy files from bootstraps
+    # before the resume point, and for checkpoints only copy those with
+    # steps <= the loaded checkpoint.
+    def _should_skip_file(parent_name, filename):
+        if parent_name == "checkpoints":
+            match = re.match(r"checkpoint-(\d+)$", filename)
+            return match and int(match.group(1)) > steps
+        if parent_name in ("agent_data", "query_video"):
+            match = re.search(r"bootstrap(\d+)", filename)
+            return match and int(match.group(1)) >= bootstrap_count
+        return False
+
     if rank == 0:
         for item in os.listdir(run_dir):
             if item == "idm_data":
@@ -77,11 +91,20 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
             src = os.path.join(run_dir, item)
             dst = os.path.join(output_dir, item)
             if os.path.isdir(src):
-                shutil.copytree(src, dst, dirs_exist_ok=True)
+                os.makedirs(dst, exist_ok=True)
+                for child in os.listdir(src):
+                    if _should_skip_file(item, child):
+                        continue
+                    child_src = os.path.join(src, child)
+                    child_dst = os.path.join(dst, child)
+                    if os.path.isdir(child_src):
+                        shutil.copytree(child_src, child_dst, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(child_src, child_dst)
             else:
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copy2(src, dst)
-        print(f"[GPU {rank} LOOP] copied run directory {run_dir} to {output_dir} (excluding idm_data)")
+        print(f"[GPU {rank} LOOP] copied run directory {run_dir} to {output_dir} (skipping bootstraps >= {bootstrap_count}, checkpoints > {steps})")
 
     dist.barrier()
 
@@ -90,12 +113,12 @@ def load_checkpoint(checkpoint_dir: str, agent, emulator, inference_architecture
     rank_state = os.path.join(checkpoint_dir, f"game_rank{rank}.state")
     single_state = os.path.join(checkpoint_dir, f"game.state")
 
-    all_videos_json_files = list_files_with_extensions(f"{output_dir}/agent_data'", ".json")
+    all_videos_json_files = list_files_with_extensions(f"{output_dir}/agent_data", ".json")
 
     query_embeds = []
     video_frames = []
     for idx in range(bootstrap_count):
-        query_emb, frames = dino_embeddings_every(query_path_template + f"{idx}")
+        query_emb, frames = dino_embeddings_every(query_path_template + f"{idx}.mp4")
         query_embeds.append(query_emb)
         video_frames.append(frames)
 
@@ -156,7 +179,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     idm_data_path_template = f'{idm_data_path}/bootstrap_'
     agent_path_template = f'{agent_data_path}/videos_gpu{rank}_bootstrap'
     checkpoint_path =  f'{output_dir}/checkpoints'
-    query_path = query_path_template + str(bootstrap_count)
 
     # retrieve from data of the correct game
     if os.environ.get('LZ_MODE'):
@@ -166,8 +188,6 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
 
     conn = EmulatorConnection(inference_args.rom_path)
     conn.load_state(curr_state)
-    conn.create_video_writer(query_path)
-    conn.start_video_writer(query_path)
 
     futures = []
     query_embeds = []
@@ -177,6 +197,10 @@ def run_online_agent(model_args, data_args, training_args, inference_args, idm_a
     if training_args.resume_from_checkpoint is not None:
         step, bootstrap_count, query_embeds, video_frames = load_checkpoint(training_args.resume_from_checkpoint, agent, conn, inference_args.inference_architecture, output_dir, query_path_template)
         training_args.resume_from_checkpoint = None
+
+    query_path = query_path_template + str(bootstrap_count)
+    conn.create_video_writer(query_path)
+    conn.start_video_writer(query_path)
 
     steps_since_last_objective = 0
     dynamic_bootstrap = False
