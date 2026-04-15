@@ -58,6 +58,13 @@ if [[ -z "$CONFIG_FILE" ]]; then
     exit 1
 fi
 
+# Guard against forgetting --lz when using an LZ config
+if [[ "${CONFIG_FILE,,}" == *lz* ]] && [[ "$LZ_MODE" != "true" ]]; then
+    echo "Error: config file '${CONFIG_FILE}' contains 'lz' but --lz flag was not passed."
+    echo "If this is a Legend of Zelda run, re-run with --lz."
+    exit 1
+fi
+
 # Generate a UUID for this run
 if command -v uuidgen >/dev/null 2>&1; then
     RUN_UUID="$(uuidgen)"
