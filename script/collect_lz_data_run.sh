@@ -32,6 +32,7 @@ for i in $(seq 1 $N_WORKERS); do
         --bind ./.git:/app/.git \
         --bind ./.cache:/app/.cache \
         --env LZ_MODE=1 \
+        --env CUPY_CACHE_DIR="/app/.cache/pokeagent/cupy" \
         .cache/pokeagent/containers/${CONTAINER_NAME} \
         bash -c "cd /app && . .venv/bin/activate && export PYTHONPATH=/app && \
             python script/collect_lz_data.py \

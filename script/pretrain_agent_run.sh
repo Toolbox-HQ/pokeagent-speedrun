@@ -31,6 +31,7 @@ apptainer exec \
     --env HF_HOME=/hf_cache \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
+    --env CUPY_CACHE_DIR="/app/.cache/pokeagent/cupy" \
     --env WANDB_MODE="offline" \
     ${EXTRA_ENV:-} \
     .cache/pokeagent/containers/${CONTAINER_NAME} \

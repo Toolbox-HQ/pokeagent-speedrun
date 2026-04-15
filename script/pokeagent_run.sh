@@ -39,6 +39,7 @@ apptainer exec \
     --env TRITON_HOME="/app/.cache/pokeagent/tmp" \
     --env PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" \
     --env TRITON_CACHE_DIR="/app/.cache/pokeagent/tmp" \
+    --env CUPY_CACHE_DIR="/app/.cache/pokeagent/cupy" \
     --env WANDB_MODE="offline" \
     --env PYTHONUNBUFFERED=1 \
     ${EXTRA_ENV:-} \
