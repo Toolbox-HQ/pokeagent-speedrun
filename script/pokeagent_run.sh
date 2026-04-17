@@ -5,6 +5,7 @@
 #SBATCH --job-name=pokeagent_online
 #SBATCH --output=/scratch/%u/slurm_out/%j_pokeagent_online_output.txt
 #SBATCH --mail-type=ALL
+#SBATCH --mail-user=Benjamin.Schneider@uwaterloo.ca
 
 set -e
 # Container name (defaults to run.sif if not set)
