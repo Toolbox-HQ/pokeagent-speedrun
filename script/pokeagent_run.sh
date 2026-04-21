@@ -31,6 +31,7 @@ fi
 apptainer exec \
     --contain \
     --nv \
+    --bind /dev/shm:/dev/shm \
     --bind ./.cache/pokeagent/tmp:/tmp \
     --bind ./.cache:/app/.cache \
     --bind ./checkpoints:/app/checkpoints \

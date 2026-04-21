@@ -4,7 +4,15 @@ import torch.distributed as dist
 from models.model.agent_modeling.agent import init_lm_agent, init_vision_prcoessor
 from models.model.agent_modeling.vpt_agent import init_vpt_agent
 from emulator.keys import CLASS_TO_KEY
-from safetensors.torch import load_file
+from safetensors.torch import load as _safetensors_load
+
+def load_file(path, device="cpu"):
+    with open(path, "rb") as f:
+        data = f.read()
+    tensors = _safetensors_load(data)
+    if device != "cpu":
+        tensors = {k: v.to(device) for k, v in tensors.items()}
+    return tensors
 from torchvision.transforms.functional import resize
 import math
 from models.dataclass import DataArguments, TrainingArguments, ModelArguments, InferenceArguments, IDMArguments
@@ -594,7 +602,7 @@ class VPTPokeAgent:
 
         self.model = init_vpt_agent()
         if model_path is not None:
-            self.model.load_state_dict(load_file(model_path))
+            self.model.load_state_dict(load_file(model_path, device="cpu"))
         self.model.to(self.device).eval()
 
         self.buffer = torch.zeros(context_len, 3, 128, 128, dtype=torch.uint8)
