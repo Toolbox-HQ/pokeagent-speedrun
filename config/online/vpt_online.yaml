@@ -1,6 +1,6 @@
 architecture: "vpt"
 idm_path: ".cache/pokeagent/rnd_idm_model.pt"
-load_path: checkpoints/vpt_test/01814b476064f52af4cb669fac593df83560b190/checkpoint-50/model.safetensors
+load_path: checkpoints/vpt_early_game/ef9057786f42ce7e5812f7d7706cd20370315c60/checkpoint-95000
 output_dir: ".cache/pokeagent/online"
 
 # unused by VPT rollout but required by HfArgumentParser
