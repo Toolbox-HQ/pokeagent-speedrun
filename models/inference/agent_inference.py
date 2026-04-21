@@ -601,7 +601,9 @@ class VPTPokeAgent:
         self.temperature = temperature
 
         self.model = init_vpt_agent()
+        
         if model_path is not None:
+            print(f"LOADING FROM {model_path}")
             self.model.load_state_dict(load_file(model_path, device="cpu"))
         self.model.to(self.device).eval()
 
