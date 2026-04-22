@@ -80,7 +80,13 @@ class IDMDataset(Dataset):
         return frames, torch.tensor(actions, dtype=torch.long)
 
     def unchanged_interval(vr, start, end, buffer_size):
-        diff = vr[end-buffer_size:end] - vr[start].unsqueeze(0)
+        num_frames = len(vr)
+        end = min(end, num_frames)
+        start = min(start, num_frames - 1)
+        slice_start = max(0, end - buffer_size)
+        if slice_start >= end or start < 0:
+            return False
+        diff = vr[slice_start:end] - vr[start].unsqueeze(0)
         return torch.any((diff == 0).all(dim=tuple(range(1, diff.ndim))))
 
     def action_filter(self, raw_data: List[Tuple]) -> None:
