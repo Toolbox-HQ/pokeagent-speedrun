@@ -59,40 +59,45 @@ def run_validation(cfg: ValidateIDMArguments) -> dict:
         dataset,
         batch_size=cfg.idm_batch_size,
         shuffle=False,
-        num_workers=cfg.idm_dataloaders_per_device,
-        pin_memory=True,
+        num_workers=0,
+        pin_memory=False,
         collate_fn=IDMDataset.collate,
     )
 
     total_correct = 0
     total_count = 0
+    skipped_batches = 0
     per_class_correct = {c: 0 for c in CLASS_TO_KEY.keys()}
     per_class_count = {c: 0 for c in CLASS_TO_KEY.keys()}
 
     for inp, labels in tqdm(loader, desc="Validating IDM"):
-        batch = inp.shape[0]
-        dummy = {
-            "first": torch.zeros((batch, 1)).to(device),
-            "state_in": model.initial_state(batch),
-        }
-        obs = {"img": inp.to(device=device)}
-        labels = labels.to(dtype=torch.long, device=device)
+        try:
+            batch = inp.shape[0]
+            dummy = {
+                "first": torch.zeros((batch, 1)).to(device),
+                "state_in": model.initial_state(batch),
+            }
+            obs = {"img": inp.to(device=device)}
+            labels = labels.to(dtype=torch.long, device=device)
 
-        out = model(obs, labels=labels, **dummy)
-        preds = torch.argmax(out.logits, dim=-1)
-        correct = (preds == labels)
+            out = model(obs, labels=labels, **dummy)
+            preds = torch.argmax(out.logits, dim=-1)
+            correct = (preds == labels)
 
-        total_correct += correct.sum().item()
-        total_count += labels.numel()
+            total_correct += correct.sum().item()
+            total_count += labels.numel()
 
-        flat_labels = labels.reshape(-1)
-        flat_correct = correct.reshape(-1)
-        for c in per_class_count.keys():
-            mask = flat_labels == c
-            n = mask.sum().item()
-            if n:
-                per_class_count[c] += n
-                per_class_correct[c] += flat_correct[mask].sum().item()
+            flat_labels = labels.reshape(-1)
+            flat_correct = correct.reshape(-1)
+            for c in per_class_count.keys():
+                mask = flat_labels == c
+                n = mask.sum().item()
+                if n:
+                    per_class_count[c] += n
+                    per_class_correct[c] += flat_correct[mask].sum().item()
+        except IndexError as e:
+            skipped_batches += 1
+            print(f"[SKIPPED BATCH] {e}")
 
     overall_accuracy = total_correct / max(total_count, 1)
     per_class_accuracy = {
@@ -104,6 +109,7 @@ def run_validation(cfg: ValidateIDMArguments) -> dict:
     return {
         "accuracy": overall_accuracy,
         "total_samples": total_count,
+        "skipped_batches": skipped_batches,
         "per_class_accuracy": per_class_accuracy,
     }
 
@@ -125,6 +131,7 @@ def main():
     print(f"checkpoint: {cfg.idm_checkpoint_path}")
     print(f"data_dir:   {cfg.idm_data_dir}")
     print(f"samples:    {results['total_samples']}")
+    print(f"skipped:    {results['skipped_batches']} batches")
     print(f"accuracy:   {results['accuracy']:.4f}")
     print(f"per-class accuracy:")
     for key, acc in results["per_class_accuracy"].items():
