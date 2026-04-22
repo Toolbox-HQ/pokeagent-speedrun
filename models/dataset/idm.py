@@ -55,7 +55,10 @@ class IDMDataset(Dataset):
     def get_frames(video_path, frame_idx, h, w,  is_val=False):
 
         try:
-            frames = VideoDecoder(video_path).get_frames_at(frame_idx).data
+            decoder = VideoDecoder(video_path)
+            num_frames = len(decoder)
+            frame_idx = tuple(min(i, num_frames - 1) for i in frame_idx)
+            frames = decoder.get_frames_at(frame_idx).data
         except Exception as e:
             print(f"[VIDEO ERROR] Failed to load {video_path}", flush=True)
             print(f"Idx:\n{frame_idx}", flush=True)

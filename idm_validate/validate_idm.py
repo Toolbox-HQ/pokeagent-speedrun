@@ -70,7 +70,17 @@ def run_validation(cfg: ValidateIDMArguments) -> dict:
     per_class_correct = {c: 0 for c in CLASS_TO_KEY.keys()}
     per_class_count = {c: 0 for c in CLASS_TO_KEY.keys()}
 
-    for inp, labels in tqdm(loader, desc="Validating IDM"):
+    loader_iter = iter(tqdm(loader, desc="Validating IDM"))
+    while True:
+        try:
+            inp, labels = next(loader_iter)
+        except StopIteration:
+            break
+        except IndexError as e:
+            skipped_batches += 1
+            print(f"[SKIPPED BATCH] {e}")
+            continue
+
         try:
             batch = inp.shape[0]
             dummy = {
