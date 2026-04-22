@@ -1,5 +1,6 @@
 import argparse
 import base64
+import collections
 from datetime import datetime
 from io import BytesIO
 from emulator.keys import KEY_LIST_FOR_TRAINING
@@ -7,10 +8,15 @@ import json
 import os
 import re
 
+FRAME_HISTORY_SPACING = 30   # env steps between context frames (~0.5 s)
+FRAME_HISTORY_COUNT = 64     # number of context frames to include
+
 SYSTEM_PROMPT = """\
 You are playing Pokémon Emerald on a Game Boy Advance emulator.
-You will be shown the current game screen and must choose the single best action to make progress in the game.
-You must call one tool every step: press_button or update_memory.
+You will be shown a sequence of up to 64 screenshots captured every ~0.5 seconds of game time, \
+ordered from oldest to most recent. The last image is the current frame. \
+Use the sequence to understand what has been happening and choose the single best next action.
+You must call the press_button tool every step.
 
 Button reference:
 - up / down / left / right: Move the character on the overworld; navigate cursor in menus and battle.
@@ -18,18 +24,11 @@ Button reference:
 - b: Cancel or close a menu; hold to run (after obtaining Running Shoes); skip or speed through dialogue.
 - start: Open the main pause menu (Pokémon, Bag, Save, etc.).
 - select: Register an item for quick use (after unlocking); swap menu shortcuts.
-- none: Do nothing this frame (use when waiting for an animation or cutscene to finish).
-
-Memory instructions:
-- Your persistent memory is shown below the screenshot each step.
-- After every step you MUST call update_memory with whatever notes you want carried forward.
-- Use memory to track your location, current objective, party state, and any important observations.\
+- none: Do nothing this frame (use when waiting for an animation or cutscene to finish).\
 """
 
 USER_TEMPLATE = """\
-Current memory:
-{memory}
-
+The {n_frames} image(s) above show the last ~{window_secs:.0f} seconds of gameplay (oldest → most recent).
 What is the best action to take next?\
 """
 
@@ -52,29 +51,7 @@ PRESS_BUTTON_TOOL = {
     },
 }
 
-UPDATE_MEMORY_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "update_memory",
-        "description": (
-            "Persist notes to carry forward into the next step. "
-            "Overwrite the full memory each call — anything not included is forgotten. "
-            "Track location, current objective, party state, and key observations."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "memory": {
-                    "type": "string",
-                    "description": "Free-form text to remember for the next step.",
-                }
-            },
-            "required": ["memory"],
-        },
-    },
-}
-
-TOOLS = [PRESS_BUTTON_TOOL, UPDATE_MEMORY_TOOL]
+TOOLS = [PRESS_BUTTON_TOOL]
 
 
 def frame_to_b64(frame) -> str:
@@ -83,18 +60,28 @@ def frame_to_b64(frame) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def build_messages(frame, memory: str) -> list:
+def build_messages(frames) -> list:
+    """Build chat messages with a temporal context window of frames.
+
+    ``frames`` is a list of PIL images in chronological order (oldest first,
+    most recent last).  All frames are included as image_url blocks followed by
+    the text prompt.
+    """
+    image_blocks = [
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{frame_to_b64(f)}"},
+        }
+        for f in frames
+    ]
+    n_frames = len(frames)
+    window_secs = (n_frames - 1) * FRAME_HISTORY_SPACING / 60  # 60 env steps per second
+    text = USER_TEMPLATE.format(n_frames=n_frames, window_secs=window_secs)
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{frame_to_b64(frame)}"},
-                },
-                {"type": "text", "text": USER_TEMPLATE.format(memory=memory or "(empty)")},
-            ],
+            "content": image_blocks + [{"type": "text", "text": text}],
         },
     ]
 
@@ -116,8 +103,6 @@ def _parse_xml_tool_calls(text: str) -> dict[str, str]:
             args = obj.get("arguments", obj.get("parameters", {}))
             if name == "press_button":
                 result["press_button"] = args.get("button", "none")
-            elif name == "update_memory":
-                result["update_memory"] = args.get("memory", "")
             continue
         except (json.JSONDecodeError, AttributeError):
             pass
@@ -132,15 +117,12 @@ def _parse_xml_tool_calls(text: str) -> dict[str, str]:
             }
             if fn_name == "press_button":
                 result["press_button"] = params.get("button", "none")
-            elif fn_name == "update_memory":
-                result["update_memory"] = params.get("memory", "")
     return result
 
 
-def parse_output(output) -> tuple[str, str]:
-    """Returns (action, memory) parsed from tool calls."""
+def parse_output(output) -> str:
+    """Returns the action parsed from tool calls."""
     action = "none"
-    memory = None
     tool_calls = getattr(output, "tool_calls", None)
     if tool_calls:
         for call in tool_calls:
@@ -152,18 +134,13 @@ def parse_output(output) -> tuple[str, str]:
                 button = args.get("button", "none")
                 if button in KEY_LIST_FOR_TRAINING:
                     action = button
-            elif call.function.name == "update_memory":
-                memory = args.get("memory", "")
-    if action == "none" or memory is None:
+    if action == "none":
         # Fallback: parse XML-style tool calls from raw text
         parsed = _parse_xml_tool_calls(output.text or "")
-        if action == "none":
-            button = parsed.get("press_button", "none").strip().lower()
-            if button in KEY_LIST_FOR_TRAINING:
-                action = button
-        if memory is None:
-            memory = parsed.get("update_memory")
-    return action, memory or ""
+        button = parsed.get("press_button", "none").strip().lower()
+        if button in KEY_LIST_FOR_TRAINING:
+            action = button
+    return action
 
 
 def main():
@@ -179,11 +156,11 @@ def main():
     parser.add_argument("--model", default="Qwen/Qwen3.5-35B-A3B-FP8")
     parser.add_argument("--rom", default=".cache/pokeagent/rom/rom.gba")
     parser.add_argument("--save-state", default=".cache/pokeagent/save_state/truck_start.state")
-    parser.add_argument("--steps", type=int, default=5_000)
+    parser.add_argument("--steps", type=int, default=72_000)
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--video-out", default="./tmp/out", help="Base directory for run output; files go in a timestamped subdirectory")
-    parser.add_argument("--save-interval", type=int, default=2000, help="Save emulator state every N steps (0 to disable)")
+    parser.add_argument("--save-interval", type=int, default=6000, help="Save emulator state every N steps (0 to disable)")
     parser.add_argument(
         "--local",
         action="store_true",
@@ -204,13 +181,13 @@ def main():
     conn = EmulatorConnection(args.rom)
     conn.load_state_from_file(args.save_state)
 
-    model_path = local_model_map(args.model) if args.local else args.model
+    model_path = local_model_map(args.model)
 
     tensor_parallel_size = torch.cuda.device_count()
     print(f"Loading model: {args.model} (tensor_parallel_size={tensor_parallel_size})")
     llm = LLM(
         model=model_path,
-        limit_mm_per_prompt={"image": 1},
+        limit_mm_per_prompt={"image": FRAME_HISTORY_COUNT},
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_tokens,
         tensor_parallel_size=tensor_parallel_size,
@@ -231,14 +208,30 @@ def main():
         conn.create_video_writer(video_path)
         conn.start_video_writer(video_path)
 
-    memory: str = ""
     log_path = os.path.join(run_dir, "steps.jsonl")
+    # Rolling buffer stores every frame; we sample every FRAME_HISTORY_SPACING
+    # steps at inference time to build a temporal context window.
+    frame_buffer: collections.deque = collections.deque(
+        maxlen=FRAME_HISTORY_COUNT * FRAME_HISTORY_SPACING
+    )
 
     print(f"Running for {args.steps} steps")
     with open(log_path, "w") as log_f:
         for step in tqdm(range(args.steps)):
             frame = conn.get_current_frame()
-            messages = build_messages(frame, memory)
+            frame_buffer.append(frame)
+
+            # Sample up to FRAME_HISTORY_COUNT frames spaced FRAME_HISTORY_SPACING apart,
+            # most recent last (chronological order).
+            buf_len = len(frame_buffer)
+            indices = [
+                buf_len - 1 - i * FRAME_HISTORY_SPACING
+                for i in range(FRAME_HISTORY_COUNT)
+                if buf_len - 1 - i * FRAME_HISTORY_SPACING >= 0
+            ]
+            context_frames = [frame_buffer[idx] for idx in reversed(indices)]
+
+            messages = build_messages(context_frames)
             outputs = llm.chat(
                 messages,
                 sampling_params=sampling_params,
@@ -246,14 +239,14 @@ def main():
                 chat_template_kwargs={"tool_choice": "required", "enable_thinking": False},
             )
             output = outputs[0].outputs[0]
-            action, memory = parse_output(output)
+            action = parse_output(output)
 
             conn.set_key(action)
             conn.run_frames(10)
             conn.set_key("none")
             conn.run_frames(50)
 
-            log_f.write(json.dumps({"step": step, "action": action, "memory": memory, "raw": output.text}) + "\n")
+            log_f.write(json.dumps({"step": step, "action": action, "raw": output.text}) + "\n")
             log_f.flush()
 
             if args.save_interval and (step + 1) % args.save_interval == 0:

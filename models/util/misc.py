@@ -14,6 +14,7 @@ def local_model_map(model_name: str):
         "facebook/dinov2-base" : f"{hf_dir}/hub/models--facebook--dinov2-base/snapshots/f9e44c814b77203eaa57a6bdbbd535f21ede1415",
         "Toolbox-HQ/NitroSigLIP": f"{hf_dir}/hub/models--Toolbox-HQ--NitroSigLIP/snapshots/cc66f54289033d7ad08f7c4f93a40f7c5b7610c9",
         "Qwen/Qwen3.5-9B": f"{hf_dir}/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+        "Qwen/Qwen3.5-35B-A3B-FP8": f"{hf_dir}/hub/models--Qwen--Qwen3.5-35B-A3B-FP8/snapshots/0b2752837483aa34b3db6e83e151b150c0e00e49",
     }[model_name]
 def download_models():
     from transformers import AutoModel, AutoProcessor
