@@ -108,7 +108,8 @@ class IDMDataset(Dataset):
                 raise e
 
         cpu_jobs = cpu_count() // 8
-        dist.barrier()
+        if dist.is_initialized():
+            dist.barrier()
 
         if not dist.is_initialized() or dist.get_rank() == 0:
             print(f"[IDM DATASET] spawning {cpu_jobs} to filter intervals")
@@ -117,7 +118,8 @@ class IDMDataset(Dataset):
                 for ind, (actions, video) in enumerate(raw_data)
             )
 
-        dist.barrier()
+        if dist.is_initialized():
+            dist.barrier()
 
     def __len__(self):
         return len(self.samples)

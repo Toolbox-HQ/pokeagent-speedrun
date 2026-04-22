@@ -50,6 +50,7 @@ def run_validation(cfg: ValidateIDMArguments) -> dict:
         w=w,
         fps=model.fps,
         is_val=True,
+        apply_filter=True,
     )
     subset_size = max(1, int(len(dataset) * 0.1))
     indices = random.sample(range(len(dataset)), subset_size)
