@@ -15,7 +15,7 @@ online: true
 agent_steps: 3000
 save_state: .cache/pokeagent/save_state/truck_start.state
 rom_path: .cache/pokeagent/rom/rom.gba
-sampling_strategy: "default"
+sampling_strategy: "temperature"
 temperature: 1.0
 context_length: 64
 actions_per_second: 4
