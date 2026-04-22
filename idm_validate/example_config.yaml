@@ -1,0 +1,7 @@
+idm_checkpoint_path: .cache/pokeagent/online/b5d1f4f5-f15f-49bb-9d43-cc27f7a85f8d/checkpoints/checkpoint-14528/idm_model.safetensors
+idm_data_dir: .cache/pokeagent/online/b5d1f4f5-f15f-49bb-9d43-cc27f7a85f8d/idm_data
+output_classes: 9
+idm_fps: 4
+idm_image_size: [128, 128]
+idm_batch_size: 8
+idm_dataloaders_per_device: 4
