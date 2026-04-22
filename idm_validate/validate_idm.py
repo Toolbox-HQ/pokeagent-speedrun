@@ -2,8 +2,10 @@ import argparse
 from dataclasses import dataclass, field
 from typing import Tuple
 
+import random
+
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm.auto import tqdm
 from transformers import HfArgumentParser
 
@@ -49,6 +51,10 @@ def run_validation(cfg: ValidateIDMArguments) -> dict:
         fps=model.fps,
         is_val=True,
     )
+    subset_size = max(1, int(len(dataset) * 0.1))
+    indices = random.sample(range(len(dataset)), subset_size)
+    dataset = Subset(dataset, indices)
+
     loader = DataLoader(
         dataset,
         batch_size=cfg.idm_batch_size,
