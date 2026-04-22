@@ -12,7 +12,7 @@ report_to: "wandb"
 # inference
 inference_architecture: "vpt"
 online: true
-agent_steps: 3000
+agent_steps: 57600
 save_state: .cache/pokeagent/save_state/truck_start.state
 rom_path: .cache/pokeagent/rom/rom.gba
 sampling_strategy: "temperature"
