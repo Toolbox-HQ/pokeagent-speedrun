@@ -116,11 +116,18 @@ def run_validation(cfg: ValidateIDMArguments) -> dict:
         if per_class_count[c] > 0
     }
 
+    movement_classes = {c for c, k in CLASS_TO_KEY.items() if k in ("up", "down", "left", "right")}
+    movement_correct = sum(per_class_correct[c] for c in movement_classes)
+    movement_count = sum(per_class_count[c] for c in movement_classes)
+    movement_accuracy = movement_correct / max(movement_count, 1)
+
     return {
         "accuracy": overall_accuracy,
         "total_samples": total_count,
         "skipped_batches": skipped_batches,
         "per_class_accuracy": per_class_accuracy,
+        "movement_accuracy": movement_accuracy,
+        "movement_samples": movement_count,
     }
 
 
@@ -143,6 +150,7 @@ def main():
     print(f"samples:    {results['total_samples']}")
     print(f"skipped:    {results['skipped_batches']} batches")
     print(f"accuracy:   {results['accuracy']:.4f}")
+    print(f"movement accuracy (up/down/left/right): {results['movement_accuracy']:.4f}  ({results['movement_samples']} samples)")
     print(f"per-class accuracy:")
     for key, acc in results["per_class_accuracy"].items():
         print(f"  {key}: {acc:.4f}")
