@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --gpus-per-node=1
 #SBATCH --job-name=pokeagent_online
 #SBATCH --output=/scratch/%u/slurm_out/%j_pokeagent_online_output.txt
