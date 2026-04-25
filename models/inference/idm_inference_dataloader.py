@@ -22,7 +22,10 @@ AGENT_WINDOW = 64
 
 def load_model(chkpt=".cache/pokeagent/rnd_idm_model.pt"):
     m = IDModel(output_classes=NUM_ACTION_CLASSES)
-    if chkpt is not None:
+    if chkpt.endswith(".safetensors"):
+        from safetensors.torch import load_file
+        m.load_state_dict(load_file(chkpt, device="cpu"))
+    else:
         m.load_state_dict(torch.load(chkpt, map_location="cpu"))
     m.eval()
     return m
