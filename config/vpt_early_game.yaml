@@ -1,5 +1,5 @@
 architecture: "vpt"
-idm_path: ".cache/pokeagent/rnd_idm_model.pt"
+idm_path: ".cache/pokeagent/online/0c26fd45-e777-4ca6-a8c5-01861c1b0260_pk3/checkpoints/checkpoint-60224/idm_model.safetensors"
 output_dir: ".cache/pokeagent/checkpoints_test"
 num_train_epochs: 10
 per_device_train_batch_size: 4
