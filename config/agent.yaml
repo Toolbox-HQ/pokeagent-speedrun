@@ -20,3 +20,4 @@ eval_strategy: "steps"
 eval_steps: 370 # 1/4 epoch
 dataloader_num_workers: 8
 data_path: ".cache/pokeagent/intervals_padded.json"
+idm_path: ".cache/pokeagent/online/0c26fd45-e777-4ca6-a8c5-01861c1b0260_pk3/checkpoints/checkpoint-60224/idm_model.safetensors"
