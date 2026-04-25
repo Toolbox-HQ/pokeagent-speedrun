@@ -237,6 +237,7 @@ def main():
                 sampling_params=sampling_params,
                 tools=TOOLS,
                 chat_template_kwargs={"tool_choice": "required", "enable_thinking": False},
+                use_tqdm=False,
             )
             output = outputs[0].outputs[0]
             action = parse_output(output)
